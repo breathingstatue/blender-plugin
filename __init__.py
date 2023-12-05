@@ -142,7 +142,7 @@ bl_info = {
 "blender": (4, 0, 1),
 "location": "File > Import-Export",
 "description": "Import and export Re-Volt file formats.",
-"wiki_url": "https://github.com/breathingstatue/blender-plugin/",
+"wiki_url": "https://re-volt.github.io/re-volt-addon/",
 "tracker_url": "https://github.com/breathingstatue/blender-plugin/issues",
 "support": 'COMMUNITY',
 "category": "Import-Export"
