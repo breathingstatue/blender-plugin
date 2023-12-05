@@ -4,40 +4,18 @@ Purpose: Init file for the Blender Add-On
 
 Description:
 Marv's Add-On for Re-Volt with Theman's Update 
-
 """
 
 # Global debug flag
 DEBUG_MODE = True
 
 import bpy
-from .props.props_mesh import RVMeshProperties
-from .props.props_obj import RVObjectProperties
-from .props.props_scene import RVSceneProperties
-from .ui.faceprops import RevoltFacePropertiesPanel
-from .ui.headers import EditModeHeader, RevoltIOToolPanel
-from .ui.helpers import RevoltHelpersPanelObj, RevoltHelpersPanelMesh
-from .ui.hull import RevoltHullPanel, ButtonHullGenerate, OBJECT_OT_add_revolt_hull_sphere
-from .ui.instances import RevoltInstancesPanel
-from .ui.light import RevoltLightPanel, ButtonBakeShadow, ButtonBakeLightToVertex
-from .ui.menu_add import INFO_MT_revolt_add
-from .ui.texanim import MenuAnimModes, RevoltAnimationPanel
-from .ui.object import RevoltObjectPanel
-from .ui.scene import RevoltScenePanel
-from .ui.settings import RevoltSettingsPanel
-from .ui.vertex import VertexPanel
-from .ui.zone import RevoltZonePanel, ButtonZoneHide, OBJECT_OT_add_revolt_track_zone
-from .operators import ImportRV, ExportRV, ButtonReExport, ButtonSelectFaceProp, ButtonSelectNCPFaceProp
-from .operators import ButtonSelectNCPMaterial, ButtonColorFromActive, ButtonVertexColorSet
-from .operators import ButtonVertexColorCreateLayer, ButtonVertexAlphaCreateLayer, ButtonEnableTextureMode
-from .operators import ButtonEnableTexturedSolidMode, ButtonRenameAllObjects, SelectByName, SelectByData
-from .operators import SetInstanceProperty, RemoveInstanceProperty, BatchBake, LaunchRV, TexturesSave
-from .operators import TexturesRename, CarParametersExport
 import os
 import os.path
 import importlib
 from bpy.app.handlers import persistent  # For the scene update handler
 
+# Importing modules from the add-on's package
 from . import (
     common,
     layers,
@@ -92,6 +70,33 @@ importlib.reload(helpers)
 importlib.reload(settings)
 
 # Reloaded here because it's used in a class which is instanced here
+# Include conditional reloads for any other local modules here...
+
+from. texanim import ButtonCopyUvToFrame, ButtonCopyFrameToUv, PreviewNextFrame, PreviewPrevFrame, TexAnimTransform, TexAnimGrid
+from .props.props_mesh import RVMeshProperties
+from .props.props_obj import RVObjectProperties
+from .props.props_scene import RVSceneProperties
+from .ui.faceprops import RevoltFacePropertiesPanel
+from .ui.headers import EditModeHeader, RevoltIOToolPanel
+from .ui.helpers import RevoltHelpersPanelObj, RevoltHelpersPanelMesh
+from .ui.hull import RevoltHullPanel, ButtonHullGenerate, OBJECT_OT_add_revolt_hull_sphere
+from .ui.instances import RevoltInstancesPanel
+from .ui.light import RevoltLightPanel, ButtonBakeShadow, ButtonBakeLightToVertex
+from .ui.menu_add import INFO_MT_revolt_add
+from .ui.texanim import MenuAnimModes, RevoltAnimationPanel
+from .ui.object import RevoltObjectPanel
+from .ui.scene import RevoltScenePanel
+from .ui.settings import RevoltSettingsPanel
+from .ui.vertex import VertexPanel
+from .ui.zone import RevoltZonePanel, ButtonZoneHide, OBJECT_OT_add_revolt_track_zone
+from .operators import ImportRV, ExportRV, ButtonReExport, ButtonSelectFaceProp, ButtonSelectNCPFaceProp
+from .operators import ButtonSelectNCPMaterial, ButtonColorFromActive, ButtonVertexColorSet
+from .operators import ButtonVertexColorCreateLayer, ButtonVertexAlphaCreateLayer, ButtonEnableTextureMode
+from .operators import ButtonEnableTexturedSolidMode, ButtonRenameAllObjects, SelectByName, SelectByData
+from .operators import SetInstanceProperty, RemoveInstanceProperty, BatchBake, LaunchRV, TexturesSave
+from .operators import TexturesRename, CarParametersExport
+
+# Reloaded here because it's used in a class which is instanced here
 if "fin_in" in locals():
     importlib.reload(fin_in)
 if "fin_out" in locals():
@@ -126,15 +131,6 @@ if "rim_out" in locals():
     importlib.reload(rim_out)
 
 
-# Makes common variables and classes directly accessible
-from .common import *
-from .props.props_mesh import *
-from .props.props_obj import *
-from .props.props_scene import *
-from .texanim import *
-
-dprint("---\n\n\n\n")
-
 bl_info = {
 "name": "Re-Volt",
 "author": "Marvin Thiel & Theman",
@@ -161,7 +157,6 @@ def edit_object_change_handler(scene):
 
     dic.clear()
 
-
 def menu_func_import(self, context):
     """Import function for the user interface."""
     self.layout.operator("import_scene.revolt", text="Re-Volt")
@@ -172,10 +167,6 @@ def menu_func_export(self, context):
     self.layout.operator("export_scene.revolt", text="Re-Volt")
 
 classes = (
-    # Props classes
-    RVMeshProperties,
-    RVObjectProperties,
-    RVSceneProperties,
     
     # Menu classes
     INFO_MT_revolt_add,
@@ -235,31 +226,44 @@ classes = (
 )
 
 def register():
-    for cls in classes:
-        bpy.utils.register_class(cls)
-
+    bpy.utils.register_class(RVSceneProperties)
+    bpy.utils.register_class(RVObjectProperties)
+    bpy.utils.register_class(RVMeshProperties)    
+    # Register Properties
     bpy.types.Scene.revolt = bpy.props.PointerProperty(type=RVSceneProperties)
     bpy.types.Object.revolt = bpy.props.PointerProperty(type=RVObjectProperties)
     bpy.types.Mesh.revolt = bpy.props.PointerProperty(type=RVMeshProperties)
+
+    # Register Classes
+    for cls in classes:
+        bpy.utils.register_class(cls)
+
+    # UI and Handlers Registration
     bpy.types.TOPBAR_MT_file_import.prepend(menu_func_import)
     bpy.types.TOPBAR_MT_file_export.prepend(menu_func_export)
     bpy.types.VIEW3D_MT_add.append(menu_add.menu_func_add)
 
     bpy.app.handlers.depsgraph_update_pre.append(edit_object_change_handler)
-    # bpy.app.handlers.depsgraph_update_post.append(edit_object_change_handler)
-
 
 def unregister():
+    # Unregister Classes
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
 
+    # Unregister Properties
     del bpy.types.Scene.revolt
     del bpy.types.Object.revolt
     del bpy.types.Mesh.revolt
+    
+    bpy.utils.unregister_class(RVSceneProperties)
+    bpy.utils.unregister_class(RVObjectProperties)
+    bpy.utils.unregister_class(RVSceneProperties)    
+
+    # UI and Handlers Unregistration
     bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
     bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
     bpy.types.VIEW3D_MT_add.remove(menu_add.menu_func_add)
-    
+
     bpy.app.handlers.depsgraph_update_pre.remove(edit_object_change_handler)
 
 if __name__ == "__main__":
@@ -269,5 +273,5 @@ def dprint(*args):
     """ Debug print function """
     if DEBUG_MODE:
         print("DEBUG:", *args)
-        
+
 dprint("Re-Volt addon successfully registered.")
