@@ -418,15 +418,6 @@ class ButtonVertexAlphaCreateLayer(bpy.types.Operator):
         create_alpha_layer(context)
         return{"FINISHED"}
 
-class RV_OT_BakeShadow(bpy.types.Operator):
-    bl_idname = "tools.bake_shadow"
-    bl_label = "Bake Shadow"
-    bl_description = "Bake shadow for the selected object"
-
-    def execute(self, context):
-        # Your bake_shadow function code here
-        return {'FINISHED'}
-
 """
 HELPERS -----------------------------------------------------------------------
 """

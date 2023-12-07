@@ -78,7 +78,7 @@ from .operators import ButtonSelectNCPMaterial, ButtonColorFromActive, ButtonVer
 from .operators import ButtonVertexColorCreateLayer, ButtonVertexAlphaCreateLayer, ButtonEnableMaterialMode
 from .operators import ButtonEnableSolidMode, ButtonRenameAllObjects, SelectByName, SelectByData
 from .operators import SetInstanceProperty, RemoveInstanceProperty, BatchBake, LaunchRV, TexturesSave
-from .operators import TexturesRename, CarParametersExport, RV_OT_BakeShadow, IgnoreNCP, SetBCubeMeshIndices
+from .operators import TexturesRename, CarParametersExport, IgnoreNCP, SetBCubeMeshIndices
 from .operators import PickInstanceColor, SetModelColor, ToggleEnvironmentMap, ToggleHide, ToggleNoMirror
 from .operators import SetEnvironmentMapColor, ToggleNoLights, ToggleNoCameraCollision
 from .operators import ToggleNoObjectCollision, SetInstancePriority, SetLoDBias, ToggleMirrorPlane
@@ -86,6 +86,7 @@ from .rvstruct import World, PRM, Mesh, BoundingBox, Vector, Matrix, Polygon, Ve
 from .rvstruct import Frame, Color, Instances, Instance, PosNodes, PosNode, NCP, Polyhedron, Plane, LookupGrid
 from .rvstruct import LookupList, Hull, ConvexHull, Edge, Interior, Sphere, RIM, MirrorPlane, TrackZones, Zone
 from .texanim import ButtonCopyUvToFrame, ButtonCopyFrameToUv, PreviewNextFrame, PreviewPrevFrame, TexAnimTransform, TexAnimGrid
+from .tools import ButtonBakeShadow
 from .props.props_mesh import RVMeshProperties
 from .props.props_obj import RVObjectProperties
 from .props.props_scene import RVSceneProperties
@@ -94,7 +95,7 @@ from .ui.headers import RVIO_PT_EditModeHeader, RVIO_PT_RevoltIOToolPanel
 from .ui.helpers import RVIO_PT_RevoltHelpersPanelMesh, RVIO_PT_RevoltHelpersPanelObj
 from .ui.hull import ButtonHullGenerate, OBJECT_OT_add_revolt_hull_sphere, RVIO_PT_RevoltHullPanel
 from .ui.instances import RVIO_PT_RevoltInstancesPanel
-from .ui.light import ButtonBakeShadow, ButtonBakeLightToVertex, RVIO_PT_RevoltLightPanel
+from .ui.light import ButtonBakeLightToVertex, RVIO_PT_RevoltLightPanel
 from .ui.texanim import RVIO_PT_AnimModesPanel, RVIO_PT_RevoltAnimationPanel
 from .ui.objectpanel import RVIO_PT_RevoltObjectPanel
 from .ui.scene import RVIO_PT_RevoltScenePanel
@@ -224,7 +225,6 @@ classes = (
     TexAnimGrid,
     ButtonZoneHide,
     OBJECT_OT_add_revolt_track_zone,
-    RV_OT_BakeShadow,
     IgnoreNCP,
     SetBCubeMeshIndices,
     PickInstanceColor,
@@ -344,7 +344,6 @@ def register():
     bpy.utils.register_class(TexAnimGrid)
     bpy.utils.register_class(ButtonZoneHide)
     bpy.utils.register_class(OBJECT_OT_add_revolt_track_zone)
-    bpy.utils.register_class(RV_OT_BakeShadow)
     bpy.utils.register_class(IgnoreNCP)
     bpy.utils.register_class(SetBCubeMeshIndices)
     bpy.utils.register_class(PickInstanceColor)
@@ -430,7 +429,6 @@ def unregister():
     bpy.utils.unregister_class(PickInstanceColor)
     bpy.utils.unregister_class(SetBCubeMeshIndices)
     bpy.utils.unregister_class(IgnoreNCP)
-    bpy.utils.unregister_class(RV_OT_BakeShadow)
     bpy.utils.unregister_class(OBJECT_OT_add_revolt_track_zone)
     bpy.utils.unregister_class(ButtonZoneHide)
     bpy.utils.unregister_class(TexAnimGrid)
