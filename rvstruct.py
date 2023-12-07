@@ -31,6 +31,19 @@ import os
 import struct
 from math import ceil, sqrt
 
+from bpy.props import (
+    BoolProperty,
+    BoolVectorProperty,
+    EnumProperty,
+    FloatProperty,
+    IntProperty,
+    StringProperty,
+    CollectionProperty,
+    IntVectorProperty,
+    FloatVectorProperty,
+    PointerProperty
+)
+
 
 class World:
     """
@@ -839,7 +852,7 @@ class Instance:
     """
     def __init__(self, file=None):
         self.name = ""                            # first 8 letters of file name
-        self.color = (0, 0, 0)       # model % RGB color
+        self.color = (0, 0, 0)                    # model % RGB color
         self.env_color = Color(color=[0, 0, 0], alpha=True) # envMap color
         self.priority = 0                         # priority for multiplayer
         self.flag = 0                             # flag with properties
@@ -1370,15 +1383,24 @@ class Sphere:
         }
         return dic
 
-
 class RIM:
     """ Mirror planes """
-    def __init__(self, file=None):
-        self.num_mirror_planes = 0
-        self.mirror_planes = []
+    _instance = None  # Singleton instance
 
-        if file:
-            self.read(file)
+    def __new__(cls, *args, **kwargs):
+        if not cls._instance:
+            cls._instance = super(RIM, cls).__new__(cls)
+        return cls._instance
+
+    def __init__(self, file=None):
+        # Initialize only if not already initialized
+        if not hasattr(self, 'initialized'):
+            self.num_mirror_planes = 0
+            self.mirror_planes = []
+            self.initialized = True
+
+            if file:
+                self.read(file)
 
     def read(self, file):
         self.num_mirror_planes = struct.unpack("<h", file.read(2))[0]
@@ -1388,6 +1410,11 @@ class RIM:
         file.write(struct.pack("<h", self.num_mirror_planes))
         for x in range(self.num_mirror_planes):
             self.mirror_planes[x].write(file)
+
+# Assuming MirrorPlane and other necessary classes are defined elsewhere
+
+# Creating the singleton instance of RIM
+rim_instance = RIM()
 
 class MirrorPlane:
     """ Mirror plane """

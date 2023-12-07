@@ -393,15 +393,29 @@ def get_active_face(bm):
 
 
 def get_edit_bmesh(obj):
+    if obj is None or obj.type != 'MESH' or obj.mode != 'EDIT':
+        return None
+
+    # Ensure the global dictionary is defined
+    global dic
+
     try:
+        # Attempt to retrieve the existing bmesh
         bm = dic[obj.name]
-        bm.faces.layers.int.get("Type")
+        bm.faces.layers.int.get("Type")  # Your existing logic
         return bm
-    except Exception as e:
+
+    except KeyError:
+        # KeyError occurs if obj.name is not in dic - create a new bmesh
         dprint("Bmesh is gone, creating new one...")
-        del dic[obj.name]
-        bm = dic.setdefault(obj.name, bmesh.from_edit_mesh(obj.data))
+        bm = bmesh.from_edit_mesh(obj.data)
+        dic[obj.name] = bm
         return bm
+
+    except Exception as e:
+        # Handle other unexpected errors
+        dprint(f"Unexpected error: {e}")
+        return None
 
 
 def apply_trs(obj, bm, transform=False):
@@ -579,23 +593,29 @@ def redraw():
     redraw_3d()
     redraw_uvedit()
 
-
 def redraw_3d():
     for window in bpy.context.window_manager.windows:
-        screen = window.screen
-        for area in screen.areas:
+        for area in window.screen.areas:
             if area.type == "VIEW_3D":
-                area.tag_redraw()
-                break
-
+                override = {
+                    "window": window,
+                    "screen": window.screen,
+                    "area": area,
+                    "region": area.regions[0],
+                }
+                bpy.ops.wm.redraw_factory(**override)
 
 def redraw_uvedit():
     for window in bpy.context.window_manager.windows:
-        screen = window.screen
-        for area in screen.areas:
+        for area in window.screen.areas:
             if area.type == "IMAGE_EDITOR":
-                area.tag_redraw()
-                break
+                override = {
+                    "window": window,
+                    "screen": window.screen,
+                    "area": area,
+                    "region": area.regions[0],
+                }
+                bpy.ops.wm.redraw_factory(**override)
 
 
 def enable_any_tex_mode(context):

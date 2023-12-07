@@ -21,6 +21,61 @@ import time
 from . import common
 from .common import *
 
+from .props.props_scene import RVSceneProperties
+from bpy.props import (
+    FloatProperty,
+    IntProperty,
+    StringProperty,
+)
+
+    # from common
+BAKE_SHADOW_METHODS = [
+    ("ADAPTIVE_QMC", "Default (fast)", "", "ALIASED", 0),
+    ("CONSTANT_QMC", "Nicer (slow)", "", "ANTIALIASED", 1)
+]
+    # from props_scene
+shadow_method = bpy.props.EnumProperty(
+    name="Method",
+    items=BAKE_SHADOW_METHODS,
+    description="Default (Adaptive QMC):\nFaster option, recommended "
+                "for testing the shadow settings.\n\n"
+                "High Quality:\nSlower and less grainy option, "
+                "recommended for creating the final shadow"
+)
+
+shadow_quality = IntProperty(
+    name = "Quality",
+    min = 0,
+    max = 32,
+    default = 15,
+    description = "The amount of samples the shadow is rendered with "
+                  "(number of samples taken extra)"
+)
+    
+shadow_resolution = IntProperty(
+    name = "Resolution",
+    min = 32,
+    max = 8192,
+    default = 128,
+    description = "Texture resolution of the shadow.\n"
+                  "Default: 128x128 pixels"
+)
+    
+shadow_softness = FloatProperty(
+    name = "Softness",
+    min = 0.0,
+    max = 100.0,
+    default = 1,
+    description = "Softness of the shadow "
+                  "(Light size for ray shadow sampling)"
+)
+    
+shadow_table = StringProperty(
+    name = "Shadowtable",
+    default = "",
+    description = "Shadow coordinates for use in parameters.txt of cars.\n"
+                  "Click to select all, then CTRL C to copy"
+)
 
 def bake_shadow(self, context):
     # This will create a negative shadow (Re-Volt requires a neg. texture)
@@ -37,30 +92,28 @@ def bake_shadow(self, context):
     method = props.shadow_method
     softness = props.shadow_softness
 
-    # create hemi (positive)
-    lamp_data_pos = bpy.data.lamps.new(name="ShadePositive", type="HEMI")
+    # Create a hemi light (positive)
+    lamp_data_pos = bpy.data.lights.new(name="ShadePositive", type="HEMI")
+    lamp_data_pos.energy = 1.0  # Adjust the light intensity if needed
     lamp_positive = bpy.data.objects.new(name="ShadePositive", object_data=lamp_data_pos)
 
-    lamp_data_neg = bpy.data.lamps.new(name="ShadeNegative", type="SUN")
-    # create sun light (negative)
+    # Create a sun light (negative)
+    lamp_data_neg = bpy.data.lights.new(name="ShadeNegative", type="SUN")
+    lamp_data_neg.energy = 1.0  # Adjust the light intensity if needed
     lamp_data_neg.use_negative = True
-    lamp_data_neg.shadow_method = "RAY_SHADOW"
-    lamp_data_neg.shadow_ray_samples = quality
-    lamp_data_neg.shadow_ray_sample_method = method
-    lamp_data_neg.shadow_soft_size = softness
     lamp_negative = bpy.data.objects.new(name="ShadeNegative", object_data=lamp_data_neg)
 
-    # link objects to the scene
-    scene.objects.link(lamp_positive)
-    scene.objects.link(lamp_negative)
+    # Link lights to the scene
+    scene.collection.objects.link(lamp_positive)
+    scene.collection.objects.link(lamp_negative)
 
-    # create a texture
+    # Create a texture
     shadow_tex = bpy.data.images.new(name="Shadow", width=resolution, height=resolution)
 
     all_objs = [ob_child for ob_child in context.scene.objects if ob_child.parent == shade_obj] + [shade_obj]
 
-    # get the bounds taking in account all child objects (wheels, etc.)
-    # using the world matrix here to get positions from child objects
+    # Get the bounds taking in account all child objects (wheels, etc.)
+    # Using the world matrix here to get positions from child objects
     far_left = min([min([(ob.matrix_world[0][3] + ob.bound_box[i][0] * shade_obj.scale[0]) for i in range(0, 8)]) for ob in all_objs])
     far_right = max([max([(ob.matrix_world[0][3] + ob.bound_box[i][0] * shade_obj.scale[0]) for i in range(0, 8)]) for ob in all_objs])
     far_front = max([max([(ob.matrix_world[1][3] + ob.bound_box[i][1] * shade_obj.scale[1]) for i in range(0, 8)]) for ob in all_objs])
@@ -68,31 +121,38 @@ def bake_shadow(self, context):
     far_top = max([max([(ob.matrix_world[2][3] + ob.bound_box[i][2] * shade_obj.scale[2]) for i in range(0, 8)]) for ob in all_objs])
     far_bottom = min([min([(ob.matrix_world[2][3] + ob.bound_box[i][2] * shade_obj.scale[2]) for i in range(0, 8)]) for ob in all_objs])
 
-    # get the dimensions to set the scale
+    # Get the dimensions to set the scale
     dim_x = abs(far_left - far_right)
     dim_y = abs(far_front - far_back)
 
-    # location for the shadow plane
+    # Location for the shadow plane
     loc = ((far_right + far_left)/2,
            (far_front + far_back)/2,
             far_bottom)
 
-    # create the shadow plane and map it
+    # Create the shadow plane and map it
     bpy.ops.mesh.primitive_plane_add(location=loc, enter_editmode=True)
     bpy.ops.uv.unwrap()
     bpy.ops.object.mode_set(mode='OBJECT')
     shadow_plane = context.object
 
-    # scale the shadow plane
+    # Set the scale for the shadow plane
     scale = max(dim_x, dim_y)
-    shadow_plane.scale[0] = scale/1.5
-    shadow_plane.scale[1] = scale/1.5
+    shadow_plane.scale.x = scale / 1.5
+    shadow_plane.scale.y = scale / 1.5
 
-    # unwrap the shadow plane
-    for uv_face in context.object.data.uv_textures.active.data:
-        uv_face.image = shadow_tex
+    # Unwrap the shadow plane
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.uv.unwrap(method='ANGLE_BASED', margin=0.001)
+    bpy.ops.object.mode_set(mode='OBJECT')
+    bpy.ops.object.bake(type='DIFFUSE')
 
-    bpy.ops.object.bake_image()
+    # Set the image for the shadow plane UV map
+    uv_layer = shadow_plane.data.uv_layers.active
+    for polygon in shadow_plane.data.polygons:
+        for loop_index in polygon.loop_indices:
+            loop = shadow_plane.data.loops[loop_index]
+            uv_layer.data[loop.index].image = shadow_tex
 
     # And finally select it and delete it
     shade_obj.select = False
@@ -119,6 +179,15 @@ def bake_shadow(self, context):
         sleft, sright, sfront, sback, sheight
     )
     props.shadow_table = shtable
+    
+class ButtonBakeShadow(bpy.types.Operator):
+    bl_idname = "lighttools.bake_shadow"
+    bl_label = "Bake Shadow"
+    bl_description = "Creates a shadow plane beneath the selected object"
+
+    def execute(self, context):
+        bake_shadow(context)
+        return {"FINISHED"}
 
 
 def bake_vertex(self, context):

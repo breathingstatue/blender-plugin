@@ -18,6 +18,18 @@ from . import tools
 from .common import *
 from .layers import *
 from .texanim import *
+from .rvstruct import RIM, MirrorPlane
+
+from bpy.props import (
+    BoolProperty,
+    BoolVectorProperty,
+    EnumProperty,
+    FloatProperty,
+    IntProperty,
+    StringProperty,
+    FloatVectorProperty,
+    PointerProperty
+)
 
 """
 IMPORT AND EXPORT -------------------------------------------------------------
@@ -379,7 +391,6 @@ class ButtonColorFromActive(bpy.types.Operator):
         redraw()
         return{"FINISHED"}
 
-
 class ButtonVertexColorSet(bpy.types.Operator):
     bl_idname = "vertexcolor.set"
     bl_label = "Set Color"
@@ -390,7 +401,6 @@ class ButtonVertexColorSet(bpy.types.Operator):
         set_vertex_color(context, self.number)
         return{"FINISHED"}
 
-
 class ButtonVertexColorCreateLayer(bpy.types.Operator):
     bl_idname = "vertexcolor.create_layer"
     bl_label = "Create Vertex Color Layer"
@@ -400,7 +410,6 @@ class ButtonVertexColorCreateLayer(bpy.types.Operator):
         create_color_layer(context)
         return{"FINISHED"}
 
-
 class ButtonVertexAlphaCreateLayer(bpy.types.Operator):
     bl_idname = "vertexcolor.create_layer_alpha"
     bl_label = "Create Alpha Color Layer"
@@ -409,7 +418,14 @@ class ButtonVertexAlphaCreateLayer(bpy.types.Operator):
         create_alpha_layer(context)
         return{"FINISHED"}
 
+class RV_OT_BakeShadow(bpy.types.Operator):
+    bl_idname = "tools.bake_shadow"
+    bl_label = "Bake Shadow"
+    bl_description = "Bake shadow for the selected object"
 
+    def execute(self, context):
+        # Your bake_shadow function code here
+        return {'FINISHED'}
 
 """
 HELPERS -----------------------------------------------------------------------
@@ -436,18 +452,22 @@ class ButtonEnableSolidMode(bpy.types.Operator):
 
 
 class ButtonRenameAllObjects(bpy.types.Operator):
-    bl_idname = "helpers.rename_all_objects"
-    bl_label = "Rename selected"
-    bl_description = (
-        "Renames all objects for instance export:\n"
-        "(example.prm, example.prm.001, ...)"
+    bl_idname = "object.rename_selected_objects"
+    bl_label = "Rename Selected Objects"
+    bl_description = "Renames all selected objects using a new name"
+
+    new_name: bpy.props.StringProperty(
+        name="New Name",
+        default="NewName",
+        description="Enter a new name for the selected objects"
     )
 
     def execute(self, context):
-        n = tools.rename_all_objects(self, context)
-        msg_box("Renamed {} objects".format(n))
+        # Loop through selected objects and rename them
+        for obj in bpy.context.selected_objects:
+            obj.name = self.new_name
 
-        return{"FINISHED"}
+        return {'FINISHED'}
 
 
 class SelectByName(bpy.types.Operator):
@@ -500,7 +520,6 @@ class RemoveInstanceProperty(bpy.types.Operator):
         n = tools.set_property_to_selected(self, context, "is_instance", False)
         msg_box("Marked {} objects as instances".format(n))
         return{"FINISHED"}
-
 
 class BatchBake(bpy.types.Operator):
     bl_idname = "helpers.batch_bake_model"
@@ -568,8 +587,9 @@ class TexturesSave(bpy.types.Operator):
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
+
 class TexturesRename(bpy.types.Operator):
-    bl_idname = "helpers.textures_rename"
+    bl_idname = "helpers.texture_rename"
     bl_label = "Rename track textures"
     bl_description = (
         "Assigns a proper name to each texture image used and makes their id numbers consistent"
@@ -577,11 +597,12 @@ class TexturesRename(bpy.types.Operator):
 
     def execute(self, context):
         number = 0
-        for key, image in bpy.data.images.items():
+        for image in bpy.data.images:
             if image.source == 'FILE':
-                image.name = ("%d.bmp" % number)
+                image.name = f"{number:04d}.bmp"
                 number += 1
-        return{"FINISHED"}
+        return {'FINISHED'}
+    
 
 class CarParametersExport(bpy.types.Operator):
     bl_idname = "helpers.car_parameters_export"
@@ -594,3 +615,301 @@ class CarParametersExport(bpy.types.Operator):
         from . import parameters_out
         parameters_out.export_file()
         return{"FINISHED"}
+    
+
+class IgnoreNCP(bpy.types.Operator):
+    bl_idname = "object.toggle_ignore_ncp"
+    bl_label = "Toggle Ignore Collision (.ncp)"
+    
+    def execute(self, context):
+        # Toggle the ignore_ncp property
+        obj = context.object
+        obj.revolt.ignore_ncp = not obj.revolt.ignore_ncp
+        return {'FINISHED'}
+    
+
+class SetBCubeMeshIndices(bpy.types.Operator):
+    bl_idname = "object.set_bcube_mesh_indices"
+    bl_label = "Set Mesh Indices"
+    
+    def execute(self, context):
+        obj = context.object
+        revolt_props = obj.revolt
+        
+        # Clear any previous mesh indices
+        revolt_props.bcube_mesh_indices = ""
+        
+        # Iterate through child meshes and add their indices
+        for child_obj in obj.children:
+            if child_obj.type == 'MESH':
+                if revolt_props.bcube_mesh_indices:
+                    revolt_props.bcube_mesh_indices += ","
+                revolt_props.bcube_mesh_indices += str(child_obj.data.index)
+        
+        return {'FINISHED'}
+    
+
+class PickInstanceColor(bpy.types.Operator):
+    bl_idname = "object.pick_instance_color"
+    bl_label = "Pick Instance Color"
+    
+    def execute(self, context):
+        # Check if there's a selected object
+        if context.selected_objects:
+            selected_object = context.selected_objects[0]
+            
+            # Check if the selected object is an instance (you can customize this check)
+            if "instance" in selected_object.name.lower():
+                # Open the color picker dialog
+                bpy.context.window_manager.invoke_props_dialog(self)
+                return {'RUNNING_MODAL'}
+        
+        # If no valid instance is selected, do nothing
+        return {'CANCELLED'}
+    
+    # Properties for the color picker
+    color: bpy.props.FloatVectorProperty(
+        name="Color",
+        subtype='COLOR',
+        size=3,  # Set size to 3 for RGB color
+        min=0.0,
+        max=1.0,
+        default=(1.0, 1.0, 1.0)
+    )
+    
+    def draw(self, context):
+        layout = self.layout
+        layout.prop(self, "color")
+    
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+
+    def finish(self, context):
+        # Apply the picked color to the selected instance object
+        if context.selected_objects:
+            selected_object = context.selected_objects[0]
+            
+            # Check if the selected object is an instance (you can customize this check)
+            if "instance" in selected_object.name.lower():
+                selected_object.color = self.color
+        
+        return {'FINISHED'}
+    
+class SetModelColor(bpy.types.Operator):
+    bl_idname = "object.set_model_color"
+    bl_label = "Set Model Color"
+    bl_description = "Open the color picker to set the Model Color"
+    
+    def execute(self, context):
+        return {'RUNNING_MODAL'}
+    
+    def invoke(self, context, event):
+        # Open the color picker dialog and set the result to update the color
+        context.window_manager.invoke_props_dialog(self)
+        return {'RUNNING_MODAL'}
+    
+    # Property for the color picker
+    color: bpy.props.FloatVectorProperty(
+        name="Model Color",
+        subtype='COLOR',
+        default=(0.5, 0.5, 0.5),
+        min=0.0, max=1.0,
+        description="Model RGB color to be added/subtracted:\n1.0: Bright, overrides vertex colors\n"
+            "0.5: Default, leaves vertex colors intact\n"
+            "0.0: Dark",
+        size=3  # Ensure size is set to 3 for RGB color
+    )
+    
+    def draw(self, context):
+        layout = self.layout
+        layout.prop(self, "color")
+    
+    def finish(self, context):
+        # Check if there's a selected object
+        if context.selected_objects:
+            selected_object = context.selected_objects[0]
+            
+            # Check if the selected object is an instance (you can customize this check)
+            if "instance" in selected_object.name.lower():
+                selected_object.revolt.fin_col = self.color[:3]  # Set RGB values from the color picker
+        
+        return {'FINISHED'}
+
+class ToggleEnvironmentMap(bpy.types.Operator):
+    bl_idname = "object.toggle_environment_map"
+    bl_label = "Toggle Environment Map"
+    
+    def execute(self, context):
+        selected_object = context.active_object
+        
+        if selected_object and "instance" in selected_object.name.lower():
+            selected_object.revolt.fin_env = not selected_object.revolt.fin_env
+        
+        return {'FINISHED'}
+
+class SetEnvironmentMapColor(bpy.types.Operator):
+    bl_idname = "object.set_environment_map_color"
+    bl_label = "Set Env Color"
+    
+    fin_envcol = bpy.props.FloatVectorProperty(
+        name="Env Color",
+        subtype='COLOR',
+        default=(1.0, 1.0, 1.0, 1.0),
+        min=0.0,
+        max=1.0,
+        description="Color of the EnvMap",
+        size=3,  # Set the size to 3 for RGB color
+        alpha=True  # Add the alpha component as a separate property
+    )
+
+    def execute(self, context):
+        # Access the selected object
+        obj = context.object
+
+        # Set the environment map color to the selected value
+        obj.revolt.fin_envcol = self.fin_envcol
+
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+    
+class ToggleHide(bpy.types.Operator):
+    bl_idname = "object.toggle_hide"
+    bl_label = "Toggle Hide"
+    
+    def execute(self, context):
+        selected_object = context.active_object
+        
+        if selected_object and "instance" in selected_object.name.lower():
+            selected_object.revolt.fin_hide = not selected_object.revolt.fin_hide
+        
+        return {'FINISHED'}
+
+class ToggleNoMirror(bpy.types.Operator):
+    bl_idname = "object.toggle_no_mirror"
+    bl_label = "Toggle No Mirror Mode"
+    bl_description = "Toggle the 'Don't show in Mirror Mode' property"
+
+    def execute(self, context):
+        obj = context.object
+        if obj and obj.type == 'MESH' and obj.get("is_instance", False):
+            obj.revolt.fin_no_mirror = not obj.revolt.fin_no_mirror
+        return {'FINISHED'}
+
+class ToggleNoLights(bpy.types.Operator):
+    bl_idname = "object.toggle_no_lights"
+    bl_label = "Toggle Is Affected by Light"
+    bl_description = "Toggle the 'Is affected by Light' property"
+
+    def execute(self, context):
+        obj = context.object
+        if obj and obj.type == 'MESH' and obj.get("is_instance", False):
+            obj.revolt.fin_no_lights = not obj.revolt.fin_no_lights
+        return {'FINISHED'}
+
+def menu_func(self, context):
+    layout = self.layout
+    obj = context.object
+
+    if obj and obj.type == 'MESH' and obj.get("is_instance", False):
+        layout.operator(ToggleNoLightsOperator.bl_idname)
+        
+class ToggleNoCameraCollision(bpy.types.Operator):
+    bl_idname = "object.toggle_no_cam_coll"
+    bl_label = "Toggle No Camera Collision"
+    bl_description = "Toggle the 'No Camera Collision' property"
+
+    def execute(self, context):
+        obj = context.object
+        if obj and "instance" in obj.name.lower():
+            obj.revolt.fin_no_cam_coll = not obj.revolt.fin_no_cam_coll
+        return {'FINISHED'}
+    
+class ToggleNoObjectCollision(bpy.types.Operator):
+    bl_idname = "object.toggle_no_obj_coll"
+    bl_label = "Toggle No Object Collision"
+    bl_description = "Toggle the 'No Object Collision' property"
+
+    def execute(self, context):
+        obj = context.object
+        if obj and "instance" in obj.name.lower():
+            obj.revolt.fin_no_obj_coll = not obj.revolt.fin_no_obj_coll
+        return {'FINISHED'}
+    
+class SetInstancePriority(bpy.types.Operator):
+    bl_idname = "object.set_instance_priority"
+    bl_label = "Set Instance Priority"
+    bl_description = "Set the priority for the instance"
+
+    fin_priority: bpy.props.IntProperty(
+        name="Priority",
+        default=1,
+        description="Priority for instance. Instance will always be shown if set to 1."
+    )
+
+    def execute(self, context):
+        obj = context.object
+        if obj and "instance" in obj.name.lower():
+            obj.revolt.fin_priority = self.fin_priority
+        return {'FINISHED'}
+    
+class SetLoDBias(bpy.types.Operator):
+    bl_idname = "object.set_lod_bias"
+    bl_label = "Set LoD Bias"
+    bl_description = "Set the LoD Bias (Unused)"
+
+    fin_lod_bias: bpy.props.IntProperty(
+        name="LoD Bias",
+        default=1024,
+        description="Unused"
+    )
+
+    def execute(self, context):
+        obj = context.object
+        if obj and "instance" in obj.name.lower():
+            obj.revolt.fin_lod_bias = self.fin_lod_bias
+        return {'FINISHED'}
+    
+class ToggleMirrorPlane(bpy.types.Operator):
+    bl_idname = "object.toggle_mirror_plane"
+    bl_label = "Toggle Mirror Plane"
+    bl_description = "Toggle Mirror Plane status for the selected object"
+
+    def execute(self, context):
+        # Check if there is an active object
+        if context.active_object:
+            obj = context.active_object
+
+            # Check if the object is already a mirror plane
+            is_mirror_plane = any(mp.object_name == obj.name for mp in rim_instance.mirror_planes)
+
+            if not is_mirror_plane:
+                # Create a new MirrorPlane instance and add it to the RIM instance
+                new_mirror_plane = MirrorPlane()
+                # Set properties of the mirror plane based on the object
+                # Example: new_mirror_plane.object_name = obj.name
+                rim_instance.mirror_planes.append(new_mirror_plane)
+                rim_instance.num_mirror_planes += 1
+
+                # Optionally set a custom property on the object for UI indication
+                obj["is_mirror_plane"] = True
+
+                self.report({'INFO'}, f"{obj.name} set as a new mirror plane")
+            else:
+                # Logic if you want to toggle or update the mirror plane status
+                # Example: remove or update the mirror plane in rim_instance
+                # Update or remove the custom property
+                obj["is_mirror_plane"] = not obj.get("is_mirror_plane", False)
+
+                self.report({'INFO'}, f"{obj.name} mirror plane status updated")
+
+        else:
+            self.report({'WARNING'}, "No active object selected")
+
+        return {'FINISHED'}
+
+if __name__ == "__main__":
+    register()
+    
+dprint

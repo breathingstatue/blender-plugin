@@ -9,6 +9,7 @@ Marv's Add-On for Re-Volt with Theman's Update
 # Global debug flag
 DEBUG_MODE = True
 
+from tokenize import Ignore
 import bpy
 import os
 import os.path
@@ -20,6 +21,7 @@ from . import (
     common,
     layers,
     operators,
+    rvstruct,
     texanim,
     tools,
 )
@@ -43,15 +45,17 @@ from .ui import (
     helpers,
     settings,
 )
+
 # Reloads potentially changed modules on reload (F8 in Blender)
 importlib.reload(common)
 importlib.reload(layers)
-importlib.reload(props_mesh)
-importlib.reload(props_obj)
-importlib.reload(props_scene)
 importlib.reload(operators)
 importlib.reload(texanim)
 importlib.reload(tools)
+
+importlib.reload(props_mesh)
+importlib.reload(props_obj)
+importlib.reload(props_scene)
 
 # Reloads ui
 importlib.reload(headers)
@@ -74,8 +78,14 @@ from .operators import ButtonSelectNCPMaterial, ButtonColorFromActive, ButtonVer
 from .operators import ButtonVertexColorCreateLayer, ButtonVertexAlphaCreateLayer, ButtonEnableMaterialMode
 from .operators import ButtonEnableSolidMode, ButtonRenameAllObjects, SelectByName, SelectByData
 from .operators import SetInstanceProperty, RemoveInstanceProperty, BatchBake, LaunchRV, TexturesSave
-from .operators import TexturesRename, CarParametersExport
-from. texanim import ButtonCopyUvToFrame, ButtonCopyFrameToUv, PreviewNextFrame, PreviewPrevFrame, TexAnimTransform, TexAnimGrid
+from .operators import TexturesRename, CarParametersExport, RV_OT_BakeShadow, IgnoreNCP, SetBCubeMeshIndices
+from .operators import PickInstanceColor, SetModelColor, ToggleEnvironmentMap, ToggleHide, ToggleNoMirror
+from .operators import SetEnvironmentMapColor, ToggleNoLights, ToggleNoCameraCollision
+from .operators import ToggleNoObjectCollision, SetInstancePriority, SetLoDBias, ToggleMirrorPlane
+from .rvstruct import World, PRM, Mesh, BoundingBox, Vector, Matrix, Polygon, Vertex, UV, BigCube, TexAnimation
+from .rvstruct import Frame, Color, Instances, Instance, PosNodes, PosNode, NCP, Polyhedron, Plane, LookupGrid
+from .rvstruct import LookupList, Hull, ConvexHull, Edge, Interior, Sphere, RIM, MirrorPlane, TrackZones, Zone
+from .texanim import ButtonCopyUvToFrame, ButtonCopyFrameToUv, PreviewNextFrame, PreviewPrevFrame, TexAnimTransform, TexAnimGrid
 from .props.props_mesh import RVMeshProperties
 from .props.props_obj import RVObjectProperties
 from .props.props_scene import RVSceneProperties
@@ -93,6 +103,8 @@ from .ui.vertex import RVIO_PT_VertexPanel
 from .ui.zone import ButtonZoneHide, OBJECT_OT_add_revolt_track_zone, RVIO_PT_RevoltZonePanel
 
 # Reloaded here because it's used in a class which is instanced here
+if "bpy" in locals():
+    importlib.reload(props_scene)
 if "fin_in" in locals():
     importlib.reload(fin_in)
 if "fin_out" in locals():
@@ -140,7 +152,7 @@ bl_info = {
 "category": "Import-Export"
 }
 
-bmesh_dict = {}  # This global dictionary will store your BMesh objects
+bmesh_dic = {}  # This global dictionary will store your BMesh objects
 
 @persistent
 def edit_object_change_handler(scene):
@@ -149,22 +161,22 @@ def edit_object_change_handler(scene):
 
     # If no active object or the active object is not a mesh, clear the dictionary and return
     if obj is None or obj.type != 'MESH':
-        bmesh_dict.clear()
+        bmesh_dic.clear()
         return
 
     # Handle the case where the object is in edit mode
     if obj.mode == 'EDIT':
         try:
             # Set default only if obj.name is not in bmesh_dict, to avoid creating a new bmesh each time
-            if obj.name not in bmesh_dict:
-                bmesh_dict[obj.name] = bmesh.from_edit_mesh(obj.data)
+            if obj.name not in bmesh_dic:
+                bmesh_dic[obj.name] = bmesh.from_edit_mesh(obj.data)
         except KeyError as e:
             print(f"Error accessing BMesh for object: {e}")
         except Exception as e:
             print(f"Unexpected error: {e}")
     else:
         # If the object is not in edit mode, clear the dictionary
-        bmesh_dict.clear()
+        bmesh_dic.clear()
 
 def menu_func_import(self, context):
     """Import function for the user interface."""
@@ -175,24 +187,8 @@ def menu_func_export(self, context):
     """Export function for the user interface."""
     self.layout.operator("export_scene.revolt", text="Re-Volt")
 
-classes = (
-    
-    # UI Panel classes
-    RVIO_PT_RevoltFacePropertiesPanel,
-    RVIO_PT_EditModeHeader,
-    RVIO_PT_RevoltIOToolPanel,
-    RVIO_PT_RevoltHelpersPanelObj,
-    RVIO_PT_RevoltHelpersPanelMesh,
-    RVIO_PT_RevoltHullPanel,
-    RVIO_PT_RevoltInstancesPanel,
-    RVIO_PT_RevoltLightPanel,
-    RVIO_PT_RevoltObjectPanel,
-    RVIO_PT_RevoltScenePanel,
-    RVIO_PT_RevoltSettingsPanel,
-    RVIO_PT_RevoltAnimationPanel,
-    RVIO_PT_VertexPanel,
-    RVIO_PT_RevoltZonePanel,
-
+classes = (    
+       
     # Operator classes
     ImportRV,
     ExportRV,
@@ -228,22 +224,163 @@ classes = (
     TexAnimGrid,
     ButtonZoneHide,
     OBJECT_OT_add_revolt_track_zone,
+    RV_OT_BakeShadow,
+    IgnoreNCP,
+    SetBCubeMeshIndices,
+    PickInstanceColor,
+    SetModelColor,
+    ToggleEnvironmentMap,
+    SetEnvironmentMapColor,
+    ToggleHide,
+    ToggleNoMirror,
+    ToggleNoLights,
+    ToggleNoCameraCollision,
+    ToggleNoObjectCollision,
+    SetInstancePriority,
+    SetLoDBias,
+    ToggleMirrorPlane,
+    
+    # rvstruct classes
+    World, 
+    PRM, 
+    Mesh, 
+    BoundingBox, 
+    Vector, 
+    Matrix, 
+    Polygon, 
+    Vertex, 
+    UV, 
+    BigCube, 
+    TexAnimation,
+    Frame, 
+    Color, 
+    Instances, 
+    Instance, 
+    PosNodes, 
+    PosNode, 
+    NCP, 
+    Polyhedron, 
+    Plane, 
+    LookupGrid,
+    LookupList, 
+    Hull, 
+    ConvexHull, 
+    Edge, 
+    Interior, 
+    Sphere, 
+    RIM, 
+    MirrorPlane, 
+    TrackZones, 
+    Zone,    
+    
+    #Custom Properties
+    RVSceneProperties,
+    RVObjectProperties,
+    RVMeshProperties,
+
+    # UI Panel classes
+    RVIO_PT_RevoltFacePropertiesPanel,
+    RVIO_PT_EditModeHeader,
+    RVIO_PT_RevoltIOToolPanel,
+    RVIO_PT_RevoltHelpersPanelObj,
+    RVIO_PT_RevoltHelpersPanelMesh,
+    RVIO_PT_RevoltHullPanel,
+    RVIO_PT_RevoltInstancesPanel,
+    RVIO_PT_RevoltLightPanel,
+    RVIO_PT_RevoltObjectPanel,
+    RVIO_PT_RevoltScenePanel,
+    RVIO_PT_RevoltSettingsPanel,
+    RVIO_PT_AnimModesPanel,
+    RVIO_PT_RevoltAnimationPanel,
+    RVIO_PT_VertexPanel,
+    RVIO_PT_RevoltZonePanel,
 )
 
 def register():
+   
+    # Register Classes
+    # for cls in classes:
+       # bpy.utils.register_class(cls)
+
+    props_scene.register()
+
+    #Register Custom Properties
     bpy.utils.register_class(RVSceneProperties)
     bpy.utils.register_class(RVObjectProperties)
     bpy.utils.register_class(RVMeshProperties)
     
-    # Register Classes
-    for cls in classes:
-        bpy.utils.register_class(cls)
+    #Register Operators
+    bpy.utils.register_class(ImportRV)
+    bpy.utils.register_class(ExportRV)
+    bpy.utils.register_class(ButtonReExport)
+    bpy.utils.register_class(ButtonSelectFaceProp)
+    bpy.utils.register_class(ButtonSelectNCPFaceProp)
+    bpy.utils.register_class(ButtonSelectNCPMaterial)
+    bpy.utils.register_class(ButtonColorFromActive)
+    bpy.utils.register_class(ButtonVertexColorSet)
+    bpy.utils.register_class(ButtonVertexColorCreateLayer)
+    bpy.utils.register_class(ButtonVertexAlphaCreateLayer)
+    bpy.utils.register_class(ButtonEnableMaterialMode)
+    bpy.utils.register_class(ButtonEnableSolidMode)
+    bpy.utils.register_class(ButtonRenameAllObjects)
+    bpy.utils.register_class(SelectByName)
+    bpy.utils.register_class(SelectByData)
+    bpy.utils.register_class(SetInstanceProperty)
+    bpy.utils.register_class(RemoveInstanceProperty)
+    bpy.utils.register_class(BatchBake)
+    bpy.utils.register_class(LaunchRV)
+    bpy.utils.register_class(TexturesSave)
+    bpy.utils.register_class(TexturesRename)
+    bpy.utils.register_class(CarParametersExport)
+    bpy.utils.register_class(ButtonHullGenerate)  
+    bpy.utils.register_class(ButtonBakeShadow)
+    bpy.utils.register_class(ButtonBakeLightToVertex)
+    bpy.utils.register_class(OBJECT_OT_add_revolt_hull_sphere)
+    bpy.utils.register_class(ButtonCopyUvToFrame)
+    bpy.utils.register_class(ButtonCopyFrameToUv)
+    bpy.utils.register_class(PreviewNextFrame)
+    bpy.utils.register_class(PreviewPrevFrame)
+    bpy.utils.register_class(TexAnimTransform)
+    bpy.utils.register_class(TexAnimGrid)
+    bpy.utils.register_class(ButtonZoneHide)
+    bpy.utils.register_class(OBJECT_OT_add_revolt_track_zone)
+    bpy.utils.register_class(RV_OT_BakeShadow)
+    bpy.utils.register_class(IgnoreNCP)
+    bpy.utils.register_class(SetBCubeMeshIndices)
+    bpy.utils.register_class(PickInstanceColor)
+    bpy.utils.register_class(SetModelColor)
+    bpy.utils.register_class(ToggleEnvironmentMap)
+    bpy.utils.register_class(SetEnvironmentMapColor)
+    bpy.utils.register_class(ToggleHide)
+    bpy.utils.register_class(ToggleNoMirror)
+    bpy.utils.register_class(ToggleNoLights)
+    bpy.utils.register_class(ToggleNoCameraCollision)
+    bpy.utils.register_class(ToggleNoObjectCollision)
+    bpy.utils.register_class(SetInstancePriority)
+    bpy.utils.register_class(SetLoDBias)
+    bpy.utils.register_class(ToggleMirrorPlane)
+    
+    # Register UI
+    bpy.utils.register_class(RVIO_PT_RevoltFacePropertiesPanel)
+    bpy.utils.register_class(RVIO_PT_EditModeHeader)
+    bpy.utils.register_class(RVIO_PT_RevoltIOToolPanel)
+    bpy.utils.register_class(RVIO_PT_RevoltHelpersPanelObj)
+    bpy.utils.register_class(RVIO_PT_RevoltHelpersPanelMesh)
+    bpy.utils.register_class(RVIO_PT_RevoltHullPanel)
+    bpy.utils.register_class(RVIO_PT_RevoltScenePanel)
+    bpy.utils.register_class(RVIO_PT_RevoltSettingsPanel)
+    bpy.utils.register_class(RVIO_PT_AnimModesPanel)
+    bpy.utils.register_class(RVIO_PT_VertexPanel)
+    bpy.utils.register_class(RVIO_PT_RevoltZonePanel)
+    bpy.utils.register_class(RVIO_PT_RevoltInstancesPanel)
+    bpy.utils.register_class(RVIO_PT_RevoltLightPanel)
+    bpy.utils.register_class(RVIO_PT_RevoltObjectPanel)
 
     # Register Properties
     bpy.types.Scene.revolt = bpy.props.PointerProperty(type=RVSceneProperties)
     bpy.types.Object.revolt = bpy.props.PointerProperty(type=RVObjectProperties)
     bpy.types.Mesh.revolt = bpy.props.PointerProperty(type=RVMeshProperties)
- 
+  
     # UI and Handlers Registration
     bpy.app.handlers.depsgraph_update_pre.append(edit_object_change_handler)
 
@@ -252,19 +389,87 @@ def unregister():
     # UI and Handlers Unregistration
     bpy.app.handlers.depsgraph_update_pre.remove(edit_object_change_handler)
     
-    # Unregister Properties
     del bpy.types.Mesh.revolt
     del bpy.types.Object.revolt
     del bpy.types.Scene.revolt
+    
+    props_scene.unregister()
         
     # Unregister Classes
-    for cls in reversed(classes):
-        bpy.utils.unregister_class(cls)
+    # for cls in reversed(classes):
+        # bpy.utils.unregister_class(cls)
 
+    # Unregister UI
+    bpy.utils.unregister_class(RVIO_PT_RevoltObjectPanel)
+    bpy.utils.unregister_class(RVIO_PT_RevoltLightPanel)
+    bpy.utils.unregister_class(RVIO_PT_RevoltInstancesPanel)
+    bpy.utils.unregister_class(RVIO_PT_RevoltZonePanel)
+    bpy.utils.unregister_class(RVIO_PT_VertexPanel)
+    bpy.utils.unregister_class(RVIO_PT_AnimModesPanel)
+    bpy.utils.unregister_class(RVIO_PT_RevoltSettingsPanel)
+    bpy.utils.unregister_class(RVIO_PT_RevoltScenePanel)
+    bpy.utils.unregister_class(RVIO_PT_RevoltHullPanel)
+    bpy.utils.unregister_class(RVIO_PT_RevoltHelpersPanelMesh)
+    bpy.utils.unregister_class(RVIO_PT_RevoltHelpersPanelObj)
+    bpy.utils.unregister_class(RVIO_PT_RevoltIOToolPanel)
+    bpy.utils.unregister_class(RVIO_PT_EditModeHeader)
+    bpy.utils.unregister_class(RVIO_PT_RevoltFacePropertiesPanel)
+    
+    # Unregister Operators
+    bpy.utils.unregister_class(ToggleMirrorPlane)
+    bpy.utils.unregister_class(SetLoDBias)
+    bpy.utils.unregister_class(SetInstancePriority)
+    bpy.utils.unregister_class(ToggleNoObjectCollision)
+    bpy.utils.unregister_class(ToggleNoCameraCollision)
+    bpy.utils.unregister_class(ToggleNoLights)
+    bpy.utils.unregister_class(ToggleNoMirror)
+    bpy.utils.unregister_class(ToggleHide)
+    bpy.utils.unregister_class(SetEnvironmentMapColor)
+    bpy.utils.unregister_class(ToggleEnvironmentMap)
+    bpy.utils.unregister_class(SetModelColor)
+    bpy.utils.unregister_class(PickInstanceColor)
+    bpy.utils.unregister_class(SetBCubeMeshIndices)
+    bpy.utils.unregister_class(IgnoreNCP)
+    bpy.utils.unregister_class(RV_OT_BakeShadow)
+    bpy.utils.unregister_class(OBJECT_OT_add_revolt_track_zone)
+    bpy.utils.unregister_class(ButtonZoneHide)
+    bpy.utils.unregister_class(TexAnimGrid)
+    bpy.utils.unregister_class(TexAnimTransform)
+    bpy.utils.unregister_class(PreviewPrevFrame)
+    bpy.utils.unregister_class(PreviewNextFrame)
+    bpy.utils.unregister_class(ButtonCopyFrameToUv)
+    bpy.utils.unregister_class(ButtonCopyUvToFrame)
+    bpy.utils.unregister_class(OBJECT_OT_add_revolt_hull_sphere)
+    bpy.utils.unregister_class(ButtonBakeLightToVertex)
+    bpy.utils.unregister_class(ButtonBakeShadow)
+    bpy.utils.unregister_class(ButtonHullGenerate) 
+    bpy.utils.unregister_class(CarParametersExport)
+    bpy.utils.unregister_class(TexturesRename)
+    bpy.utils.unregister_class(TexturesSave)
+    bpy.utils.unregister_class(LaunchRV)
+    bpy.utils.unregister_class(BatchBake)
+    bpy.utils.unregister_class(RemoveInstanceProperty)
+    bpy.utils.unregister_class(SetInstanceProperty)
+    bpy.utils.unregister_class(SelectByData)
+    bpy.utils.unregister_class(SelectByName)
+    bpy.utils.unregister_class(ButtonRenameAllObjects)
+    bpy.utils.unregister_class(ButtonEnableSolidMode)
+    bpy.utils.unregister_class(ButtonEnableMaterialMode)
+    bpy.utils.unregister_class(ButtonVertexAlphaCreateLayer)
+    bpy.utils.unregister_class(ButtonVertexColorCreateLayer)
+    bpy.utils.unregister_class(ButtonVertexColorSet)
+    bpy.utils.unregister_class(ButtonColorFromActive)
+    bpy.utils.unregister_class(ButtonSelectNCPMaterial)
+    bpy.utils.unregister_class(ButtonSelectNCPFaceProp)
+    bpy.utils.unregister_class(ButtonSelectFaceProp)
+    bpy.utils.unregister_class(ButtonReExport)
+    bpy.utils.unregister_class(ExportRV)
+    bpy.utils.unregister_class(ImportRV)
+    # Unregister Custom Properties
     bpy.utils.unregister_class(RVMeshProperties)
     bpy.utils.unregister_class(RVObjectProperties)
     bpy.utils.unregister_class(RVSceneProperties)
-  
+
 if __name__ == "__main__":
     register()
 
