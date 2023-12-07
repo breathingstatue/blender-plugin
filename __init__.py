@@ -31,20 +31,18 @@ from .props import (
 )
 
 from .ui import (
-    menu_add,
     headers,
     faceprops,
     instances,
     light,
     hull,
-    object,
+    objectpanel,
     scene,
     vertex,
     texanim,
     helpers,
     settings,
 )
-
 # Reloads potentially changed modules on reload (F8 in Blender)
 importlib.reload(common)
 importlib.reload(layers)
@@ -56,13 +54,12 @@ importlib.reload(texanim)
 importlib.reload(tools)
 
 # Reloads ui
-importlib.reload(menu_add)
 importlib.reload(headers)
 importlib.reload(faceprops)
 importlib.reload(instances)
 importlib.reload(light)
 importlib.reload(hull)
-importlib.reload(object)
+importlib.reload(objectpanel)
 importlib.reload(scene)
 importlib.reload(vertex)
 importlib.reload(texanim)
@@ -72,29 +69,28 @@ importlib.reload(settings)
 # Reloaded here because it's used in a class which is instanced here
 # Include conditional reloads for any other local modules here...
 
+from .operators import ImportRV, ExportRV, ButtonReExport, ButtonSelectFaceProp, ButtonSelectNCPFaceProp
+from .operators import ButtonSelectNCPMaterial, ButtonColorFromActive, ButtonVertexColorSet
+from .operators import ButtonVertexColorCreateLayer, ButtonVertexAlphaCreateLayer, ButtonEnableMaterialMode
+from .operators import ButtonEnableSolidMode, ButtonRenameAllObjects, SelectByName, SelectByData
+from .operators import SetInstanceProperty, RemoveInstanceProperty, BatchBake, LaunchRV, TexturesSave
+from .operators import TexturesRename, CarParametersExport
 from. texanim import ButtonCopyUvToFrame, ButtonCopyFrameToUv, PreviewNextFrame, PreviewPrevFrame, TexAnimTransform, TexAnimGrid
 from .props.props_mesh import RVMeshProperties
 from .props.props_obj import RVObjectProperties
 from .props.props_scene import RVSceneProperties
-from .ui.faceprops import RevoltFacePropertiesPanel
-from .ui.headers import EditModeHeader, RevoltIOToolPanel
-from .ui.helpers import RevoltHelpersPanelObj, RevoltHelpersPanelMesh
-from .ui.hull import RevoltHullPanel, ButtonHullGenerate, OBJECT_OT_add_revolt_hull_sphere
-from .ui.instances import RevoltInstancesPanel
-from .ui.light import RevoltLightPanel, ButtonBakeShadow, ButtonBakeLightToVertex
-from .ui.menu_add import INFO_MT_revolt_add
-from .ui.texanim import MenuAnimModes, RevoltAnimationPanel
-from .ui.object import RevoltObjectPanel
-from .ui.scene import RevoltScenePanel
-from .ui.settings import RevoltSettingsPanel
-from .ui.vertex import VertexPanel
-from .ui.zone import RevoltZonePanel, ButtonZoneHide, OBJECT_OT_add_revolt_track_zone
-from .operators import ImportRV, ExportRV, ButtonReExport, ButtonSelectFaceProp, ButtonSelectNCPFaceProp
-from .operators import ButtonSelectNCPMaterial, ButtonColorFromActive, ButtonVertexColorSet
-from .operators import ButtonVertexColorCreateLayer, ButtonVertexAlphaCreateLayer, ButtonEnableTextureMode
-from .operators import ButtonEnableTexturedSolidMode, ButtonRenameAllObjects, SelectByName, SelectByData
-from .operators import SetInstanceProperty, RemoveInstanceProperty, BatchBake, LaunchRV, TexturesSave
-from .operators import TexturesRename, CarParametersExport
+from .ui.faceprops import RVIO_PT_RevoltFacePropertiesPanel
+from .ui.headers import RVIO_PT_EditModeHeader, RVIO_PT_RevoltIOToolPanel
+from .ui.helpers import RVIO_PT_RevoltHelpersPanelMesh, RVIO_PT_RevoltHelpersPanelObj
+from .ui.hull import ButtonHullGenerate, OBJECT_OT_add_revolt_hull_sphere, RVIO_PT_RevoltHullPanel
+from .ui.instances import RVIO_PT_RevoltInstancesPanel
+from .ui.light import ButtonBakeShadow, ButtonBakeLightToVertex, RVIO_PT_RevoltLightPanel
+from .ui.texanim import RVIO_PT_AnimModesPanel, RVIO_PT_RevoltAnimationPanel
+from .ui.objectpanel import RVIO_PT_RevoltObjectPanel
+from .ui.scene import RVIO_PT_RevoltScenePanel
+from .ui.settings import RVIO_PT_RevoltSettingsPanel
+from .ui.vertex import RVIO_PT_VertexPanel
+from .ui.zone import ButtonZoneHide, OBJECT_OT_add_revolt_track_zone, RVIO_PT_RevoltZonePanel
 
 # Reloaded here because it's used in a class which is instanced here
 if "fin_in" in locals():
@@ -144,18 +140,31 @@ bl_info = {
 "category": "Import-Export"
 }
 
+bmesh_dict = {}  # This global dictionary will store your BMesh objects
+
 @persistent
 def edit_object_change_handler(scene):
     """Makes the edit mode bmesh available for use in GUI panels."""
-    obj = scene.objects.active
-    if obj is None:
-        return
-    # Adds an instance of the edit mode mesh to the global dict
-    if obj.mode == 'EDIT' and obj.type == 'MESH':
-        bm = dic.setdefault(obj.name, bmesh.from_edit_mesh(obj.data))
+    obj = bpy.context.view_layer.objects.active
+
+    # If no active object or the active object is not a mesh, clear the dictionary and return
+    if obj is None or obj.type != 'MESH':
+        bmesh_dict.clear()
         return
 
-    dic.clear()
+    # Handle the case where the object is in edit mode
+    if obj.mode == 'EDIT':
+        try:
+            # Set default only if obj.name is not in bmesh_dict, to avoid creating a new bmesh each time
+            if obj.name not in bmesh_dict:
+                bmesh_dict[obj.name] = bmesh.from_edit_mesh(obj.data)
+        except KeyError as e:
+            print(f"Error accessing BMesh for object: {e}")
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+    else:
+        # If the object is not in edit mode, clear the dictionary
+        bmesh_dict.clear()
 
 def menu_func_import(self, context):
     """Import function for the user interface."""
@@ -168,25 +177,21 @@ def menu_func_export(self, context):
 
 classes = (
     
-    # Menu classes
-    INFO_MT_revolt_add,
-    MenuAnimModes,
-
     # UI Panel classes
-    RevoltFacePropertiesPanel,
-    EditModeHeader,
-    RevoltIOToolPanel,
-    RevoltHelpersPanelObj,
-    RevoltHelpersPanelMesh,
-    RevoltHullPanel,
-    RevoltInstancesPanel,
-    RevoltLightPanel,
-    RevoltObjectPanel,
-    RevoltScenePanel,
-    RevoltSettingsPanel,
-    RevoltAnimationPanel,
-    VertexPanel,
-    RevoltZonePanel,
+    RVIO_PT_RevoltFacePropertiesPanel,
+    RVIO_PT_EditModeHeader,
+    RVIO_PT_RevoltIOToolPanel,
+    RVIO_PT_RevoltHelpersPanelObj,
+    RVIO_PT_RevoltHelpersPanelMesh,
+    RVIO_PT_RevoltHullPanel,
+    RVIO_PT_RevoltInstancesPanel,
+    RVIO_PT_RevoltLightPanel,
+    RVIO_PT_RevoltObjectPanel,
+    RVIO_PT_RevoltScenePanel,
+    RVIO_PT_RevoltSettingsPanel,
+    RVIO_PT_RevoltAnimationPanel,
+    RVIO_PT_VertexPanel,
+    RVIO_PT_RevoltZonePanel,
 
     # Operator classes
     ImportRV,
@@ -199,8 +204,8 @@ classes = (
     ButtonVertexColorSet,
     ButtonVertexColorCreateLayer,
     ButtonVertexAlphaCreateLayer,
-    ButtonEnableTextureMode,
-    ButtonEnableTexturedSolidMode,
+    ButtonEnableMaterialMode,
+    ButtonEnableSolidMode,
     ButtonRenameAllObjects,
     SelectByName,
     SelectByData,
@@ -228,44 +233,38 @@ classes = (
 def register():
     bpy.utils.register_class(RVSceneProperties)
     bpy.utils.register_class(RVObjectProperties)
-    bpy.utils.register_class(RVMeshProperties)    
-    # Register Properties
-    bpy.types.Scene.revolt = bpy.props.PointerProperty(type=RVSceneProperties)
-    bpy.types.Object.revolt = bpy.props.PointerProperty(type=RVObjectProperties)
-    bpy.types.Mesh.revolt = bpy.props.PointerProperty(type=RVMeshProperties)
-
+    bpy.utils.register_class(RVMeshProperties)
+    
     # Register Classes
     for cls in classes:
         bpy.utils.register_class(cls)
 
+    # Register Properties
+    bpy.types.Scene.revolt = bpy.props.PointerProperty(type=RVSceneProperties)
+    bpy.types.Object.revolt = bpy.props.PointerProperty(type=RVObjectProperties)
+    bpy.types.Mesh.revolt = bpy.props.PointerProperty(type=RVMeshProperties)
+ 
     # UI and Handlers Registration
-    bpy.types.TOPBAR_MT_file_import.prepend(menu_func_import)
-    bpy.types.TOPBAR_MT_file_export.prepend(menu_func_export)
-    bpy.types.VIEW3D_MT_add.append(menu_add.menu_func_add)
-
     bpy.app.handlers.depsgraph_update_pre.append(edit_object_change_handler)
 
 def unregister():
+    
+    # UI and Handlers Unregistration
+    bpy.app.handlers.depsgraph_update_pre.remove(edit_object_change_handler)
+    
+    # Unregister Properties
+    del bpy.types.Mesh.revolt
+    del bpy.types.Object.revolt
+    del bpy.types.Scene.revolt
+        
     # Unregister Classes
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
 
-    # Unregister Properties
-    del bpy.types.Scene.revolt
-    del bpy.types.Object.revolt
-    del bpy.types.Mesh.revolt
-    
-    bpy.utils.unregister_class(RVSceneProperties)
+    bpy.utils.unregister_class(RVMeshProperties)
     bpy.utils.unregister_class(RVObjectProperties)
-    bpy.utils.unregister_class(RVSceneProperties)    
-
-    # UI and Handlers Unregistration
-    bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
-    bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
-    bpy.types.VIEW3D_MT_add.remove(menu_add.menu_func_add)
-
-    bpy.app.handlers.depsgraph_update_pre.remove(edit_object_change_handler)
-
+    bpy.utils.unregister_class(RVSceneProperties)
+  
 if __name__ == "__main__":
     register()
 

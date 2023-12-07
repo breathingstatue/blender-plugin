@@ -415,24 +415,24 @@ class ButtonVertexAlphaCreateLayer(bpy.types.Operator):
 HELPERS -----------------------------------------------------------------------
 """
 
-class ButtonEnableTextureMode(bpy.types.Operator):
-    bl_idname = "helpers.enable_texture_mode"
-    bl_label = "Enable Texture Mode"
-    bl_description = "Enables texture mode so textures can be seen"
+class ButtonEnableMaterialMode(bpy.types.Operator):
+    bl_idname = "helpers.enable_material_mode"
+    bl_label = "Enable Material Preview"
+    bl_description = "Enables material preview mode to see textures and materials"
 
     def execute(self, context):
-        enable_texture_mode()
-        return{"FINISHED"}
+        enable_material_mode()  # This function should set the shading mode to 'MATERIAL'
+        return {"FINISHED"}
 
 
-class ButtonEnableTexturedSolidMode(bpy.types.Operator):
-    bl_idname = "helpers.enable_textured_solid_mode"
-    bl_label = "Enable Textured Solid Mode"
-    bl_description = "Enables texture mode so textures can be seen"
+class ButtonEnableSolidMode(bpy.types.Operator):
+    bl_idname = "helpers.enable_solid_mode"
+    bl_label = "Enable Solid Mode"
+    bl_description = "Enables solid shading mode"
 
     def execute(self, context):
-        enable_textured_solid_mode()
-        return{"FINISHED"}
+        enable_solid_mode()  # This function should set the shading mode to 'SOLID'
+        return {"FINISHED"}
 
 
 class ButtonRenameAllObjects(bpy.types.Operator):

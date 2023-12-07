@@ -599,62 +599,55 @@ def redraw_uvedit():
 
 
 def enable_any_tex_mode(context):
-    """ Enables the preferred texture mode according to settings """
+    """ Enables the preferred shading mode according to settings """
     props = context.scene.revolt
+
+    # Decide what "prefer_tex_solid_mode" corresponds to in the context of your add-on
+    # For example, you might choose 'MATERIAL' mode to represent the preferred texture mode
     if props.prefer_tex_solid_mode:
-        enable_textured_solid_mode()
+        enable_material_mode()  # Assuming this is the preferred mode
     else:
-        enable_texture_mode()
+        enable_solid_mode()  # Fall back to solid mode
 
 
-def enable_texture_mode():
-    """ Enables textured shading in the viewport """
+def enable_material_mode():
+    """ Enables material preview in the viewport """
     for area in bpy.context.screen.areas:
-        if area.type == "VIEW_3D":
+        if area.type == 'VIEW_3D':
             for space in area.spaces:
-                if space.type == "VIEW_3D":
-                    space.viewport_shade = "TEXTURED"
-    return
-
-def enable_textured_solid_mode():
-    """ Enables solid mode and enables textured solid shading """
-    for area in bpy.context.screen.areas:
-        if area.type == "VIEW_3D":
-            for space in area.spaces:
-                if space.type == "VIEW_3D":
-                    space.viewport_shade = "SOLID"
-                    space.show_textured_solid = True
+                if space.type == 'VIEW_3D':
+                    space.shading.type = 'MATERIAL'
     return
 
 def enable_solid_mode():
     """ Enables solid mode """
     for area in bpy.context.screen.areas:
-        if area.type == "VIEW_3D":
+        if area.type == 'VIEW_3D':
             for space in area.spaces:
-                if space.type == "VIEW_3D":
-                    space.viewport_shade = "SOLID"
-                    space.show_textured_solid = False
+                if space.type == 'VIEW_3D':
+                    space.shading.type = 'SOLID'
     return
 
+def enable_rendered_mode():
+    """ Enables rendered mode """
+    for area in bpy.context.screen.areas:
+        if area.type == 'VIEW_3D':
+            for space in area.spaces:
+                if space.type == 'VIEW_3D':
+                    space.shading.type = 'RENDERED'
+    return
 
 def texture_mode_enabled():
-    """ Returns true if texture mode or textured solid mode is enabled """
+    """ Returns true if material preview or rendered mode is enabled """
     for area in bpy.context.screen.areas:
-        if area.type == "VIEW_3D":
+        if area.type == 'VIEW_3D':
             for space in area.spaces:
-                if space.type == "VIEW_3D":
+                if space.type == 'VIEW_3D':
                     shading = space.shading
 
                     # Check for MATERIAL or RENDERED shading mode
                     if shading.type in {'MATERIAL', 'RENDERED'}:
                         return True
-
-                    # Check for SOLID shading mode with texture
-                    elif shading.type == 'SOLID':
-                        # Adjusted check for textured display in SOLID mode
-                        if shading.color_type == 'TEXTURE':
-                            return True
-
     return False
 
 
