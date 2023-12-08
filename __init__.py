@@ -73,6 +73,7 @@ importlib.reload(settings)
 # Reloaded here because it's used in a class which is instanced here
 # Include conditional reloads for any other local modules here...
 
+from .common import DialogOperator
 from .operators import ImportRV, ExportRV, ButtonReExport, ButtonSelectFaceProp, ButtonSelectNCPFaceProp
 from .operators import ButtonSelectNCPMaterial, ButtonColorFromActive, ButtonVertexColorSet
 from .operators import ButtonVertexColorCreateLayer, ButtonVertexAlphaCreateLayer, ButtonEnableMaterialMode
@@ -92,7 +93,7 @@ from .props.props_obj import RVObjectProperties
 from .props.props_scene import RVSceneProperties
 from .ui.faceprops import RVIO_PT_RevoltFacePropertiesPanel
 from .ui.headers import RVIO_PT_EditModeHeader, RVIO_PT_RevoltIOToolPanel
-from .ui.helpers import RVIO_PT_RevoltHelpersPanelMesh, RVIO_PT_RevoltHelpersPanelObj
+from .ui.helpers import RVIO_PT_RevoltHelpersPanelMesh
 from .ui.hull import ButtonHullGenerate, OBJECT_OT_add_revolt_hull_sphere, RVIO_PT_RevoltHullPanel
 from .ui.instances import RVIO_PT_RevoltInstancesPanel
 from .ui.light import ButtonBakeLightToVertex, RVIO_PT_RevoltLightPanel
@@ -168,7 +169,7 @@ def edit_object_change_handler(scene):
     # Handle the case where the object is in edit mode
     if obj.mode == 'EDIT':
         try:
-            # Set default only if obj.name is not in bmesh_dict, to avoid creating a new bmesh each time
+            # Set default only if obj.name is not in bmesh_dic, to avoid creating a new bmesh each time
             if obj.name not in bmesh_dic:
                 bmesh_dic[obj.name] = bmesh.from_edit_mesh(obj.data)
         except KeyError as e:
@@ -191,6 +192,7 @@ def menu_func_export(self, context):
 classes = (    
        
     # Operator classes
+    DialogOperator,
     ImportRV,
     ExportRV,
     ButtonReExport,
@@ -282,7 +284,6 @@ classes = (
     RVIO_PT_RevoltFacePropertiesPanel,
     RVIO_PT_EditModeHeader,
     RVIO_PT_RevoltIOToolPanel,
-    RVIO_PT_RevoltHelpersPanelObj,
     RVIO_PT_RevoltHelpersPanelMesh,
     RVIO_PT_RevoltHullPanel,
     RVIO_PT_RevoltInstancesPanel,
@@ -310,6 +311,7 @@ def register():
     bpy.utils.register_class(RVMeshProperties)
     
     #Register Operators
+    bpy.utils.register_class(DialogOperator)
     bpy.utils.register_class(ImportRV)
     bpy.utils.register_class(ExportRV)
     bpy.utils.register_class(ButtonReExport)
@@ -363,7 +365,6 @@ def register():
     bpy.utils.register_class(RVIO_PT_RevoltFacePropertiesPanel)
     bpy.utils.register_class(RVIO_PT_EditModeHeader)
     bpy.utils.register_class(RVIO_PT_RevoltIOToolPanel)
-    bpy.utils.register_class(RVIO_PT_RevoltHelpersPanelObj)
     bpy.utils.register_class(RVIO_PT_RevoltHelpersPanelMesh)
     bpy.utils.register_class(RVIO_PT_RevoltHullPanel)
     bpy.utils.register_class(RVIO_PT_RevoltScenePanel)
@@ -409,7 +410,6 @@ def unregister():
     bpy.utils.unregister_class(RVIO_PT_RevoltScenePanel)
     bpy.utils.unregister_class(RVIO_PT_RevoltHullPanel)
     bpy.utils.unregister_class(RVIO_PT_RevoltHelpersPanelMesh)
-    bpy.utils.unregister_class(RVIO_PT_RevoltHelpersPanelObj)
     bpy.utils.unregister_class(RVIO_PT_RevoltIOToolPanel)
     bpy.utils.unregister_class(RVIO_PT_EditModeHeader)
     bpy.utils.unregister_class(RVIO_PT_RevoltFacePropertiesPanel)
@@ -463,6 +463,7 @@ def unregister():
     bpy.utils.unregister_class(ButtonReExport)
     bpy.utils.unregister_class(ExportRV)
     bpy.utils.unregister_class(ImportRV)
+    bpy.utils.unregister_class(DialogOperator)
     # Unregister Custom Properties
     bpy.utils.unregister_class(RVMeshProperties)
     bpy.utils.unregister_class(RVObjectProperties)

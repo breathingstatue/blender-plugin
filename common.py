@@ -551,10 +551,10 @@ class DialogOperator(bpy.types.Operator):
         global dialog_message
         global dialog_icon
         row = self.layout.row()
-        row.label("", icon=dialog_icon)
+        row.label(text="", icon=dialog_icon)
         column = row.column()
         for line in str.split(dialog_message, "\n"):
-            column.label(line)
+            column.label(text=line)
 
 
 def msg_box(message, icon="INFO"):

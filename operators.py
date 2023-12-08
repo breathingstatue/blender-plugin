@@ -740,7 +740,7 @@ class ToggleEnvironmentMap(bpy.types.Operator):
 
 class SetEnvironmentMapColor(bpy.types.Operator):
     bl_idname = "object.set_environment_map_color"
-    bl_label = "Set Env Color"
+    bl_label = "Set EnvMap Color"
     
     fin_envcol = bpy.props.FloatVectorProperty(
         name="Env Color",
@@ -790,7 +790,7 @@ class ToggleNoMirror(bpy.types.Operator):
 
 class ToggleNoLights(bpy.types.Operator):
     bl_idname = "object.toggle_no_lights"
-    bl_label = "Toggle Is Affected by Light"
+    bl_label = "Is Affected by Light"
     bl_description = "Toggle the 'Is affected by Light' property"
 
     def execute(self, context):
@@ -808,7 +808,7 @@ def menu_func(self, context):
         
 class ToggleNoCameraCollision(bpy.types.Operator):
     bl_idname = "object.toggle_no_cam_coll"
-    bl_label = "Toggle No Camera Collision"
+    bl_label = "No Camera Collision"
     bl_description = "Toggle the 'No Camera Collision' property"
 
     def execute(self, context):
@@ -819,7 +819,7 @@ class ToggleNoCameraCollision(bpy.types.Operator):
     
 class ToggleNoObjectCollision(bpy.types.Operator):
     bl_idname = "object.toggle_no_obj_coll"
-    bl_label = "Toggle No Object Collision"
+    bl_label = "No Object Collision"
     bl_description = "Toggle the 'No Object Collision' property"
 
     def execute(self, context):
@@ -847,7 +847,7 @@ class SetInstancePriority(bpy.types.Operator):
     
 class SetLoDBias(bpy.types.Operator):
     bl_idname = "object.set_lod_bias"
-    bl_label = "Set LoD Bias"
+    bl_label = "Set LoD Bias (Unused)"
     bl_description = "Set the LoD Bias (Unused)"
 
     fin_lod_bias: bpy.props.IntProperty(
