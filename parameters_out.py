@@ -13,6 +13,7 @@ if "bpy" in locals():
 
 import os
 import bpy
+import bmesh
 from bpy import context
 from . import common
 

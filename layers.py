@@ -11,9 +11,10 @@ behavior.
 """
 
 import bpy
+import bmesh
 import mathutils
-from .common import *
-
+from .common import get_edit_bmesh
+from .common import NCP_PROP_MASK
 
 def color_from_face(context):
     obj = context.object
@@ -230,8 +231,9 @@ def set_face_property(self, value, mask):
     layer = bm.faces.layers.int.get("Type") or bm.faces.layers.int.new("Type")
     for face in bm.faces:
         if face.select:
+            print("face[layer] before operation:", face[layer], "type:", type(face[layer]))
             face[layer] = face[layer] | mask if value else face[layer] & ~mask
-
+            
 
 def get_face_ncp_property(self):
     eo = bpy.context.edit_object
@@ -301,3 +303,4 @@ def select_ncp_material(self, context):
     if count == 0:
         msg_box("No {} materials found.".format(MATERIALS[mat+1][1]))
     redraw()
+    

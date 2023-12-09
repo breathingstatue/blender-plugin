@@ -11,6 +11,7 @@ DEBUG_MODE = True
 
 from tokenize import Ignore
 import bpy
+import bmesh
 import os
 import os.path
 import importlib

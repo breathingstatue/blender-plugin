@@ -6,6 +6,7 @@ Description:
 Moved from operators and panels here to reduce script line amount
 
 """
+import bmesh
 
 if "bpy" in locals():
     import imp

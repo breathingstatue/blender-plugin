@@ -7,6 +7,7 @@ Zone files contain numbered boxes to identify tracks space.
 
 """ 
 import bpy
+import bmesh
 import os
 from . import common
 from . import rvstruct

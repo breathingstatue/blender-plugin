@@ -7,6 +7,8 @@ Mirror planes are used to determine reflective surfaces.
 
 """
 
+import bmesh
+
 if "common" in locals():
     import imp
     imp.reload(common)

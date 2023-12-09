@@ -7,20 +7,17 @@ Some functions that are called by operators
 (e.g. the light panel, helpers, etc.).
 
 """
-
-if "bpy" in locals():
-    import imp
-    imp.reload(common)
-
 import bpy
 import bmesh
 import mathutils
 from math import pi
 import time
-
 from . import common
-from .common import *
+import importlib
 
+if "bpy" in locals():
+    importlib.reload(common)
+    
 from .props.props_scene import RVSceneProperties
 from bpy.props import (
     FloatProperty,

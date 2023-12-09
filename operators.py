@@ -13,12 +13,13 @@ import bpy
 import time
 import subprocess
 import shutil
+import bmesh
 
 from . import tools
 from .common import *
 from .layers import *
 from .texanim import *
-from .rvstruct import RIM, MirrorPlane
+from .rvstruct import *
 
 from bpy.props import (
     BoolProperty,
@@ -30,6 +31,9 @@ from bpy.props import (
     FloatVectorProperty,
     PointerProperty
 )
+
+FACE_ENV = "World"
+FACE_NOENV = "Mesh"
 
 """
 IMPORT AND EXPORT -------------------------------------------------------------
@@ -729,13 +733,26 @@ class SetModelColor(bpy.types.Operator):
 class ToggleEnvironmentMap(bpy.types.Operator):
     bl_idname = "object.toggle_environment_map"
     bl_label = "Toggle Environment Map"
-    
+
     def execute(self, context):
-        selected_object = context.active_object
-        
-        if selected_object and "instance" in selected_object.name.lower():
-            selected_object.revolt.fin_env = not selected_object.revolt.fin_env
-        
+        obj = context.active_object
+        if obj is None:
+            self.report({'WARNING'}, "No active object")
+            return {'CANCELLED'}
+
+        # Toggle the fin_env property
+        obj.revolt.fin_env = not obj.revolt.fin_env
+
+        # Update face_envmapping and face_no_envmapping based on fin_env
+        if obj.revolt.fin_env:
+            # fin_env is True, set face_envmapping to True and face_no_envmapping to False
+            set_face_property(obj, True, FACE_ENV)
+            set_face_property(obj, False, FACE_NOENV)
+        else:
+            # fin_env is False, set face_envmapping to False and face_no_envmapping to True
+            set_face_property(obj, False, FACE_ENV)
+            set_face_property(obj, True, FACE_NOENV)
+
         return {'FINISHED'}
 
 class SetEnvironmentMapColor(bpy.types.Operator):
@@ -745,20 +762,31 @@ class SetEnvironmentMapColor(bpy.types.Operator):
     fin_envcol = bpy.props.FloatVectorProperty(
         name="Env Color",
         subtype='COLOR',
-        default=(1.0, 1.0, 1.0, 1.0),
+        default=(1.0, 1.0, 1.0),
         min=0.0,
         max=1.0,
         description="Color of the EnvMap",
-        size=3,  # Set the size to 3 for RGB color
-        alpha=True  # Add the alpha component as a separate property
+        size=3  # Set the size to 3 for RGB color
     )
 
     def execute(self, context):
-        # Access the selected object
-        obj = context.object
+        obj = context.active_object
+        if obj is None:
+            self.report({'WARNING'}, "No active object")
+            return {'CANCELLED'}
 
-        # Set the environment map color to the selected value
-        obj.revolt.fin_envcol = self.fin_envcol
+        # Check if the object is flagged as FACE_ENV
+        if getattr(obj, 'fin_env', False):
+            # Create a Color object and store it on the object
+            fin_envcol_obj = rvstruct.Color(color=(self.fin_envcol[0] * 255,
+                                                   self.fin_envcol[1] * 255,
+                                                   self.fin_envcol[2] * 255),
+                                            alpha=255)  # or use alpha from self.fin_envcol if needed
+
+            obj["fin_envcol"] = fin_envcol_obj.as_dict()
+        else:
+            self.report({'INFO'}, "Object is not flagged as FACE_ENV")
+            return {'CANCELLED'}
 
         return {'FINISHED'}
 
@@ -771,9 +799,6 @@ class ToggleHide(bpy.types.Operator):
     
     def execute(self, context):
         selected_object = context.active_object
-        
-        if selected_object and "instance" in selected_object.name.lower():
-            selected_object.revolt.fin_hide = not selected_object.revolt.fin_hide
         
         return {'FINISHED'}
 

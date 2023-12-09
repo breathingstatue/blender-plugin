@@ -9,6 +9,7 @@ Zone files contain numbered boxes to identify tracks space.
 
 
 import os
+import bmesh
 import bpy
 import mathutils
 

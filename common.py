@@ -396,13 +396,12 @@ def get_edit_bmesh(obj):
     if obj is None or obj.type != 'MESH' or obj.mode != 'EDIT':
         return None
 
-    # Ensure the global dictionary is defined
-    global dic
+    bmesh_dic = {}
 
     try:
         # Attempt to retrieve the existing bmesh
         bm = dic[obj.name]
-        bm.faces.layers.int.get("Type")  # Your existing logic
+        bm.faces.layers.int.get("Type")
         return bm
 
     except KeyError:

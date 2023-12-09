@@ -28,6 +28,7 @@ Missing Formats:
 """
 
 import os
+import bmesh
 import struct
 from math import ceil, sqrt
 

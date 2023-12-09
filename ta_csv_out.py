@@ -8,6 +8,7 @@ This module provides an easy way to transfer texture animations from one
 file to another, as well as edit them in an external spread sheet program.
 
 """
+import bmesh
 
 if "common" in locals():
     import imp
