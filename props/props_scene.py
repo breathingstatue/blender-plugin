@@ -9,6 +9,7 @@ level information.
 """
 
 import bpy
+import bmesh
 
 from bpy.props import (
     BoolProperty,

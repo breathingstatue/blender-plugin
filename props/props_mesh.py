@@ -10,6 +10,7 @@ using the mesh data defined here.
 
 
 import bpy
+import bmesh
 
 from bpy.props import (
     BoolProperty,

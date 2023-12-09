@@ -9,6 +9,7 @@ Especially instances make use of this (.fin).
 """
 
 import bpy
+import bmesh
 
 from bpy.props import (
     BoolProperty,
