@@ -1,8 +1,7 @@
 import bpy
 import bmesh
-from ..common import *
 from ..props.props_scene import RVSceneProperties
-from .. import operators
+from ..operators import *
 
 class RVIO_PT_RevoltInstancesPanel(bpy.types.Panel):
     bl_label = "Instances"
