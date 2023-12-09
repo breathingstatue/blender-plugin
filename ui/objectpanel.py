@@ -1,9 +1,10 @@
 import bpy
+import bmesh
 from ..common import *
-from .. import operators
-from .hull import *
-
 from ..operators import *
+from .hull import *
+from ..props.props_obj import RVObjectProperties
+from ..rvstruct import *
 
 from bpy.props import (BoolProperty,
                        FloatVectorProperty, 
@@ -27,6 +28,12 @@ class RVIO_PT_RevoltObjectPanel(bpy.types.Panel):
         layout = self.layout
         obj = context.object
         objprops = obj.revolt
+        
+        if obj:
+            col = layout.column()
+            col.operator("object.toggle_environment_map", text="Use Environment Map", icon="MATERIAL_DATA")
+            col = layout.column()
+            col.operator("object.set_environment_map_color")
 
         # Ignore NCP
         layout.operator("object.toggle_ignore_ncp", text="Toggle Ignore Collision (.ncp)")
@@ -44,25 +51,22 @@ class RVIO_PT_RevoltObjectPanel(bpy.types.Panel):
         row = box.row(align=True)
         row.operator("object.pick_instance_color", text="Pick Color")
         row.operator("object.set_model_color", text="Set Colour", icon='COLOR')
-        row = box.row(align=True)
-        row.operator("object.toggle_environment_map", text="Use Environment Map", icon='ARROW_LEFTRIGHT')
-        row.operator("object.set_environment_map_color", text="Set EnvMap Color", icon='COLOR')
-        row.operator("object.toggle_hide", text="Hide", icon='HIDE_ON' if obj.revolt.fin_hide else 'HIDE_OFF')
-        row.operator("object.toggle_no_mirror", text="No Mirror")
-        row.operator("object.toggle_no_lights", text="No Lights")
-        row.operator("object.toggle_no_cam_coll", text="No Camera Collision")
-        row.operator("object.toggle_no_obj_coll", text="No Object Collision")
-        row.operator("object.set_instance_priority", text="Set Priority")
-        row.operator("object.set_lod_bias", text="Unused")
+        col = box.column(align=True)
+        col.operator("object.toggle_no_mirror", text="Toggle No Mirror")
+        col.operator("object.toggle_no_lights", text="Toggle No Lights")
+        col.operator("object.toggle_no_cam_coll", text="Toggle No Camera Collision")
+        col.operator("object.toggle_no_obj_coll", text="Toggle No Object Collision")
+        col.operator("object.set_instance_priority", text="Set Instance Priority")
+        col.operator("object.set_lod_bias", text="Set LOD Bias")
 
         # Mirror properties
-        row = box.row(align=True)
         box.label(text="Mirror Properties:")
+        row = box.row(align=True)
         row.operator("object.toggle_mirror_plane", text="Is Mirror Plane")
 
         # Hull properties
-        row = box.row(align=True)
         box.label(text="Hull Properties:")
+        row = box.row(align=True)
         row.operator("hull.generate")
         row.operator("object.add_hull_sphere")
         

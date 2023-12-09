@@ -6,6 +6,7 @@ a custom color which is chosen with a color picker.
 """
 
 import bpy
+import bmesh
 from ..common import *
 from .widgets import *
 

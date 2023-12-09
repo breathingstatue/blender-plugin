@@ -1,4 +1,5 @@
 import bpy
+import bmesh
 from ..common import *
 
 class RVIO_PT_RevoltSettingsPanel(bpy.types.Panel):

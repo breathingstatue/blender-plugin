@@ -1,4 +1,5 @@
 import bpy
+import bmesh
 from ..common import *
 from .. import tools
 

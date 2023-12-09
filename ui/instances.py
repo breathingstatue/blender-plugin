@@ -1,4 +1,5 @@
 import bpy
+import bmesh
 from ..common import *
 from ..props.props_scene import RVSceneProperties
 from .. import operators
@@ -30,16 +31,5 @@ class RVIO_PT_RevoltInstancesPanel(bpy.types.Panel):
         col = layout.column(align=True)
         col.operator("helpers.set_instance_property")
         col.operator("helpers.rem_instance_property")
-
-        col = layout.column(align=True)
-        col.operator("object.toggle_environment_map")
-        col.operator("object.set_environment_map_color")
-        col.operator("object.toggle_hide")
-        col.operator("object.toggle_no_mirror")
-        col.operator("object.toggle_no_lights")
-        col.operator("object.toggle_no_cam_coll")
-        col.operator("object.toggle_no_obj_coll")
-        col.operator("object.set_instance_priority")
-        col.operator("object.set_lod_bias")
         
 dprint

@@ -4,7 +4,9 @@ set up correctly to use a feature. They return true if something isn't right.
 They return false if everything is alright.
 """
 import bpy
-from ..common import *
+import bmesh
+from ..operators import *
+from ..common import texture_mode_enabled
 
 def widget_texture_mode(self):
     if not texture_mode_enabled():
@@ -38,11 +40,9 @@ def widget_vertex_color_channel(self, obj):
             # The operator might require the object to be in Edit mode
             # Ensure the object is in the correct mode or inform the user
             if obj.mode == 'EDIT':
-                row.operator("mesh.vertex_color_add", icon='PLUS',
+                row.operator("vertexcolor.create_layer", icon='PLUS',
                              text="Create Vertex Color Layer")
             else:
                 row.label(text="Switch to Edit Mode to add Vertex Color Layer", icon='ERROR')
             return True
     return False
-
-dprint

@@ -1,4 +1,5 @@
 import bpy
+import bmesh
 from ..common import *
 from .widgets import *
 from .. import tools
@@ -36,7 +37,7 @@ class RVIO_PT_RevoltLightPanel(bpy.types.Panel):
                 box = self.layout.box()
                 box.label(text="Shade Object")
                 row = box.row()
-                row.prop(props, "light_orientation", text="Orientation")
+                row.prop(props.revolt, "light_orientation", text="Orientation")
                 if props.light_orientation == "X":
                     dirs = ["Left", "Right"]
                 elif props.light_orientation == "Y":
