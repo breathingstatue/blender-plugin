@@ -16,7 +16,8 @@ import shutil
 import bmesh
 
 from . import tools
-from .common import *
+from .common import FIN_ENV
+from .props.props_obj import RVObjectProperties
 from .layers import *
 from .texanim import *
 from .rvstruct import *
@@ -31,9 +32,6 @@ from bpy.props import (
     FloatVectorProperty,
     PointerProperty
 )
-
-FACE_ENV = "World"
-FACE_NOENV = "Mesh"
 
 """
 IMPORT AND EXPORT -------------------------------------------------------------
@@ -740,20 +738,33 @@ class ToggleEnvironmentMap(bpy.types.Operator):
             self.report({'WARNING'}, "No active object")
             return {'CANCELLED'}
 
-        # Toggle the fin_env property
-        obj.revolt.fin_env = not obj.revolt.fin_env
-
-        # Update face_envmapping and face_no_envmapping based on fin_env
-        if obj.revolt.fin_env:
-            # fin_env is True, set face_envmapping to True and face_no_envmapping to False
-            set_face_property(obj, True, FACE_ENV)
-            set_face_property(obj, False, FACE_NOENV)
+        if "revolt" in obj:
+            revolt_props = obj.revolt
+            if "fin_env" in revolt_props:
+                # If 'fin_env' exists, remove it and update material to indicate it's toggled off
+                del revolt_props["fin_env"]
+                self.update_material_reflection(obj, False)
+                self.report({'INFO'}, "Environment map turned off")
+            else:
+                # If 'fin_env' does not exist, add it, set to True, and update material
+                revolt_props["fin_env"] = True
+                self.update_material_reflection(obj, True)
+                self.report({'INFO'}, "Environment map turned on")
         else:
-            # fin_env is False, set face_envmapping to False and face_no_envmapping to True
-            set_face_property(obj, False, FACE_ENV)
-            set_face_property(obj, True, FACE_NOENV)
+            self.report({'WARNING'}, "Object does not have 'revolt' properties")
 
         return {'FINISHED'}
+
+    def update_material_reflection(self, obj, enable_reflection):
+        """Update material's reflection properties based on enable_reflection."""
+        if obj.type == 'MESH' and obj.data.materials:
+            for mat in obj.data.materials:
+                if mat and mat.use_nodes:
+                    for node in mat.node_tree.nodes:
+                        if node.type == 'BSDF_PRINCIPLED':
+                            # Set reflection properties based on enable_reflection
+                            node.inputs['Roughness'].default_value = 0.0 if enable_reflection else 0.5
+                            node.inputs['Metallic'].default_value = 1.0 if enable_reflection else 0.0
 
 class SetEnvironmentMapColor(bpy.types.Operator):
     bl_idname = "object.set_environment_map_color"
@@ -925,7 +936,4 @@ class ToggleMirrorPlane(bpy.types.Operator):
 
         return {'FINISHED'}
 
-if __name__ == "__main__":
-    register()
-    
 dprint

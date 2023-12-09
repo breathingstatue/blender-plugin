@@ -16,6 +16,7 @@ import os
 import os.path
 import importlib
 from bpy.app.handlers import persistent  # For the scene update handler
+from bpy.app.handlers import load_post
 
 # Importing modules from the add-on's package
 from . import (
@@ -189,6 +190,15 @@ def menu_func_import(self, context):
 def menu_func_export(self, context):
     """Export function for the user interface."""
     self.layout.operator("export_scene.revolt", text="Re-Volt")
+    
+def initialize_custom_properties():
+    for obj in bpy.data.objects:
+        # Attach 'revolt' property group if not already attached
+        if not hasattr(obj, 'revolt'):
+            obj.revolt = bpy.props.PointerProperty(type=bpy.types.ObjectRevolt)
+
+def load_handler(dummy):
+    initialize_custom_properties()
 
 classes = (    
        
@@ -384,10 +394,12 @@ def register():
   
     # UI and Handlers Registration
     bpy.app.handlers.depsgraph_update_pre.append(edit_object_change_handler)
+    bpy.app.handlers.load_post.append(load_handler)
 
 def unregister():
     
     # UI and Handlers Unregistration
+    bpy.app.handlers.load_post.remove(load_handler)
     bpy.app.handlers.depsgraph_update_pre.remove(edit_object_change_handler)
     
     del bpy.types.Mesh.revolt

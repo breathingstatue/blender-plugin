@@ -15,6 +15,10 @@ import bmesh
 import mathutils
 from .common import get_edit_bmesh
 from .common import NCP_PROP_MASK
+from .common import FACE_PROP_MASK
+from .common import objects_to_bmesh
+from .prm_in import add_rvmesh_to_bmesh
+from .prm_out import export_mesh
 
 def color_from_face(context):
     obj = context.object
@@ -115,7 +119,7 @@ def set_vertex_color(context, number):
     bmesh.update_edit_mesh(mesh, tessface=False, destructive=False)
 
 
-def get_face_material(self):
+def get_face_material():
     eo = bpy.context.edit_object
     bm = get_edit_bmesh(eo)
     layer = (bm.faces.layers.int.get("Material") or
@@ -132,7 +136,7 @@ def get_face_material(self):
         return selected_faces[0][layer]
 
 
-def set_face_material(self, value):
+def set_face_material(value):
     eo = bpy.context.edit_object
     bm = get_edit_bmesh(eo)
     mesh = eo.data
@@ -152,7 +156,7 @@ def set_face_material(self, value):
     redraw_3d()
 
 
-def get_face_texture(self):
+def get_face_texture():
     eo = bpy.context.edit_object
     bm = get_edit_bmesh(eo)
     layer = (bm.faces.layers.int.get("Texture Number") or
@@ -170,7 +174,7 @@ def get_face_texture(self):
         return selected_faces[0][layer]
 
 
-def set_face_texture(self, value):
+def set_face_texture(value):
     eo = bpy.context.edit_object
     bm = get_edit_bmesh(eo)
     layer = (bm.faces.layers.int.get("Texture Number") or
@@ -180,7 +184,7 @@ def set_face_texture(self, value):
             face[layer] = value
 
 
-def set_face_env(self, value):
+def set_face_env(value):
     eo = bpy.context.edit_object
     bm = get_edit_bmesh(eo)
     env_layer = (bm.loops.layers.color.get("Env") or
@@ -197,7 +201,7 @@ def set_face_env(self, value):
     redraw_3d()
 
 
-def get_face_env(self):
+def get_face_env():
     eo = bpy.context.edit_object
     bm = get_edit_bmesh(eo)
     env_layer = (bm.loops.layers.color.get("Env")
@@ -212,7 +216,7 @@ def get_face_env(self):
     return [*col, selected_faces[0][env_alpha_layer]]
 
 
-def get_face_property(self):
+def get_face_property():
     eo = bpy.context.edit_object
     bm = get_edit_bmesh(eo)
     layer = bm.faces.layers.int.get("Type") or bm.faces.layers.int.new("Type")
@@ -225,17 +229,17 @@ def get_face_property(self):
     return prop
 
 
-def set_face_property(self, value, mask):
+def set_face_property(obj, value, FACE_PROP_MASK):
     eo = bpy.context.edit_object
     bm = get_edit_bmesh(eo)
     layer = bm.faces.layers.int.get("Type") or bm.faces.layers.int.new("Type")
     for face in bm.faces:
         if face.select:
             print("face[layer] before operation:", face[layer], "type:", type(face[layer]))
-            face[layer] = face[layer] | mask if value else face[layer] & ~mask
+            face[layer] = face[layer] | FACE_PROP_MASK if value else face[layer] & ~FACE_PROP_MASK
             
 
-def get_face_ncp_property(self):
+def get_face_ncp_property():
     eo = bpy.context.edit_object
     bm = get_edit_bmesh(eo)
     layer = (bm.faces.layers.int.get("NCPType") or
@@ -249,14 +253,14 @@ def get_face_ncp_property(self):
     return prop
 
 
-def set_face_ncp_property(self, value, mask):
+def set_face_ncp_property(obj, value, NCP_PROP_MASK):
     eo = bpy.context.edit_object
     bm = get_edit_bmesh(eo)
     layer = (bm.faces.layers.int.get("NCPType") or
              bm.faces.layers.int.new("NCPType"))
     for face in bm.faces:
         if face.select:
-            face[layer] = face[layer] | mask if value else face[layer] & ~mask
+            face[layer] = face[layer] | NCP_PROP_MASK if value else face[layer] & ~NCP_PROP_MASK
 
 
 def select_faces(context, prop):
@@ -283,7 +287,7 @@ def select_ncp_faces(context, prop):
     redraw()
 
 
-def select_ncp_material(self, context):
+def select_ncp_material(context):
     eo = bpy.context.edit_object
     bm = get_edit_bmesh(eo)
     mat = int(self.select_material)

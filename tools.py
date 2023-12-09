@@ -15,15 +15,15 @@ import time
 from . import common
 import importlib
 
-if "bpy" in locals():
-    importlib.reload(common)
-    
 from .props.props_scene import RVSceneProperties
 from bpy.props import (
     FloatProperty,
     IntProperty,
     StringProperty,
 )
+
+if "bpy" in locals():
+    importlib.reload(common)
 
     # from common
 BAKE_SHADOW_METHODS = [

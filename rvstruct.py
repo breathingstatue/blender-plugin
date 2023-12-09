@@ -39,7 +39,6 @@ from bpy.props import (
     FloatProperty,
     IntProperty,
     StringProperty,
-    CollectionProperty,
     IntVectorProperty,
     FloatVectorProperty,
     PointerProperty
