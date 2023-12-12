@@ -18,6 +18,7 @@ import bmesh
 from . import tools
 from .common import FIN_ENV
 from .props.props_obj import RVObjectProperties
+from .props.props_scene import RVSceneProperties
 from .layers import *
 from .texanim import *
 from .rvstruct import *
@@ -419,6 +420,7 @@ class ButtonVertexAlphaCreateLayer(bpy.types.Operator):
     def execute(self, context):
         create_alpha_layer(context)
         return{"FINISHED"}
+
 
 """
 HELPERS -----------------------------------------------------------------------

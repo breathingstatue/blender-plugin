@@ -41,7 +41,6 @@ from .ui import (
     light,
     hull,
     objectpanel,
-    scene,
     vertex,
     texanim,
     helpers,
@@ -66,7 +65,6 @@ importlib.reload(instances)
 importlib.reload(light)
 importlib.reload(hull)
 importlib.reload(objectpanel)
-importlib.reload(scene)
 importlib.reload(vertex)
 importlib.reload(texanim)
 importlib.reload(helpers)
@@ -99,9 +97,8 @@ from .ui.helpers import RVIO_PT_RevoltHelpersPanelMesh
 from .ui.hull import ButtonHullGenerate, OBJECT_OT_add_revolt_hull_sphere, RVIO_PT_RevoltHullPanel
 from .ui.instances import RVIO_PT_RevoltInstancesPanel
 from .ui.light import ButtonBakeLightToVertex, RVIO_PT_RevoltLightPanel
-from .ui.texanim import RVIO_PT_AnimModesPanel, RVIO_PT_RevoltAnimationPanel
+from .ui.texanim import RVIO_PT_AnimModesPanel
 from .ui.objectpanel import RVIO_PT_RevoltObjectPanel
-from .ui.scene import RVIO_PT_RevoltScenePanel
 from .ui.settings import RVIO_PT_RevoltSettingsPanel
 from .ui.vertex import RVIO_PT_VertexPanel
 from .ui.zone import ButtonZoneHide, OBJECT_OT_add_revolt_track_zone, RVIO_PT_RevoltZonePanel
@@ -300,10 +297,8 @@ classes = (
     RVIO_PT_RevoltInstancesPanel,
     RVIO_PT_RevoltLightPanel,
     RVIO_PT_RevoltObjectPanel,
-    RVIO_PT_RevoltScenePanel,
     RVIO_PT_RevoltSettingsPanel,
     RVIO_PT_AnimModesPanel,
-    RVIO_PT_RevoltAnimationPanel,
     RVIO_PT_VertexPanel,
     RVIO_PT_RevoltZonePanel,
 )
@@ -378,7 +373,6 @@ def register():
     bpy.utils.register_class(RVIO_PT_RevoltIOToolPanel)
     bpy.utils.register_class(RVIO_PT_RevoltHelpersPanelMesh)
     bpy.utils.register_class(RVIO_PT_RevoltHullPanel)
-    bpy.utils.register_class(RVIO_PT_RevoltScenePanel)
     bpy.utils.register_class(RVIO_PT_RevoltSettingsPanel)
     bpy.utils.register_class(RVIO_PT_AnimModesPanel)
     bpy.utils.register_class(RVIO_PT_VertexPanel)
@@ -399,7 +393,8 @@ def register():
 def unregister():
     
     # UI and Handlers Unregistration
-    bpy.app.handlers.load_post.remove(load_handler)
+    if load_handler in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.remove(load_handler)
     bpy.app.handlers.depsgraph_update_pre.remove(edit_object_change_handler)
     
     del bpy.types.Mesh.revolt
@@ -420,7 +415,6 @@ def unregister():
     bpy.utils.unregister_class(RVIO_PT_VertexPanel)
     bpy.utils.unregister_class(RVIO_PT_AnimModesPanel)
     bpy.utils.unregister_class(RVIO_PT_RevoltSettingsPanel)
-    bpy.utils.unregister_class(RVIO_PT_RevoltScenePanel)
     bpy.utils.unregister_class(RVIO_PT_RevoltHullPanel)
     bpy.utils.unregister_class(RVIO_PT_RevoltHelpersPanelMesh)
     bpy.utils.unregister_class(RVIO_PT_RevoltIOToolPanel)
