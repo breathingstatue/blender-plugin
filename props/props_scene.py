@@ -315,7 +315,7 @@ class RVSceneProperties(bpy.types.PropertyGroup):
                       "by hand"
     )
     
-    ta_max_slots = IntProperty(
+    ta_max_slots = bpy.props.IntProperty(
         name = "Slots",
         min = 0,
         max = TEX_ANIM_MAX,
@@ -325,7 +325,7 @@ class RVSceneProperties(bpy.types.PropertyGroup):
                       "All higher slots will be ignored on export"
     )
     
-    ta_current_slot = IntProperty(
+    ta_current_slot = bpy.props.IntProperty(
         name = "Animation",
         default = 0,
         min = 0,
@@ -334,7 +334,7 @@ class RVSceneProperties(bpy.types.PropertyGroup):
         description = "Texture animation slot"
     )
     
-    ta_max_frames = IntProperty(
+    ta_max_frames = bpy.props.IntProperty(
         name = "Frames",
         min = 2,
         default = 2,
@@ -343,7 +343,7 @@ class RVSceneProperties(bpy.types.PropertyGroup):
                       "All higher frames will be ignored on export"
     )
     
-    ta_current_frame = IntProperty(
+    ta_current_frame = bpy.props.IntProperty(
         name = "Frame",
         default = 0,
         min = 0,
@@ -351,7 +351,7 @@ class RVSceneProperties(bpy.types.PropertyGroup):
         description = "Current frame"
     )
     
-    ta_current_frame_tex = IntProperty(
+    ta_current_frame_tex = bpy.props.IntProperty(
         name = "Texture",
         default = 0,
         min = -1,
@@ -360,7 +360,7 @@ class RVSceneProperties(bpy.types.PropertyGroup):
         description = "Texture of the current frame"
     )
     
-    ta_current_frame_delay = FloatProperty(
+    ta_current_frame_delay = bpy.props.FloatProperty(
         name = "Duration",
         default = 0.01,
         min = 0,
@@ -368,7 +368,7 @@ class RVSceneProperties(bpy.types.PropertyGroup):
         description = "Duration of the current frame"
     )
     
-    ta_current_frame_uv0 = FloatVectorProperty(
+    ta_current_frame_uv0 = bpy.props.FloatVectorProperty(
         name = "UV 0",
         size = 2,
         default = (0, 0),
@@ -378,7 +378,7 @@ class RVSceneProperties(bpy.types.PropertyGroup):
         description = "UV coordinate of the first vertex"
     )
     
-    ta_current_frame_uv1 = FloatVectorProperty(
+    ta_current_frame_uv1 = bpy.props.FloatVectorProperty(
         name = "UV 1",
         size = 2,
         default = (0, 0),
@@ -388,7 +388,7 @@ class RVSceneProperties(bpy.types.PropertyGroup):
         description = "UV coordinate of the second vertex"
     )
     
-    ta_current_frame_uv2 = FloatVectorProperty(
+    ta_current_frame_uv2 = bpy.props.FloatVectorProperty(
         name = "UV 2",
         size = 2,
         default = (0, 0),
@@ -398,7 +398,7 @@ class RVSceneProperties(bpy.types.PropertyGroup):
         description = "UV coordinate of the third vertex"
     )
     
-    ta_current_frame_uv3 = FloatVectorProperty(
+    ta_current_frame_uv3 = bpy.props.FloatVectorProperty(
         name = "UV 3",
         size = 2,
         default = (0, 0),
@@ -408,7 +408,7 @@ class RVSceneProperties(bpy.types.PropertyGroup):
         description = "UV coordinate of the fourth vertex"
     )
     
-    ta_sync_with_face = BoolProperty(
+    ta_sync_with_face = bpy.props.BoolProperty(
         name = "Sync UV with Selection",
         default = False,
         description = "Updates the UV mapping of the currently selected face "
