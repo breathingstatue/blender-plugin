@@ -31,19 +31,19 @@ class RVObjectProperties(bpy.types.PropertyGroup):
 
     # Debug Objects
 
-    is_bcube = BoolProperty(
+    is_bcube = bpy.props.BoolProperty(
         name = "Object is a BigCube",
         default = False,
         description = "Makes BigCube properties visible for this object"
     )
     
-    is_cube = BoolProperty(
+    is_cube = bpy.props.BoolProperty(
         name = "Object is a Cube",
         default = False,
         description = "Makes Cube properties visible for this object"
     )
     
-    is_bbox = BoolProperty(
+    is_bbox = bpy.props.BoolProperty(
         name = "Object is a Boundary Box",
         default = False,
         description = "Makes BoundBox properties visible for this object"

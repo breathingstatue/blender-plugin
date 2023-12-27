@@ -33,7 +33,7 @@ class RVSceneProperties(bpy.types.PropertyGroup):
     bl_idname = "RVSceneProperties"
     
     # User interface and misc.
-    face_edit_mode = EnumProperty(
+    face_edit_mode = bpy.props.EnumProperty(
         name = "Face Edit Mode",
         description = "Select the Edit Mode",
         items=(
@@ -43,25 +43,25 @@ class RVSceneProperties(bpy.types.PropertyGroup):
         default = "prm"
     )
     
-    select_material = EnumProperty(
+    select_material = bpy.props.EnumProperty(
         name = "Select Material",
         items = MATERIALS,
         update = select_ncp_material,
         description = "Selects all faces with the selected material"
     )
     
-    last_exported_filepath = StringProperty(
+    last_exported_filepath = bpy.props.StringProperty(
         name = "Last Exported Filepath",
         default = ""
     )
     
-    enable_tex_mode = BoolProperty(
+    enable_tex_mode = bpy.props.BoolProperty(
         name = "Material Preview after Import",
         default = True,
         description = "Enables Material Preview mode after mesh import to show textures and materials"
     )
     
-    prefer_tex_solid_mode = BoolProperty(
+    prefer_tex_solid_mode = bpy.props.BoolProperty(
         name = "Prefer Solid Shading Mode",
         default = False,
         description = "Prefer Solid shading mode over Material Preview mode in the 3D view:\n\n"
@@ -70,7 +70,7 @@ class RVSceneProperties(bpy.types.PropertyGroup):
                   "This setting affects functions that switch shading modes."
     )
         
-    vertex_color_picker = FloatVectorProperty(
+    vertex_color_picker = bpy.props.FloatVectorProperty(
         name = "Object Color",
         subtype = 'COLOR',
         default = (0, 0, 1.0),
@@ -78,14 +78,14 @@ class RVSceneProperties(bpy.types.PropertyGroup):
         description = "Color picker for painting custom vertex colors"
     )
     
-    envidx = IntProperty(
+    envidx = bpy.props.IntProperty(
         name = "envidx",
         default = 0,
         min = 0,
         description = "Current env color index for importing. Internal only"
     )
     
-    revolt_dir = StringProperty(
+    revolt_dir = bpy.props.StringProperty(
         name = "Re-Volt Directory",
         default = "",
         description = "Manually define a Re-Volt installation for loading "
@@ -93,20 +93,20 @@ class RVSceneProperties(bpy.types.PropertyGroup):
                       "automatically detected"
     )
     
-    batch_bake_model_rgb = BoolProperty(
+    batch_bake_model_rgb = bpy.props.BoolProperty(
         name = "Bake to Model RGB",
         default = True,
         description = "Bake scene lighting to Instance model RGB"
     )
     
-    batch_bake_model_env = BoolProperty(
+    batch_bake_model_env = bpy.props.BoolProperty(
         name = "Bake to Model Env",
         default = True,
         description = "Bake scene lighting to Instance model environment color"
     )
     
     # Export properties
-    triangulate_ngons = BoolProperty(
+    triangulate_ngons = bpy.props.BoolProperty(
         name = "Triangulate n-gons",
         default = True,
         description = "Triangulate n-gons when exporting.\n"
@@ -115,7 +115,7 @@ class RVSceneProperties(bpy.types.PropertyGroup):
                      "you're doing!"
     )
     
-    use_tex_num = BoolProperty(
+    use_tex_num = bpy.props.BoolProperty(
         name = "Use Number for Textures",
         default = False,
         description = "Uses the texture number from the texture layer "
@@ -123,46 +123,46 @@ class RVSceneProperties(bpy.types.PropertyGroup):
                       "Otherwise, it uses the texture from the texture file"
     )
     
-    apply_scale = BoolProperty(
+    apply_scale = bpy.props.BoolProperty(
         name = "Apply Scale",
         default = True,
         description = "Applies the object scale on export"
     )
     
-    apply_rotation = BoolProperty(
+    apply_rotation = bpy.props.BoolProperty(
         name = "Apply Rotation",
         default = True,
         description = "Applies the object rotation on export"
     )
     
-    apply_translation = BoolProperty(
+    apply_translation = bpy.props.BoolProperty(
         name = "Apply Translation",
         default = False,
         description = "Applies the object location on export. Should be disabled disabled for single/instance ncp files"
     )
 
-    prm_check_parameters = BoolProperty(
+    prm_check_parameters = bpy.props.BoolProperty(
         name = "Check Parameters for texture",
         default = True,
         description = "Checks car parameters.txt for the texture"
     )
     
     # World import properties
-    w_parent_meshes = BoolProperty(
+    w_parent_meshes = bpy.props.BoolProperty(
         name = "Parent .w meshes to Empty",
         default = False,
         description = "Parents all .w meshes to an Empty object, resulting in "
                       "less clutter in the object outliner"
     )
     
-    w_import_bound_boxes = BoolProperty(
+    w_import_bound_boxes = bpy.props.BoolProperty(
         name = "Import Bound Boxes",
         default = False,
         description = "Imports the boundary box of each .w mesh for debugging "
                       "purposes"
     )
     
-    w_bound_box_layers = BoolVectorProperty(
+    w_bound_box_layers = bpy.props.BoolVectorProperty(
         name = "Bound Box Layers",
         subtype = "LAYER",
         size = 20,
@@ -172,14 +172,14 @@ class RVSceneProperties(bpy.types.PropertyGroup):
                       "Activate multiple layers by pressing Shift + numbers"
     )
     
-    w_import_cubes = BoolProperty(
+    w_import_cubes = bpy.props.BoolProperty(
         name = "Import Cubes",
         default = False,
         description = "Imports the cube of each .w mesh for debugging "
                       "purposes"
     )
     
-    w_cube_layers = BoolVectorProperty(
+    w_cube_layers = bpy.props.BoolVectorProperty(
         name = "Cube Layers",
         subtype = "LAYER",
         size = 20,
@@ -189,13 +189,13 @@ class RVSceneProperties(bpy.types.PropertyGroup):
                       "Activate multiple layers by pressing Shift + numbers"
     )
     
-    w_import_big_cubes = BoolProperty(
+    w_import_big_cubes = bpy.props.BoolProperty(
         name = "Import Big Cubes",
         default = False,
         description = "Imports Big Cubes for debugging purposes"
     )
     
-    w_big_cube_layers = BoolVectorProperty(
+    w_big_cube_layers = bpy.props.BoolVectorProperty(
         name = "Big Cube Layers",
         subtype = "LAYER",
         size = 20,
@@ -206,7 +206,7 @@ class RVSceneProperties(bpy.types.PropertyGroup):
     )
     
     # NCP
-    ncp_export_collgrid = BoolProperty(
+    ncp_export_collgrid = bpy.props.BoolProperty(
         name = "Export Collision Grid (.w)",
         default = True,
         description = "Export a collision grid to the .ncp file:\n\n"
@@ -214,7 +214,7 @@ class RVSceneProperties(bpy.types.PropertyGroup):
                       ".ncp file"
     )
     
-    ncp_collgrid_size = IntProperty(
+    ncp_collgrid_size = bpy.props.IntProperty(
         name = "Grid Size",
         default = 1024,
         min = 512,
@@ -222,42 +222,42 @@ class RVSceneProperties(bpy.types.PropertyGroup):
         description = "Size of the lookup grid"
     )
     
-    ncp_export_selected = BoolProperty(
+    ncp_export_selected = bpy.props.BoolProperty(
         name = "Only export selected",
         default = False,
         description = "Only exports the selected objects"
     )
     
     # Light tools
-    light1 = EnumProperty(
+    light1 = bpy.props.EnumProperty(
         name = "Light 1",
         items = BAKE_LIGHTS,
         default = "SUN",
         description = "Type of light"
     )
     
-    light2 = EnumProperty(
+    light2 = bpy.props.EnumProperty(
         name = "Light 2",
         items = BAKE_LIGHTS,
         default = "HEMI",
         description = "Type of light"
     )
     
-    light_intensity1 = FloatProperty(
+    light_intensity1 = bpy.props.FloatProperty(
         name = "Intensity 1",
         min = 0.0,
         default = 1.5,
         description = "Intensity of Light 1"
     )
     
-    light_intensity2 = FloatProperty(
+    light_intensity2 = bpy.props.FloatProperty(
         name = "Intensity 2",
         min = 0.0,
         default = .05,
         description = "Intensity of Light 2"
     )
     
-    light_orientation = EnumProperty(
+    light_orientation = bpy.props.EnumProperty(
         name = "Orientation",
         items = BAKE_LIGHT_ORIENTATIONS,
         default = "Z",

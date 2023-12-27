@@ -31,14 +31,14 @@ from ..layers import *
 class RVMeshProperties(bpy.types.PropertyGroup):
     bl_idname = "RVMeshProperties"
     
-    face_material = EnumProperty(
+    face_material = bpy.props.EnumProperty(
         name = "Material",
         items = MATERIALS,
         get = get_face_material,
         set = set_face_material,
         description = "Surface Material"
     )
-    face_texture = IntProperty(
+    face_texture = bpy.props.IntProperty(
         name = "Texture",
         get = get_face_texture,
         set = set_face_texture,
@@ -60,13 +60,13 @@ class RVMeshProperties(bpy.types.PropertyGroup):
                       "the \"Use Texture Number\" export setting needs to be "
                       "enabled"
     )
-    face_double_sided = BoolProperty(
+    face_double_sided = bpy.props.BoolProperty(
         name = "Double sided",
         get = lambda s: bool(get_face_property(s) & FACE_DOUBLE),
         set = lambda s, v: set_face_property(s, v, FACE_DOUBLE),
         description = "The polygon will be visible from both sides in-game"
     )
-    face_translucent = BoolProperty(
+    face_translucent = bpy.props.BoolProperty(
         name = "Translucent",
         get = lambda s: bool(get_face_property(s) & FACE_TRANSLUCENT),
         set = lambda s, v: set_face_property(s, v, FACE_TRANSLUCENT),
@@ -74,13 +74,13 @@ class RVMeshProperties(bpy.types.PropertyGroup):
                       "from the \"Alpha\" vertex color layer or the alpha "
                       "layer of the texture"
     )
-    face_mirror = BoolProperty(
+    face_mirror = bpy.props.BoolProperty(
         name = "Mirror",
         get = lambda s: bool(get_face_property(s) & FACE_MIRROR),
         set = lambda s, v: set_face_property(s, v, FACE_MIRROR),
         description = "This polygon covers a mirror area. (?)"
     )
-    face_additive = BoolProperty(
+    face_additive = bpy.props.BoolProperty(
         name = "Additive blending",
         get = lambda s: bool(get_face_property(s) & FACE_TRANSL_TYPE),
         set = lambda s, v: set_face_property(s, v, FACE_TRANSL_TYPE),
@@ -88,19 +88,19 @@ class RVMeshProperties(bpy.types.PropertyGroup):
                       "becomes transparent, bright colors are added to colors "
                       "beneath)"
     )
-    face_texture_animation = BoolProperty(
+    face_texture_animation = bpy.props.BoolProperty(
         name = "Animated",
         get = lambda s: bool(get_face_property(s) & FACE_TEXANIM),
         set = lambda s, v: set_face_property(s, v, FACE_TEXANIM),
         description = "Uses texture animation for this poly (only in .w files)"
     )
-    face_no_envmapping = BoolProperty(
+    face_no_envmapping = bpy.props.BoolProperty(
         name = "No EnvMap (.prm)",
         get = lambda s: bool(get_face_property(s) & FACE_NOENV),
         set = lambda s, v: set_face_property(s, v, FACE_NOENV),
         description = "Disables the environment map for this poly (.prm only)"
     )
-    face_envmapping = BoolProperty(
+    face_envmapping = bpy.props.BoolProperty(
         name = "EnvMapping (.w)",
         get = lambda s: bool(get_face_property(s) & FACE_ENV),
         set = lambda s, v: set_face_property(s, v, FACE_ENV),
@@ -108,19 +108,19 @@ class RVMeshProperties(bpy.types.PropertyGroup):
                       "If enabled on pickup.m, sparks will appear"
                       "around the poly"
     )
-    face_cloth = BoolProperty(
+    face_cloth = bpy.props.BoolProperty(
         name = "Cloth effect (.prm)",
         get = lambda s: bool(get_face_property(s) & FACE_CLOTH),
         set = lambda s, v: set_face_property(s, v, FACE_CLOTH),
         description = "Enables the cloth effect used on the Mystery car"
     )
-    face_skip = BoolProperty(
+    face_skip = bpy.props.BoolProperty(
         name = "Do not export",
         get = lambda s: bool(get_face_property(s) & FACE_SKIP),
         set = lambda s, v: set_face_property(s, v, FACE_SKIP),
         description = "Skips the polygon when exporting (not Re-Volt related)"
     )
-    face_env = FloatVectorProperty(
+    face_env = bpy.props.FloatVectorProperty(
         name = "Environment Color",
         subtype = "COLOR",
         size = 4,
@@ -132,43 +132,43 @@ class RVMeshProperties(bpy.types.PropertyGroup):
         set = set_face_env,
         description = "Color of the environment map for World meshes"
     )
-    face_ncp_double = BoolProperty(
+    face_ncp_double = bpy.props.BoolProperty(
         name = "Double-sided",
         get=lambda s: bool(get_face_ncp_property(s) & NCP_DOUBLE),
         set=lambda s, v: set_face_ncp_property(s, v, NCP_DOUBLE),
         description="Enables double-sided collision"
     )
-    face_ncp_object_only = BoolProperty(
+    face_ncp_object_only = bpy.props.BoolProperty(
         name = "Object Only",
         get=lambda s: bool(get_face_ncp_property(s) & NCP_OBJECT_ONLY),
         set=lambda s, v: set_face_ncp_property(s, v, NCP_OBJECT_ONLY),
         description="Enable collision for objects only (ignores camera)"
     )
-    face_ncp_camera_only = BoolProperty(
+    face_ncp_camera_only = bpy.props.BoolProperty(
         name = "Camera Only",
         get=lambda s: bool(get_face_ncp_property(s) & NCP_CAMERA_ONLY),
         set=lambda s, v: set_face_ncp_property(s, v, NCP_CAMERA_ONLY),
         description="Enable collision for camera only"
     )
-    face_ncp_non_planar = BoolProperty(
+    face_ncp_non_planar = bpy.props.BoolProperty(
         name = "Non-planar",
         get=lambda s: bool(get_face_ncp_property(s) & NCP_NON_PLANAR),
         set=lambda s, v: set_face_ncp_property(s, v, NCP_NON_PLANAR),
         description="Face is non-planar"
     )
-    face_ncp_no_skid = BoolProperty(
+    face_ncp_no_skid = bpy.props.BoolProperty(
         name = "No Skid Marks",
         get=lambda s: bool(get_face_ncp_property(s) & NCP_NO_SKID),
         set=lambda s, v: set_face_ncp_property(s, v, NCP_NO_SKID),
         description="Disable skid marks"
     )
-    face_ncp_oil = BoolProperty(
+    face_ncp_oil = bpy.props.BoolProperty(
         name = "Oil",
         get=lambda s: bool(get_face_ncp_property(s) & NCP_OIL),
         set=lambda s, v: set_face_ncp_property(s, v, NCP_OIL),
         description="Ground is oil"
     )
-    face_ncp_nocoll = BoolProperty(
+    face_ncp_nocoll = bpy.props.BoolProperty(
         name = "No Collision",
         get=lambda s: bool(get_face_ncp_property(s) & NCP_NOCOLL),
         set=lambda s, v: set_face_ncp_property(s, v, NCP_NOCOLL),
