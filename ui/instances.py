@@ -11,15 +11,13 @@ class RVIO_PT_RevoltInstancesPanel(bpy.types.Panel):
     bl_options = {"HIDE_HEADER"}
 
     def draw(self, context):
-        view = context.space_data
-        obj = context.object
-        props = context.scene.revolt
         layout = self.layout
+        scene = context.scene
 
-        instance_count = len([obj for obj in context.scene.objects if hasattr(obj, "revolt") 
-                              and getattr(obj, "revolt", None) is not None 
-                              and getattr(obj.revolt, "is_instance", False)])
-        layout.label(text="Instances: {}/1024".format(instance_count))
+        # Count only objects with 'is_instance' set to True
+        instance_count = sum(1 for obj in scene.objects if getattr(obj, "is_instance", False))
+        
+        layout.label(text=f"Instances: {instance_count}/1024")
         layout.operator("helpers.select_by_data")
 
         col = layout.column(align=True)

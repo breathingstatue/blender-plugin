@@ -10,11 +10,6 @@ from bpy.props import (BoolProperty,
                        FloatVectorProperty, 
                        IntProperty
 )
-is_instance = bpy.props.BoolProperty(
-        name = "Is Instance",
-        default = False,
-        description = "Object is an instanced mesh"
-)
 
 class RVIO_PT_RevoltObjectPanel(bpy.types.Panel):
     bl_label = "Revolt Object Properties"
@@ -26,12 +21,24 @@ class RVIO_PT_RevoltObjectPanel(bpy.types.Panel):
         layout = self.layout
         obj = context.object
         objprops = obj.revolt
+        scene = context.scene
+
+
+        if obj:
+            col = layout.column()
+            col.prop(obj, "is_instance", text="Is Instance")
 
         if obj and "revolt" in obj:
             col = layout.column()
             col.operator("object.toggle_environment_map", text="Toggle EnvMap", icon="MATERIAL_DATA")
-            col = layout.column()
-            col.operator("object.set_environment_map_color")
+        
+        # Display the current color from EnvMapColorPickerProperties
+        if hasattr(scene, 'envmap_color_picker'):
+            layout.prop(scene.envmap_color_picker, "envmap_color", text="EnvMap Color")
+
+        # Button to set environment map color
+        col = layout.column()
+        col.operator("object.set_environment_map_color", text="Set EnvMap Color")
 
         # Ignore NCP
         layout.operator("object.toggle_ignore_ncp", text="Toggle Ignore Collision (.ncp)")

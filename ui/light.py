@@ -50,19 +50,35 @@ class RVIO_PT_RevoltLightPanel(bpy.types.Panel):
 
             # UI for the first light
             if light1:
+                box.label(text=f"Light 1: {light1.name}")
                 row = box.row()
-                row.label(text=f"Light 1: {light1.name}")
-                row = box.row(align=True)
-                row.prop(light1, "rotation_euler", text="Orientation")
-                row.prop(light1.data, "energy", text="Intensity")
+                row.label(text="Orientation X")
+                row.prop(light1, "rotation_euler", index=0, text="")
+                row = box.row()
+                row.label(text="Orientation Y")
+                row.prop(light1, "rotation_euler", index=1, text="")
+                row = box.row()
+                row.label(text="Orientation Z")
+                row.prop(light1, "rotation_euler", index=2, text="")
+                row = box.row()
+                row.label(text="Intensity")
+                row.prop(light1.data, "energy", text="")
 
             # UI for the second light
             if light2:
+                box.label(text=f"Light 2: {light2.name}")
                 row = box.row()
-                row.label(text=f"Light 2: {light2.name}")
-                row = box.row(align=True)
-                row.prop(light2, "rotation_euler", text="Orientation")
-                row.prop(light2.data, "energy", text="Intensity")
+                row.label(text="Orientation X")
+                row.prop(light2, "rotation_euler", index=0, text="")
+                row = box.row()
+                row.label(text="Orientation Y")
+                row.prop(light2, "rotation_euler", index=1, text="")
+                row = box.row()
+                row.label(text="Orientation Z")
+                row.prop(light2, "rotation_euler", index=2, text="")
+                row = box.row()
+                row.label(text="Intensity")
+                row.prop(light2.data, "energy", text="")
 
 class ButtonBakeLightToVertex(bpy.types.Operator):
     bl_idname = "lighttools.bakevertex"

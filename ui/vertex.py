@@ -19,6 +19,17 @@ class VertexColorPickerProperties(bpy.types.PropertyGroup):
         max=1.0,
         description="Vertex color picker"
     )
+    
+class EnvMapColorPickerProperties(bpy.types.PropertyGroup):
+    envmap_color: bpy.props.FloatVectorProperty(
+        name="EnvMap Color",
+        subtype='COLOR',
+        default=(1.0, 1.0, 1.0, 1.0),  # Default to white with alpha
+        min=0.0,
+        max=1.0,
+        size=4,  # Including alpha
+        description="Environment map color picker"
+    )
 
 class RVIO_PT_VertexPanel(bpy.types.Panel):
     bl_label = "Vertex Colors"
@@ -61,18 +72,13 @@ class RVIO_PT_VertexPanel(bpy.types.Panel):
         box = layout.box()
         row = box.row()
         col = row.column(align=True)
-        col.operator("vertexcolor.remove", icon='REMOVE', text="Remove Color")
+        col.operator("vertexcolor.set", icon="ADD", text="Apply Color")
+        col.operator("vertexcolor.remove", icon="REMOVE", text="Remove Color")
 
         # Add the color picker
         box = layout.box()
         box.label(text="Vertex Color Picker:")
         box.prop(color_props, "vertex_color", text="")
-
-        # Buttons for Copying and Applying Colors
-        box = layout.box()
-        box.label(text="Color Operations:")
-        box.operator("vertexcolor.copycolor", icon="EYEDROPPER", text="Copy Color from Active Face")
-        box.operator("vertexcolor.set", icon="BRUSH_DATA", text="Apply Color")
 
     # Preset Alphas
     def draw_alpha_presets(self, layout):
