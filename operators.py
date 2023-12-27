@@ -331,6 +331,16 @@ def exec_export(filepath, context):
 
     return {"FINISHED"}
 
+class AssignEnvColorProperty(bpy.types.Operator):
+    """Assign Environment Color Property to Selected Objects"""
+    bl_idname = "object.assign_env_color_property"
+    bl_label = "Assign Env Color Property"
+
+    def execute(self, context):
+        for obj in context.selected_objects:
+            obj.fin_envcol = (1.0, 1.0, 1.0, 1.0)  # Default color
+        return {'FINISHED'}
+
 
 """
 BUTTONS ------------------------------------------------------------------------
@@ -383,46 +393,6 @@ class ButtonSelectNCPMaterial(bpy.types.Operator):
 """
 VERTEX COLROS -----------------------------------------------------------------
 """
-
-class ButtonColorFromActive(bpy.types.Operator):
-    bl_idname = "vertexcolor.copycolor"
-    bl_label = "Get Color"
-    bl_description = "Gets the color from the active face"
-
-    def color_from_face(self, context):
-        obj = context.object
-        if obj.type != 'MESH' or obj.mode != 'EDIT':
-            return None
-
-        mesh = obj.data
-        bm = bmesh.from_edit_mesh(mesh)
-        color_layer = bm.loops.layers.color.active
-
-        if color_layer is None:
-            return None
-
-        selected_faces = [f for f in bm.faces if f.select]
-        if not selected_faces:
-            return None
-
-        # Assuming we take the color from the first loop of the first selected face
-        first_face = selected_faces[0]
-        color = first_face.loops[0][color_layer]
-
-        # Store this color in some property or return it
-        # Example: store in scene properties
-        context.scene.vertex_color_from_face = color
-
-        return color
-
-    def execute(self, context):
-        color = self.color_from_face(context)
-        if color:
-            self.report({'INFO'}, "Color copied from face.")
-        else:
-            self.report({'WARNING'}, "No color copied. Ensure a face is selected and a vertex color layer exists.")
-        bpy.context.area.tag_redraw()
-        return {"FINISHED"}
 
 class ButtonVertexColorSet(bpy.types.Operator):
     bl_idname = "vertexcolor.set"
@@ -628,27 +598,41 @@ class SelectByData(bpy.types.Operator):
 class SetInstanceProperty(bpy.types.Operator):
     bl_idname = "helpers.set_instance_property"
     bl_label = "Mark as Instance"
-    bl_description = (
-        "Marks all selected objects as instances"
-    )
+    bl_description = ("Marks all selected objects as instances")
+
+    def set_property_to_selected(self, context, property_name, value):
+        count = 0
+        for obj in context.selected_objects:
+            setattr(obj, property_name, value)
+            count += 1
+        return count
 
     def execute(self, context):
-        n = tools.set_property_to_selected(self, context, "is_instance", True)
-        msg_box("Marked {} objects as instances".format(n))
-        return{"FINISHED"}
+        for obj in context.selected_objects:
+            obj.is_instance = True
+        context.view_layer.update()
+        self.report({'INFO'}, "Marked {} objects as instances".format(len(context.selected_objects)))
+        return{'FINISHED'}
 
 
 class RemoveInstanceProperty(bpy.types.Operator):
     bl_idname = "helpers.rem_instance_property"
     bl_label = "Remove Instance property"
-    bl_description = (
-        ""
-    )
+    bl_description = ("")
+
+    def set_property_to_selected(self, context, property_name, value):
+        count = 0
+        for obj in context.selected_objects:
+            setattr(obj, property_name, value)
+            count += 1
+        return count
 
     def execute(self, context):
-        n = tools.set_property_to_selected(self, context, "is_instance", False)
-        msg_box("Marked {} objects as instances".format(n))
-        return{"FINISHED"}
+        for obj in context.selected_objects:
+            obj.is_instance = False
+        context.view_layer.update()
+        self.report({'INFO'}, "Removed instance property from {} objects".format(len(context.selected_objects)))
+        return{'FINISHED'}
 
 class BatchBake(bpy.types.Operator):
     bl_idname = "helpers.batch_bake_model"
@@ -875,17 +859,26 @@ class ToggleEnvironmentMap(bpy.types.Operator):
             return {'CANCELLED'}
 
         if "revolt" in obj:
-            revolt_props = obj.revolt
-            if "fin_env" in revolt_props:
-                # If 'fin_env' exists, remove it and update material to indicate it's toggled off
-                del revolt_props["fin_env"]
-                self.update_material_reflection(obj, False)
-                self.report({'INFO'}, "Environment map turned off")
+            if obj.get("is_instance", False):
+                # If object is an instance, handle 'env_layer' and 'env_alpha_layer'
+                # This code assumes you have a way to handle these properties
+                # For demonstration, just toggling a custom property
+                if "env_layer_info" in obj:
+                    del obj["env_layer_info"]
+                    self.report({'INFO'}, "Environment layer info turned off for instance")
+                else:
+                    obj["env_layer_info"] = True
+                    self.report({'INFO'}, "Environment layer info turned on for instance")
             else:
-                # If 'fin_env' does not exist, add it, set to True, and update material
-                revolt_props["fin_env"] = True
-                self.update_material_reflection(obj, True)
-                self.report({'INFO'}, "Environment map turned on")
+                # If object is not an instance, handle 'fin_env'
+                if "fin_env" in obj:
+                    del obj["fin_env"]
+                    self.update_material_reflection(obj, False)
+                    self.report({'INFO'}, "Environment map turned off")
+                else:
+                    obj["fin_env"] = True
+                    self.update_material_reflection(obj, True)
+                    self.report({'INFO'}, "Environment map turned on")
         else:
             self.report({'WARNING'}, "Object does not have 'revolt' properties")
 
@@ -898,47 +891,47 @@ class ToggleEnvironmentMap(bpy.types.Operator):
                 if mat and mat.use_nodes:
                     for node in mat.node_tree.nodes:
                         if node.type == 'BSDF_PRINCIPLED':
-                            # Set reflection properties based on enable_reflection
                             node.inputs['Roughness'].default_value = 0.0 if enable_reflection else 0.5
                             node.inputs['Metallic'].default_value = 1.0 if enable_reflection else 0.0
 
 class SetEnvironmentMapColor(bpy.types.Operator):
     bl_idname = "object.set_environment_map_color"
     bl_label = "Set EnvMap Color"
-    
-    fin_envcol = bpy.props.FloatVectorProperty(
-        name="Env Color",
-        subtype='COLOR',
-        default=(1.0, 1.0, 1.0),
-        min=0.0,
-        max=1.0,
-        description="Color of the EnvMap",
-        size=3  # Set the size to 3 for RGB color
-    )
 
     def execute(self, context):
+        props = context.scene.envmap_color_picker
         obj = context.active_object
+
         if obj is None:
             self.report({'WARNING'}, "No active object")
             return {'CANCELLED'}
 
-        # Check if the object is flagged as FACE_ENV
-        if getattr(obj, 'fin_env', False):
-            # Create a Color object and store it on the object
-            fin_envcol_obj = rvstruct.Color(color=(self.fin_envcol[0] * 255,
-                                                   self.fin_envcol[1] * 255,
-                                                   self.fin_envcol[2] * 255),
-                                            alpha=255)  # or use alpha from self.fin_envcol if needed
+        # Convert color to 0-255 range and store it
+        color = tuple(int(c * 255) for c in props.envmap_color[:3])
+        alpha = int((1 - props.envmap_color[3]) * 255)
 
-            obj["fin_envcol"] = fin_envcol_obj.as_dict()
-        else:
-            self.report({'INFO'}, "Object is not flagged as FACE_ENV")
-            return {'CANCELLED'}
+        # Use your rvstruct.Color class to store the color and alpha
+        env_color = rvstruct.Color(color=color, alpha=alpha)
+        obj["fin_envcol"] = env_color.as_dict()
 
+        # Update BSDF material color
+        self.update_bsdf_color(obj, props.envmap_color)
+
+        self.report({'INFO'}, "Environment map color set")
         return {'FINISHED'}
 
     def invoke(self, context, event):
-        return context.window_manager.invoke_props_dialog(self)
+        return context.window_manager.invoke_props_dialog(self, width=200)
+
+    def update_bsdf_color(self, obj, color):
+        """Update BSDF material color."""
+        if obj.type == 'MESH' and obj.data.materials:
+            for mat in obj.data.materials:
+                if mat and mat.use_nodes:
+                    for node in mat.node_tree.nodes:
+                        if node.type == 'BSDF_PRINCIPLED':
+                            # Set the Base Color of the BSDF node
+                            node.inputs['Base Color'].default_value = [color[0], color[1], color[2], 1]
     
 class ToggleHide(bpy.types.Operator):
     bl_idname = "object.toggle_hide"

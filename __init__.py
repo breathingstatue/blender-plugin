@@ -74,8 +74,9 @@ importlib.reload(settings)
 # Include conditional reloads for any other local modules here...
 
 from .common import DialogOperator
-from .operators import ImportRV, ExportRV, ButtonReExport, ButtonSelectFaceProp, ButtonSelectNCPFaceProp
-from .operators import ButtonSelectNCPMaterial, ButtonColorFromActive, ButtonVertexColorSet
+from .operators import ImportRV, ExportRV, AssignEnvColorProperty
+from .operators import ButtonReExport, ButtonSelectFaceProp, ButtonSelectNCPFaceProp
+from .operators import ButtonSelectNCPMaterial, ButtonVertexColorSet
 from .operators import ButtonVertexColorCreateLayer, ButtonVertexAlphaSetLayer, ButtonEnableMaterialMode
 from .operators import ButtonEnableSolidMode, ButtonRenameAllObjects, SelectByName, SelectByData
 from .operators import SetInstanceProperty, RemoveInstanceProperty, BatchBake, LaunchRV, TexturesSave
@@ -101,7 +102,7 @@ from .ui.light import ButtonBakeLightToVertex, RVIO_PT_RevoltLightPanel
 from .ui.texanim import RVIO_PT_AnimModesPanel
 from .ui.objectpanel import RVIO_PT_RevoltObjectPanel
 from .ui.settings import RVIO_PT_RevoltSettingsPanel
-from .ui.vertex import VertexColorPickerProperties, RVIO_PT_VertexPanel
+from .ui.vertex import VertexColorPickerProperties, EnvMapColorPickerProperties, RVIO_PT_VertexPanel
 from .ui.zone import ButtonZoneHide, OBJECT_OT_add_revolt_track_zone, RVIO_PT_RevoltZonePanel
 
 # Reloaded here because it's used in a class which is instanced here
@@ -204,11 +205,11 @@ classes = (
     DialogOperator,
     ImportRV,
     ExportRV,
+    AssignEnvColorProperty,
     ButtonReExport,
     ButtonSelectFaceProp,
     ButtonSelectNCPFaceProp,
     ButtonSelectNCPMaterial,
-    ButtonColorFromActive,
     ButtonVertexColorSet,
     ButtonVertexColorCreateLayer,
     ButtonVertexAlphaSetLayer,
@@ -251,6 +252,7 @@ classes = (
     SetLoDBias,
     ToggleMirrorPlane,
     VertexColorPickerProperties,
+    EnvMapColorPickerProperties,
     VertexColorRemove,
     
     # rvstruct classes
@@ -323,11 +325,11 @@ def register():
     bpy.utils.register_class(DialogOperator)
     bpy.utils.register_class(ImportRV)
     bpy.utils.register_class(ExportRV)
+    bpy.utils.register_class(AssignEnvColorProperty)
     bpy.utils.register_class(ButtonReExport)
     bpy.utils.register_class(ButtonSelectFaceProp)
     bpy.utils.register_class(ButtonSelectNCPFaceProp)
     bpy.utils.register_class(ButtonSelectNCPMaterial)
-    bpy.utils.register_class(ButtonColorFromActive)
     bpy.utils.register_class(ButtonVertexColorSet)
     bpy.utils.register_class(ButtonVertexColorCreateLayer)
     bpy.utils.register_class(ButtonVertexAlphaSetLayer)
@@ -370,6 +372,7 @@ def register():
     bpy.utils.register_class(SetLoDBias)
     bpy.utils.register_class(ToggleMirrorPlane)
     bpy.utils.register_class(VertexColorPickerProperties)
+    bpy.utils.register_class(EnvMapColorPickerProperties)
     bpy.utils.register_class(VertexColorRemove)
     
     # Register UI
@@ -391,12 +394,43 @@ def register():
     bpy.types.Object.revolt = bpy.props.PointerProperty(type=RVObjectProperties)
     bpy.types.Mesh.revolt = bpy.props.PointerProperty(type=RVMeshProperties)
     bpy.types.Scene.vertex_color_picker_props = bpy.props.PointerProperty(type=VertexColorPickerProperties)
+    bpy.types.Scene.envmap_color_picker = bpy.props.PointerProperty(type=EnvMapColorPickerProperties)
     
     bpy.types.Scene.vertex_alpha_value = bpy.props.FloatProperty(
-    name="Vertex Alpha Value",
-    description="Alpha value for vertex colors",
-    default=1.0,  # Default to fully opaque
-    min=0.0, max=1.0
+        name="Vertex Alpha Value",
+        description="Alpha value for vertex colors",
+        default=1.0,  # Default to fully opaque
+        min=0.0, max=1.0
+        )
+    
+    bpy.types.Scene.stored_vertex_color = bpy.props.FloatVectorProperty(
+        name="Stored Vertex Color",
+        subtype='COLOR',
+        default=(1.0, 1.0, 1.0),  # Default to white
+        min=0.0,
+        max=1.0,
+        description="Stored vertex color for later use"
+    )
+    
+    bpy.types.Object.is_instance = bpy.props.BoolProperty(
+        name="Is Instance",
+        description="Mark object as an instance",
+        default=False
+    )
+    
+    bpy.types.Object.fin_env = bpy.props.BoolProperty(
+        name="Environment Map",
+        description="Enable or disable environment map",
+        default=False
+    )
+    
+    bpy.types.Object.fin_envcol = bpy.props.FloatVectorProperty(
+        name="Environment Map Color",
+        subtype='COLOR',
+        default=(1.0, 1.0, 1.0, 1.0),
+        min=0.0,
+        max=1.0,
+        size=4
     )
   
     # UI and Handlers Registration
@@ -410,7 +444,12 @@ def unregister():
         bpy.app.handlers.load_post.remove(load_handler)
     bpy.app.handlers.depsgraph_update_pre.remove(edit_object_change_handler)
     
+    del bpy.types.Object.fin_envcol
+    del bpy.types.Object.fin_env
+    del bpy.types.Object.is_instance
+    del bpy.types.Scene.stored_vertex_color
     del bpy.types.Scene.vertex_alpha_value
+    del bpy.types.Scene.envmap_color_picker
     del bpy.types.Scene.vertex_color_picker_props
     del bpy.types.Mesh.revolt
     del bpy.types.Object.revolt
@@ -438,6 +477,7 @@ def unregister():
     
     # Unregister Operators
     bpy.utils.unregister_class(VertexColorRemove)
+    bpy.utils.unregister_class(EnvMapColorPickerProperties)
     bpy.utils.unregister_class(VertexColorPickerProperties)
     bpy.utils.unregister_class(ToggleMirrorPlane)
     bpy.utils.unregister_class(SetLoDBias)
@@ -480,11 +520,11 @@ def unregister():
     bpy.utils.unregister_class(ButtonVertexAlphaSetLayer)
     bpy.utils.unregister_class(ButtonVertexColorCreateLayer)
     bpy.utils.unregister_class(ButtonVertexColorSet)
-    bpy.utils.unregister_class(ButtonColorFromActive)
     bpy.utils.unregister_class(ButtonSelectNCPMaterial)
     bpy.utils.unregister_class(ButtonSelectNCPFaceProp)
     bpy.utils.unregister_class(ButtonSelectFaceProp)
     bpy.utils.unregister_class(ButtonReExport)
+    bpy.utils.unregister_class(AssignEnvColorProperty)
     bpy.utils.unregister_class(ExportRV)
     bpy.utils.unregister_class(ImportRV)
     bpy.utils.unregister_class(DialogOperator)
