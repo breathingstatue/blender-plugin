@@ -76,13 +76,14 @@ importlib.reload(settings)
 from .common import DialogOperator
 from .operators import ImportRV, ExportRV, ButtonReExport, ButtonSelectFaceProp, ButtonSelectNCPFaceProp
 from .operators import ButtonSelectNCPMaterial, ButtonColorFromActive, ButtonVertexColorSet
-from .operators import ButtonVertexColorCreateLayer, ButtonVertexAlphaCreateLayer, ButtonEnableMaterialMode
+from .operators import ButtonVertexColorCreateLayer, ButtonVertexAlphaSetLayer, ButtonEnableMaterialMode
 from .operators import ButtonEnableSolidMode, ButtonRenameAllObjects, SelectByName, SelectByData
 from .operators import SetInstanceProperty, RemoveInstanceProperty, BatchBake, LaunchRV, TexturesSave
 from .operators import TexturesRename, CarParametersExport, IgnoreNCP, SetBCubeMeshIndices
 from .operators import PickInstanceColor, SetModelColor, ToggleEnvironmentMap, ToggleHide, ToggleNoMirror
 from .operators import SetEnvironmentMapColor, ToggleNoLights, ToggleNoCameraCollision
 from .operators import ToggleNoObjectCollision, SetInstancePriority, SetLoDBias, ToggleMirrorPlane
+from .operators import VertexColorRemove
 from .rvstruct import World, PRM, Mesh, BoundingBox, Vector, Matrix, Polygon, Vertex, UV, BigCube, TexAnimation
 from .rvstruct import Frame, Color, Instances, Instance, PosNodes, PosNode, NCP, Polyhedron, Plane, LookupGrid
 from .rvstruct import LookupList, Hull, ConvexHull, Edge, Interior, Sphere, RIM, MirrorPlane, TrackZones, Zone
@@ -100,7 +101,7 @@ from .ui.light import ButtonBakeLightToVertex, RVIO_PT_RevoltLightPanel
 from .ui.texanim import RVIO_PT_AnimModesPanel
 from .ui.objectpanel import RVIO_PT_RevoltObjectPanel
 from .ui.settings import RVIO_PT_RevoltSettingsPanel
-from .ui.vertex import RVIO_PT_VertexPanel
+from .ui.vertex import VertexColorPickerProperties, RVIO_PT_VertexPanel
 from .ui.zone import ButtonZoneHide, OBJECT_OT_add_revolt_track_zone, RVIO_PT_RevoltZonePanel
 
 # Reloaded here because it's used in a class which is instanced here
@@ -210,7 +211,7 @@ classes = (
     ButtonColorFromActive,
     ButtonVertexColorSet,
     ButtonVertexColorCreateLayer,
-    ButtonVertexAlphaCreateLayer,
+    ButtonVertexAlphaSetLayer,
     ButtonEnableMaterialMode,
     ButtonEnableSolidMode,
     ButtonRenameAllObjects,
@@ -249,6 +250,8 @@ classes = (
     SetInstancePriority,
     SetLoDBias,
     ToggleMirrorPlane,
+    VertexColorPickerProperties,
+    VertexColorRemove,
     
     # rvstruct classes
     World, 
@@ -327,7 +330,7 @@ def register():
     bpy.utils.register_class(ButtonColorFromActive)
     bpy.utils.register_class(ButtonVertexColorSet)
     bpy.utils.register_class(ButtonVertexColorCreateLayer)
-    bpy.utils.register_class(ButtonVertexAlphaCreateLayer)
+    bpy.utils.register_class(ButtonVertexAlphaSetLayer)
     bpy.utils.register_class(ButtonEnableMaterialMode)
     bpy.utils.register_class(ButtonEnableSolidMode)
     bpy.utils.register_class(ButtonRenameAllObjects)
@@ -366,6 +369,8 @@ def register():
     bpy.utils.register_class(SetInstancePriority)
     bpy.utils.register_class(SetLoDBias)
     bpy.utils.register_class(ToggleMirrorPlane)
+    bpy.utils.register_class(VertexColorPickerProperties)
+    bpy.utils.register_class(VertexColorRemove)
     
     # Register UI
     bpy.utils.register_class(RVIO_PT_RevoltFacePropertiesPanel)
@@ -385,6 +390,14 @@ def register():
     bpy.types.Scene.revolt = bpy.props.PointerProperty(type=RVSceneProperties)
     bpy.types.Object.revolt = bpy.props.PointerProperty(type=RVObjectProperties)
     bpy.types.Mesh.revolt = bpy.props.PointerProperty(type=RVMeshProperties)
+    bpy.types.Scene.vertex_color_picker_props = bpy.props.PointerProperty(type=VertexColorPickerProperties)
+    
+    bpy.types.Scene.vertex_alpha_value = bpy.props.FloatProperty(
+    name="Vertex Alpha Value",
+    description="Alpha value for vertex colors",
+    default=1.0,  # Default to fully opaque
+    min=0.0, max=1.0
+    )
   
     # UI and Handlers Registration
     bpy.app.handlers.depsgraph_update_pre.append(edit_object_change_handler)
@@ -397,6 +410,8 @@ def unregister():
         bpy.app.handlers.load_post.remove(load_handler)
     bpy.app.handlers.depsgraph_update_pre.remove(edit_object_change_handler)
     
+    del bpy.types.Scene.vertex_alpha_value
+    del bpy.types.Scene.vertex_color_picker_props
     del bpy.types.Mesh.revolt
     del bpy.types.Object.revolt
     del bpy.types.Scene.revolt
@@ -422,6 +437,8 @@ def unregister():
     bpy.utils.unregister_class(RVIO_PT_RevoltFacePropertiesPanel)
     
     # Unregister Operators
+    bpy.utils.unregister_class(VertexColorRemove)
+    bpy.utils.unregister_class(VertexColorPickerProperties)
     bpy.utils.unregister_class(ToggleMirrorPlane)
     bpy.utils.unregister_class(SetLoDBias)
     bpy.utils.unregister_class(SetInstancePriority)
@@ -460,7 +477,7 @@ def unregister():
     bpy.utils.unregister_class(ButtonRenameAllObjects)
     bpy.utils.unregister_class(ButtonEnableSolidMode)
     bpy.utils.unregister_class(ButtonEnableMaterialMode)
-    bpy.utils.unregister_class(ButtonVertexAlphaCreateLayer)
+    bpy.utils.unregister_class(ButtonVertexAlphaSetLayer)
     bpy.utils.unregister_class(ButtonVertexColorCreateLayer)
     bpy.utils.unregister_class(ButtonVertexColorSet)
     bpy.utils.unregister_class(ButtonColorFromActive)

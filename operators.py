@@ -389,38 +389,172 @@ class ButtonColorFromActive(bpy.types.Operator):
     bl_label = "Get Color"
     bl_description = "Gets the color from the active face"
 
+    def color_from_face(self, context):
+        obj = context.object
+        if obj.type != 'MESH' or obj.mode != 'EDIT':
+            return None
+
+        mesh = obj.data
+        bm = bmesh.from_edit_mesh(mesh)
+        color_layer = bm.loops.layers.color.active
+
+        if color_layer is None:
+            return None
+
+        selected_faces = [f for f in bm.faces if f.select]
+        if not selected_faces:
+            return None
+
+        # Assuming we take the color from the first loop of the first selected face
+        first_face = selected_faces[0]
+        color = first_face.loops[0][color_layer]
+
+        # Store this color in some property or return it
+        # Example: store in scene properties
+        context.scene.vertex_color_from_face = color
+
+        return color
+
     def execute(self, context):
-        color_from_face(context)
-        redraw()
-        return{"FINISHED"}
+        color = self.color_from_face(context)
+        if color:
+            self.report({'INFO'}, "Color copied from face.")
+        else:
+            self.report({'WARNING'}, "No color copied. Ensure a face is selected and a vertex color layer exists.")
+        bpy.context.area.tag_redraw()
+        return {"FINISHED"}
 
 class ButtonVertexColorSet(bpy.types.Operator):
     bl_idname = "vertexcolor.set"
-    bl_label = "Set Color"
-    bl_description = "Apply color to selected faces"
-    number = bpy.props.IntProperty()
+    bl_label = "Set Color and Alpha"
+    bl_description = "Apply color and alpha to selected faces"
+
+    def set_vertex_color(self, context, color, alpha):
+        obj = context.object
+        if obj.type != 'MESH' or obj.mode != 'EDIT':
+            self.report({'WARNING'}, "Operation requires an active mesh object in edit mode.")
+            return False
+
+        mesh = obj.data
+        bm = bmesh.from_edit_mesh(mesh)
+        color_layer = bm.loops.layers.color.active
+
+        if color_layer is None:
+            self.report({'WARNING'}, "No active vertex color layer found.")
+            return False
+
+        # Apply color and alpha to the vertex colors
+        for face in bm.faces:
+            if face.select:
+                for loop in face.loops:
+                    loop[color_layer] = (color[0], color[1], color[2], alpha)
+
+        bmesh.update_edit_mesh(mesh)
+        return True
 
     def execute(self, context):
-        set_vertex_color(context, self.number)
-        return{"FINISHED"}
+        scene = context.scene
+        color_props = scene.vertex_color_picker_props  # Fetch color
+        alpha_value = getattr(scene, 'vertex_alpha_value', 1.0)  # Fetch alpha
+
+        # Call set_vertex_color with both color and alpha
+        success = self.set_vertex_color(context, color_props.vertex_color, alpha_value)
+
+        if success:
+            self.report({'INFO'}, "Color and alpha applied to selected faces.")
+        else:
+            self.report({'WARNING'}, "Failed to apply color and alpha.")
+        return {"FINISHED"}
 
 class ButtonVertexColorCreateLayer(bpy.types.Operator):
     bl_idname = "vertexcolor.create_layer"
     bl_label = "Create Vertex Color Layer"
-    bl_description = "Creates a vertex color layer"
+    bl_description = "Creates a new vertex color layer"
 
     def execute(self, context):
-        create_color_layer(context)
-        return{"FINISHED"}
+        obj = context.object
+        if obj.type != 'MESH' or obj.mode != 'EDIT':
+            self.report({'WARNING'}, "Operation requires an active mesh object in edit mode.")
+            return {'CANCELLED'}
 
-class ButtonVertexAlphaCreateLayer(bpy.types.Operator):
-    bl_idname = "vertexcolor.create_layer_alpha"
-    bl_label = "Create Alpha Color Layer"
+        mesh = obj.data
+        bm = bmesh.from_edit_mesh(mesh)
+
+        # Check if the color layer already exists
+        if bm.loops.layers.color.active is not None:
+            self.report({'INFO'}, "Vertex color layer already exists.")
+            return {'CANCELLED'}
+
+        # Create a new vertex color layer
+        bm.loops.layers.color.new("VertexColor")
+        bmesh.update_edit_mesh(mesh)
+        self.report({'INFO'}, "New vertex color layer created.")
+        return {'FINISHED'}
+
+class ButtonVertexAlphaSetLayer(bpy.types.Operator):
+    bl_idname = "vertexcolor.set_alpha"
+    bl_label = "Set Vertex Alpha"
+    bl_description = "Set alpha value for the vertex color layer"
+    alpha: bpy.props.FloatProperty()  # Add an alpha property
+
+    def set_vertex_alpha(self, context, alpha_value):
+        obj = context.object
+        if obj.type != 'MESH' or obj.mode != 'EDIT':
+            self.report({'WARNING'}, "Operation requires an active mesh object in edit mode.")
+            return False
+
+        mesh = obj.data
+        bm = bmesh.from_edit_mesh(mesh)
+        color_layer = bm.loops.layers.color.active
+
+        if color_layer is None:
+            self.report({'WARNING'}, "No active vertex color layer found.")
+            return False
+
+        # Apply the alpha value to the vertex colors
+        for face in bm.faces:
+            for loop in face.loops:
+                loop[color_layer][3] = alpha_value  # Set alpha for each vertex color
+
+        bmesh.update_edit_mesh(mesh)
+        return True
 
     def execute(self, context):
-        create_alpha_layer(context)
-        return{"FINISHED"}
+        success = self.set_vertex_alpha(context, self.alpha)
+        if success:
+            context.scene.vertex_alpha_value = self.alpha  # Store alpha value
+            self.report({'INFO'}, "Alpha value set for vertex colors.")
+        else:
+            self.report({'WARNING'}, "Failed to set alpha value.")
+        return {'FINISHED' if success else 'CANCELLED'}
+   
+class VertexColorRemove(bpy.types.Operator):
+    bl_idname = "vertexcolor.remove"
+    bl_label = "Remove Vertex Color"
+    bl_description = "Remove the vertex colors from selected vertices"
 
+    def execute(self, context):
+        obj = context.object
+
+        if obj.type != 'MESH' or obj.mode != 'EDIT':
+            self.report({'WARNING'}, "Operation requires an active mesh object in edit mode.")
+            return {'CANCELLED'}
+
+        mesh = obj.data
+        bm = bmesh.from_edit_mesh(mesh)
+        color_layer = bm.loops.layers.color.active
+
+        if color_layer is None:
+            self.report({'WARNING'}, "No active vertex color layer found.")
+            return {'CANCELLED'}
+
+        for face in bm.faces:
+            for loop in face.loops:
+                loop[color_layer] = (1.0, 1.0, 1.0, 1.0)  # Setting color to white
+
+        bmesh.update_edit_mesh(mesh)
+        self.report({'INFO'}, "Vertex color removed.")
+        return {'FINISHED'}
 
 """
 HELPERS -----------------------------------------------------------------------
