@@ -9,6 +9,7 @@ providing the functions behind the UI buttons.
 """
 
 
+import os
 import bpy
 import time
 import subprocess
@@ -16,12 +17,13 @@ import shutil
 import bmesh
 
 from . import tools
-from .common import FIN_ENV
 from .props.props_obj import RVObjectProperties
 from .props.props_scene import RVSceneProperties
 from .layers import *
 from .texanim import *
 from .rvstruct import *
+from .ui.settings import RVGLAddonPreferences
+from . import carinfo
 
 from bpy.props import (
     BoolProperty,
@@ -33,6 +35,11 @@ from bpy.props import (
     FloatVectorProperty,
     PointerProperty
 )
+
+def get_addon_preferences():
+    revolt = __name__.split('.')[0]
+    preferences = bpy.context.preferences
+    return preferences.addons[revolt].preferences
 
 """
 IMPORT AND EXPORT -------------------------------------------------------------
@@ -218,7 +225,6 @@ class ExportRV(bpy.types.Operator):
             box.prop(props, "ncp_export_collgrid")
             box.prop(props, "ncp_collgrid_size")
 
-
         # Texture mesh settings
         if frmt in [FORMAT_PRM, FORMAT_W]:
             box = layout.box()
@@ -229,12 +235,9 @@ class ExportRV(bpy.types.Operator):
             box = layout.box()
             box.prop(props, "apply_scale")
             box.prop(props, "apply_rotation")
-        if frmt in [FORMAT_NCP, FORMAT_PRM, FORMAT_W]:
-            box = layout.box()
-            box.prop(props, "triangulate_ngons")
 
 
-def exec_export(filepath, context):
+def exec_export(self, filepath, context):
     scene = context.scene
     props = context.scene.revolt
 
@@ -245,7 +248,6 @@ def exec_export(filepath, context):
         msg_box("File not specified.", "ERROR")
         return {"FINISHED"}
 
-    # Gets the format from the file path
     frmt = get_format(filepath)
 
     if frmt == FORMAT_UNK:
@@ -263,11 +265,8 @@ def exec_export(filepath, context):
         props.last_exported_filepath = filepath
 
         if frmt == FORMAT_PRM:
-            # Checks if a file can be exported
-            if not tools.check_for_export(scene.objects.active):
-                return {"FINISHED"}
-
             from . import prm_out
+            print("Exporting to .prm...")
             prm_out.export_file(filepath, scene)
 
         elif frmt == FORMAT_FIN:
@@ -307,9 +306,9 @@ def exec_export(filepath, context):
         else:
             msg_box("Format not yet supported: {}".format(FORMATS[frmt]))
 
-        # Re-enables undo
+        # Re-enables undo and cleanup
         bpy.context.user_preferences.edit.use_global_undo = use_global_undo
-
+        
     context.window.cursor_set("DEFAULT")
 
     # Gets any encountered errors
@@ -321,27 +320,95 @@ def exec_export(filepath, context):
     else:
         ico = "ERROR"
 
-    # Displays a message box with the import results
+    # Display export results
     end_time = time.time() - start_time
-    msg_box(
-        "Export to {} done in {:.3f} seconds.\n{}".format(
-            FORMATS[frmt], end_time, errors),
-        icon=ico
-    )
+    msg_box("Export to {} done in {:.3f} seconds.\n{}".format(FORMATS[frmt], end_time, get_errors()),icon=ico)
 
     return {"FINISHED"}
 
-class AssignEnvColorProperty(bpy.types.Operator):
-    """Assign Environment Color Property to Selected Objects"""
-    bl_idname = "object.assign_env_color_property"
-    bl_label = "Assign Env Color Property"
+class RVIO_OT_SelectRevoltDirectory(bpy.types.Operator):
+    bl_idname = "rvio.select_revolt_dir"
+    bl_label = "Select Re-Volt Directory"
+    bl_description = "Select the directory where RVGL is located"
+
+    directory: bpy.props.StringProperty(subtype='DIR_PATH')
 
     def execute(self, context):
-        for obj in context.selected_objects:
-            obj.fin_envcol = (1.0, 1.0, 1.0, 1.0)  # Default color
+        prefs = get_addon_preferences()
+        prefs.revolt_dir = self.directory  # Update the revolt_dir with the selected directory
         return {'FINISHED'}
 
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+    
+class RVIO_OT_ReadCarParameters(bpy.types.Operator):
+    bl_idname = "rvio.read_car_parameters"
+    bl_label = "Read Car Parameters"
+    bl_description = "Read car parameters from parameters.txt file"
 
+    # Filepath handler
+    filepath: bpy.props.StringProperty(subtype="FILE_PATH")
+    directory: bpy.props.StringProperty(subtype="DIR_PATH")
+
+    def execute(self, context):
+        if not self.filepath.lower().endswith("parameters.txt"):
+            self.report({'ERROR'}, "Please select a valid parameters.txt file")
+            return {'CANCELLED'}
+
+        parameters = carinfo.read_parameters(self.filepath)
+        parameters_str = self.format_parameters(parameters)
+
+        text_block_name = os.path.basename(self.filepath)
+        text_block = bpy.data.texts.new(name=text_block_name)
+        text_block.write(parameters_str)
+
+        self.report({'INFO'}, f"Car parameters from '{self.filepath}' imported to Text Editor")
+        return {'FINISHED'}
+
+    def format_parameters(self, parameters):
+        formatted_str = ""
+        for key, value in parameters.items():
+            if key == 'model':
+                formatted_str += f"{key}:\n"
+                for model_key, model_value in value.items():
+                    formatted_str += f"  {model_key}: {model_value}\n"
+            elif key in ['wheel', 'spring', 'pin', 'axle', 'spinner', 'aerial', 'body', 'ai']:
+                formatted_str += f"{key}:\n"
+                if isinstance(value, dict):
+                    for sub_key, sub_value in value.items():
+                        formatted_str += f"  {sub_key}:\n"
+                        if isinstance(sub_value, dict):
+                            for sub_sub_key, sub_sub_value in sub_value.items():
+                                formatted_str += f"    {sub_sub_key}: {sub_sub_value}\n"
+                        else:
+                            formatted_str += f"    {sub_value}\n"
+                elif isinstance(value, list):
+                    for item in value:
+                        formatted_str += f"  - {item}\n"
+            else:
+                formatted_str += f"{key}: {value}\n"
+        return formatted_str
+
+    def invoke(self, context, event):
+        # Get addon preferences
+        prefs = get_addon_preferences()
+        rvgl_dir = prefs.revolt_dir
+
+        # Use the RVGL directory if set, otherwise start in the default directory
+        if rvgl_dir and os.path.isdir(rvgl_dir):
+            cars_folder = os.path.join(rvgl_dir, "cars")
+            if os.path.isdir(cars_folder):
+                self.directory = cars_folder
+            else:
+                self.report({'INFO'}, "RVGL '/cars' subfolder not found. Browse to locate parameters.txt.")
+        else:
+            self.report({'INFO'}, "RVGL directory not set. Browse to locate parameters.txt.")
+
+        # Open the file browser
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+    
 """
 BUTTONS ------------------------------------------------------------------------
 """
@@ -390,6 +457,54 @@ class ButtonSelectNCPMaterial(bpy.types.Operator):
         props.select_material = meshprops.face_material
         return{"FINISHED"}
 
+class ToggleTriangulateNgons(bpy.types.Operator):
+    """Toggle Triangulate Ngons"""
+    bl_idname = "object.triangulate_ngons"
+    bl_label = "Triangulate Ngons"
+
+    # Property to act as a tickbox
+    is_enabled: bpy.props.BoolProperty(
+        name="Enable Triangulation",
+        description="Toggle Triangulation",
+        default=True
+    )
+
+    def execute(self, context):
+        context.scene.triangulate_ngons_enabled = not context.scene.triangulate_ngons_enabled
+        self.report({'INFO'}, "Triangulate Ngons: {}".format("Enabled" if context.scene.triangulate_ngons_enabled else "Disabled"))
+        return {'FINISHED'}
+
+    @classmethod
+    def poll(cls, context):
+        return True
+
+class ToggleExportWithoutTexture(bpy.types.Operator):
+    """Toggle Export w/o Texture"""
+    bl_idname = "object.export_without_texture"
+    bl_label = "Toggle Export w/o Texture"
+
+    def execute(self, context):
+        context.scene.export_without_texture = not context.scene.export_without_texture
+        return {'FINISHED'}
+    
+class ToggleApplyScale(bpy.types.Operator):
+    """Toggle Apply Scale on Export"""
+    bl_idname = "object.toggle_apply_scale"
+    bl_label = "Apply Scale on Export"
+
+    def execute(self, context):
+        context.scene.apply_scale_on_export = not context.scene.apply_scale_on_export
+        return {'FINISHED'}
+
+class ToggleApplyRotation(bpy.types.Operator):
+    """Toggle Apply Rotation on Export"""
+    bl_idname = "object.toggle_apply_rotation"
+    bl_label = "Toggle Apply Rotation on Export"
+
+    def execute(self, context):
+        context.scene.apply_rotation_on_export = not context.scene.apply_rotation_on_export
+        return {'FINISHED'}
+    
 """
 VERTEX COLROS -----------------------------------------------------------------
 """
@@ -633,6 +748,21 @@ class RemoveInstanceProperty(bpy.types.Operator):
         context.view_layer.update()
         self.report({'INFO'}, "Removed instance property from {} objects".format(len(context.selected_objects)))
         return{'FINISHED'}
+    
+class AssignEnvColorProperty(bpy.types.Operator):
+    """Assign Environment Color Property to Selected Objects"""
+    bl_idname = "object.assign_env_color_property"
+    bl_label = "Assign Env Color Property"
+
+    def execute(self, context):
+        for obj in context.selected_objects:
+            obj.fin_envcol = (1.0, 1.0, 1.0, 1.0)  # Default color
+        return {'FINISHED'}
+
+def get_addon_preferences():
+    revolt = __name__.split('.')[0]
+    preferences = bpy.context.preferences
+    return preferences.addons[revolt].preferences
 
 class BatchBake(bpy.types.Operator):
     bl_idname = "helpers.batch_bake_model"
@@ -647,25 +777,33 @@ class BatchBake(bpy.types.Operator):
         msg_box("Baked {} objects".format(n))
         return{"FINISHED"}
 
-
 class LaunchRV(bpy.types.Operator):
     bl_idname = "helpers.launch_rv"
     bl_label = "Launch RVGL"
-    bl_description = (
-        "Launches the game"
-    )
+    bl_description = "Launches the game"
 
     def execute(self, context):
-        rvgl_dir = context.scene.revolt.revolt_dir
-        if "rvgl.exe" in os.listdir(rvgl_dir):
-            executable = "rvgl.exe"
-        elif "rvgl" in os.listdir(rvgl_dir):
-            executable = "rvgl"
-        else:
-            return{"FINISHED"}
-        subprocess.Popen(["{}/{}".format(rvgl_dir, executable), "-window", "-nointro", "-sload", "-dev"])
-        return{"FINISHED"}
+        prefs = get_addon_preferences()
+        rvgl_dir = prefs.revolt_dir
 
+        if not rvgl_dir or not os.path.isdir(rvgl_dir):
+            self.report({'WARNING'}, f"RVGL directory '{rvgl_dir}' is not set or invalid.")
+            return {'CANCELLED'}
+
+        executable_path = None
+        if "rvgl.exe" in os.listdir(rvgl_dir):
+            executable_path = os.path.join(rvgl_dir, "rvgl.exe")
+        elif "rvgl" in os.listdir(rvgl_dir):
+            executable_path = os.path.join(rvgl_dir, "rvgl")
+
+        if executable_path and os.path.isfile(executable_path):
+            # Set the working directory to rvgl_dir when launching the subprocess
+            subprocess.Popen([executable_path], cwd=rvgl_dir)
+        else:
+            self.report({'WARNING'}, f"RVGL executable not found in '{rvgl_dir}'.")
+            return {'CANCELLED'}
+
+        return {'FINISHED'}
 
 class TexturesSave(bpy.types.Operator):
     bl_idname = "helpers.textures_save"
@@ -858,29 +996,26 @@ class ToggleEnvironmentMap(bpy.types.Operator):
             self.report({'WARNING'}, "No active object")
             return {'CANCELLED'}
 
-        if "revolt" in obj:
-            if obj.get("is_instance", False):
-                # If object is an instance, handle 'env_layer' and 'env_alpha_layer'
-                # This code assumes you have a way to handle these properties
-                # For demonstration, just toggling a custom property
-                if "env_layer_info" in obj:
-                    del obj["env_layer_info"]
-                    self.report({'INFO'}, "Environment layer info turned off for instance")
-                else:
-                    obj["env_layer_info"] = True
-                    self.report({'INFO'}, "Environment layer info turned on for instance")
+        if obj.get("is_instance", False):
+            # If object is an instance, handle 'env_layer' and 'env_alpha_layer'
+            # This code assumes you have a way to handle these properties
+            # For demonstration, just toggling a custom property
+            if "env_layer_info" in obj:
+                del obj["env_layer_info"]
+                self.report({'INFO'}, "Environment layer info turned off for instance")
             else:
-                # If object is not an instance, handle 'fin_env'
-                if "fin_env" in obj:
-                    del obj["fin_env"]
-                    self.update_material_reflection(obj, False)
-                    self.report({'INFO'}, "Environment map turned off")
-                else:
-                    obj["fin_env"] = True
-                    self.update_material_reflection(obj, True)
-                    self.report({'INFO'}, "Environment map turned on")
+                obj["env_layer_info"] = True
+                self.report({'INFO'}, "Environment layer info turned on for instance")
         else:
-            self.report({'WARNING'}, "Object does not have 'revolt' properties")
+            # If object is not an instance, handle 'fin_env'
+            if "fin_env" in obj:
+                del obj["fin_env"]
+                self.update_material_reflection(obj, False)
+                self.report({'INFO'}, "Environment map turned off")
+            else:
+                obj["fin_env"] = True
+                self.update_material_reflection(obj, True)
+                self.report({'INFO'}, "Environment map turned on")
 
         return {'FINISHED'}
 
@@ -1064,5 +1199,3 @@ class ToggleMirrorPlane(bpy.types.Operator):
             self.report({'WARNING'}, "No active object selected")
 
         return {'FINISHED'}
-
-dprint

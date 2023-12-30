@@ -9,15 +9,15 @@ file to another, as well as edit them in an external spread sheet program.
 
 """
 import bmesh
-
-if "common" in locals():
-    import imp
-    imp.reload(common)
-
+import importlib
 from . import common
-from . import texanim
 
-from .common import *
+# Check if 'common' is already in locals to determine if this is a reload scenario
+if "common" in locals():
+    importlib.reload(common)
+
+# Add specific imports from common as needed
+# Example: from .common import specific_function, SpecificClass
 
 def export_file(filepath, scene):
 

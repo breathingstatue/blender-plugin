@@ -8,16 +8,17 @@ Mirror planes are used to determine reflective surfaces.
 """
 
 import bmesh
-
-if "common" in locals():
-    import imp
-    imp.reload(common)
-    imp.reload(rvstruct)
-
+import importlib
 from . import common
 from . import rvstruct
 
-from .common import *
+# Check if 'common' is already in locals to determine if this is a reload scenario
+if "common" in locals():
+    importlib.reload(common)
+    importlib.reload(rvstruct)
+
+# Add specific imports from common as needed
+# Example: from .common import specific_function, SpecificClass
 
 def import_file(filepath, scene):
     props = scene.revolt

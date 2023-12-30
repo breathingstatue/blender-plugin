@@ -7,31 +7,25 @@ Exports collision files.
 
 """
 
-
-if "bpy" in locals():
-    import imp
-    imp.reload(common)
-    imp.reload(rvstruct)
-
 import os
 import bpy
 import bmesh
-
+import importlib
 from math import ceil
 from mathutils import Color, Matrix
 from . import common
 from . import rvstruct
 
-from .common import *
-from .rvstruct import (
-    BoundingBox,
-    LookupGrid,
-    LookupList,
-    NCP,
-    Plane,
-    Polyhedron,
-    Vector
-)
+# Check if 'bpy' is already in locals to determine if this is a reload scenario
+if "bpy" in locals():
+    importlib.reload(common)
+    importlib.reload(rvstruct
+
+# Importing specific classes and functions
+from .rvstruct import BoundingBox, LookupGrid, LookupList, NCP, Plane, Polyhedron, Vector
+
+# Add specific imports from common as needed
+# Example: from .common import specific_function, SpecificClass
 
 
 def export_file(filepath, scene):
@@ -76,10 +70,10 @@ def export_file(filepath, scene):
         bm = bmesh.new()
         bm.from_mesh(obj.data)
 
-        if props.triangulate_ngons:
-            num_ngons = triangulate_ngons(bm)
-            if scene.revolt.triangulate_ngons > 0:
-                print("Triangulated {} n-gons".format(num_ngons))
+    if context.scene.triangulate_ngons_enabled:
+        num_ngons = triangulate_ngons(bm)
+        if num_ngons > 0:
+            print("Triangulated {} n-gons".format(num_ngons))
 
         # Applies translation, rotation and scale
         apply_trs(obj, bm, transform)

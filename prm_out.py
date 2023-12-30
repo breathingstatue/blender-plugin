@@ -8,24 +8,25 @@ Meshes used for cars, game objects and track instances.
 """
 
 
-if "bpy" in locals():
-    import imp
-    imp.reload(common)
-    imp.reload(rvstruct)
-    imp.reload(img_in)
-    imp.reload(layers)
-
 import os
 import bpy
 import bmesh
+import importlib
 from mathutils import Color, Vector, Matrix
 from . import common
 from . import rvstruct
 from . import img_in
 from . import layers
 
-from .common import *
-from .layers import *
+# Use importlib.reload to reload modules during development
+if "bpy" in locals():
+    importlib.reload(common)
+    importlib.reload(rvstruct)
+    importlib.reload(img_in)
+    importlib.reload(layers)
+    
+# Add specific imports from common as needed
+# Example: from .common import specific_function, SpecificClass
 
 
 def export_file(filepath, scene):
@@ -120,9 +121,9 @@ def export_mesh(me, obj, scene, filepath, world=None):
             obj.parent = parent
             obj.matrix_basis = old_mat
 
-    if props.triangulate_ngons:
+    if context.scene.triangulate_ngons_enabled:
         num_ngons = triangulate_ngons(bm)
-        if scene.revolt.triangulate_ngons > 0:
+        if num_ngons > 0:
             print("Triangulated {} n-gons".format(num_ngons))
 
     # Gets layers

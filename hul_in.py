@@ -7,25 +7,28 @@ Description:
 
 """
 
-if "bpy" in locals():
-    import imp
-    imp.reload(common)
-    imp.reload(rvstruct)
-
 import os
 import subprocess
 import re
 import bpy
 import bmesh
 import mathutils
-
+import importlib
 from . import common
 from . import rvstruct
 from . import prm_in
 
+# Check if 'bpy' is already in locals to determine if this is a reload scenario
+if "bpy" in locals():
+    importlib.reload(common)
+    importlib.reload(rvstruct)
+
+# Importing specific classes and functions
 from .rvstruct import Hull
-from .common import *
 from mathutils import Color, Vector
+
+# Add specific imports from common as needed
+# Example: from .common import specific_function, SpecificClass
 
 
 def get_plane(x, y, z):
@@ -164,8 +167,6 @@ def import_chull(chull, scene, filename):
             # bm.faces.append(bmesh.ops.contextual_create(bm, verts, 0, False)["faces"])
             bmesh.ops.contextual_create(bm, geom=verts, use_smooth=True)
             # bm.faces.new(verts)
-
-
 
 
     # Converts the bmesh back to a mesh and frees resources

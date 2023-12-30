@@ -6,14 +6,16 @@ Description:
 Zone files contain numbered boxes to identify tracks space.
 
 """ 
+
 import bpy
 import bmesh
 import os
 from . import common
-from . import rvstruct
 
 from .rvstruct import TrackZones
-from .common import *
+
+# Add specific imports from common as needed
+# Example: from .common import specific_function, SpecificClass
 
 def import_file(filepath, scene):
     """

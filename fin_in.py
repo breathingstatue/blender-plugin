@@ -7,22 +7,25 @@ Imports Instance files.
 
 """
 
-if "bpy" in locals():
-    import imp
-    imp.reload(common)
-    imp.reload(rvstruct)
-
 import bpy
 import bmesh
 import mathutils
-
+import importlib
 from . import common
 from . import rvstruct
 from . import prm_in
 
+# Check if 'bpy' is already in locals to determine if this is a reload scenario
+if "bpy" in locals():
+    importlib.reload(common)
+    importlib.reload(rvstruct)
+
+# Importing specific classes and functions
 from .rvstruct import Instances, Vector
-from .common import *
 from mathutils import Color
+
+# You can add specific imports from common as needed
+# Example: from .common import function_name, ClassName
 
 
 def import_file(filepath, scene):

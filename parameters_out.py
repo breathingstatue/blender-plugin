@@ -7,17 +7,19 @@ Prints most valuable car parameters into clipboard.
 
 """
 
-if "bpy" in locals():
-    import imp
-    imp.reload(common)
-
 import os
 import bpy
 import bmesh
+import importlib
 from bpy import context
 from . import common
 
-from .common import * 
+# Check if 'bpy' is already in locals to determine if this is a reload scenario
+if "bpy" in locals():
+    importlib.reload(common)
+
+# Add specific imports from common as needed
+# Example: from .common import specific_function, SpecificClass
 
 def export_file(filepath = None, scene = None):
     """

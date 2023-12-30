@@ -74,17 +74,19 @@ importlib.reload(settings)
 # Include conditional reloads for any other local modules here...
 
 from .common import DialogOperator
-from .operators import ImportRV, ExportRV, AssignEnvColorProperty
+from .operators import ImportRV, ExportRV, RVIO_OT_ReadCarParameters, AssignEnvColorProperty
 from .operators import ButtonReExport, ButtonSelectFaceProp, ButtonSelectNCPFaceProp
 from .operators import ButtonSelectNCPMaterial, ButtonVertexColorSet
 from .operators import ButtonVertexColorCreateLayer, ButtonVertexAlphaSetLayer, ButtonEnableMaterialMode
 from .operators import ButtonEnableSolidMode, ButtonRenameAllObjects, SelectByName, SelectByData
 from .operators import SetInstanceProperty, RemoveInstanceProperty, BatchBake, LaunchRV, TexturesSave
-from .operators import TexturesRename, CarParametersExport, IgnoreNCP, SetBCubeMeshIndices
+from .operators import TexturesRename, CarParametersExport, IgnoreNCP 
+from .operators import ToggleTriangulateNgons, ToggleExportWithoutTexture, ToggleApplyScale, ToggleApplyRotation
+from .operators import SetBCubeMeshIndices
 from .operators import PickInstanceColor, SetModelColor, ToggleEnvironmentMap, ToggleHide, ToggleNoMirror
 from .operators import SetEnvironmentMapColor, ToggleNoLights, ToggleNoCameraCollision
 from .operators import ToggleNoObjectCollision, SetInstancePriority, SetLoDBias, ToggleMirrorPlane
-from .operators import VertexColorRemove
+from .operators import VertexColorRemove, RVIO_OT_SelectRevoltDirectory
 from .rvstruct import World, PRM, Mesh, BoundingBox, Vector, Matrix, Polygon, Vertex, UV, BigCube, TexAnimation
 from .rvstruct import Frame, Color, Instances, Instance, PosNodes, PosNode, NCP, Polyhedron, Plane, LookupGrid
 from .rvstruct import LookupList, Hull, ConvexHull, Edge, Interior, Sphere, RIM, MirrorPlane, TrackZones, Zone
@@ -94,14 +96,14 @@ from .props.props_mesh import RVMeshProperties
 from .props.props_obj import RVObjectProperties
 from .props.props_scene import RVSceneProperties
 from .ui.faceprops import RVIO_PT_RevoltFacePropertiesPanel
-from .ui.headers import RVIO_PT_EditModeHeader, RVIO_PT_RevoltIOToolPanel
+from .ui.headers import RVIO_PT_RevoltIOToolPanel
 from .ui.helpers import RVIO_PT_RevoltHelpersPanelMesh
 from .ui.hull import ButtonHullGenerate, OBJECT_OT_add_revolt_hull_sphere, RVIO_PT_RevoltHullPanel
 from .ui.instances import RVIO_PT_RevoltInstancesPanel
 from .ui.light import ButtonBakeLightToVertex, RVIO_PT_RevoltLightPanel
 from .ui.texanim import RVIO_PT_AnimModesPanel
 from .ui.objectpanel import RVIO_PT_RevoltObjectPanel
-from .ui.settings import RVIO_PT_RevoltSettingsPanel
+from .ui.settings import RVGLAddonPreferences, RVIO_PT_RevoltSettingsPanel
 from .ui.vertex import VertexColorPickerProperties, EnvMapColorPickerProperties, RVIO_PT_VertexPanel
 from .ui.zone import ButtonZoneHide, OBJECT_OT_add_revolt_track_zone, RVIO_PT_RevoltZonePanel
 
@@ -190,12 +192,6 @@ def menu_func_export(self, context):
     """Export function for the user interface."""
     self.layout.operator("export_scene.revolt", text="Re-Volt")
     
-def initialize_custom_properties():
-    for obj in bpy.data.objects:
-        # Attach 'revolt' property group if not already attached
-        if not hasattr(obj, 'revolt'):
-            obj.revolt = bpy.props.PointerProperty(type=bpy.types.ObjectRevolt)
-
 def load_handler(dummy):
     initialize_custom_properties()
 
@@ -205,6 +201,7 @@ classes = (
     DialogOperator,
     ImportRV,
     ExportRV,
+    RVIO_OT_ReadCarParameters,
     AssignEnvColorProperty,
     ButtonReExport,
     ButtonSelectFaceProp,
@@ -238,6 +235,10 @@ classes = (
     ButtonZoneHide,
     OBJECT_OT_add_revolt_track_zone,
     IgnoreNCP,
+    ToggleTriangulateNgons,
+    ToggleExportWithoutTexture,
+    ToggleApplyScale,
+    ToggleApplyRotation,
     SetBCubeMeshIndices,
     PickInstanceColor,
     SetModelColor,
@@ -254,6 +255,8 @@ classes = (
     VertexColorPickerProperties,
     EnvMapColorPickerProperties,
     VertexColorRemove,
+    RVIO_OT_SelectRevoltDirectory,
+    RVGLAddonPreferences,
     
     # rvstruct classes
     World, 
@@ -295,7 +298,6 @@ classes = (
 
     # UI Panel classes
     RVIO_PT_RevoltFacePropertiesPanel,
-    RVIO_PT_EditModeHeader,
     RVIO_PT_RevoltIOToolPanel,
     RVIO_PT_RevoltHelpersPanelMesh,
     RVIO_PT_RevoltHullPanel,
@@ -325,6 +327,7 @@ def register():
     bpy.utils.register_class(DialogOperator)
     bpy.utils.register_class(ImportRV)
     bpy.utils.register_class(ExportRV)
+    bpy.utils.register_class(RVIO_OT_ReadCarParameters)
     bpy.utils.register_class(AssignEnvColorProperty)
     bpy.utils.register_class(ButtonReExport)
     bpy.utils.register_class(ButtonSelectFaceProp)
@@ -358,6 +361,10 @@ def register():
     bpy.utils.register_class(ButtonZoneHide)
     bpy.utils.register_class(OBJECT_OT_add_revolt_track_zone)
     bpy.utils.register_class(IgnoreNCP)
+    bpy.utils.register_class(ToggleTriangulateNgons)
+    bpy.utils.register_class(ToggleExportWithoutTexture)
+    bpy.utils.register_class(ToggleApplyScale)
+    bpy.utils.register_class(ToggleApplyRotation)
     bpy.utils.register_class(SetBCubeMeshIndices)
     bpy.utils.register_class(PickInstanceColor)
     bpy.utils.register_class(SetModelColor)
@@ -374,10 +381,11 @@ def register():
     bpy.utils.register_class(VertexColorPickerProperties)
     bpy.utils.register_class(EnvMapColorPickerProperties)
     bpy.utils.register_class(VertexColorRemove)
+    bpy.utils.register_class(RVIO_OT_SelectRevoltDirectory)
+    bpy.utils.register_class(RVGLAddonPreferences)
     
     # Register UI
     bpy.utils.register_class(RVIO_PT_RevoltFacePropertiesPanel)
-    bpy.utils.register_class(RVIO_PT_EditModeHeader)
     bpy.utils.register_class(RVIO_PT_RevoltIOToolPanel)
     bpy.utils.register_class(RVIO_PT_RevoltHelpersPanelMesh)
     bpy.utils.register_class(RVIO_PT_RevoltHullPanel)
@@ -395,6 +403,7 @@ def register():
     bpy.types.Mesh.revolt = bpy.props.PointerProperty(type=RVMeshProperties)
     bpy.types.Scene.vertex_color_picker_props = bpy.props.PointerProperty(type=VertexColorPickerProperties)
     bpy.types.Scene.envmap_color_picker = bpy.props.PointerProperty(type=EnvMapColorPickerProperties)
+    bpy.types.Scene.revolt_dir = bpy.props.StringProperty(name="RVGL Directory", subtype='DIR_PATH')
     
     bpy.types.Scene.vertex_alpha_value = bpy.props.FloatProperty(
         name="Vertex Alpha Value",
@@ -432,7 +441,31 @@ def register():
         max=1.0,
         size=4
     )
+    
+    bpy.types.Scene.triangulate_ngons_enabled = bpy.props.BoolProperty(
+        name="Triangulate Ngons",
+        description="Enable or disable ngon triangulation",
+        default=True
+    )
   
+    bpy.types.Scene.export_without_texture = bpy.props.BoolProperty(
+        name="Export w/o Texture",
+        description="Export objects without textures",
+        default=False
+    )
+
+    bpy.types.Scene.apply_scale_on_export = bpy.props.BoolProperty(
+        name="Apply Scale on Export",
+        default=True,
+        description="Apply object scale during export"
+    )
+    
+    bpy.types.Scene.apply_rotation_on_export = bpy.props.BoolProperty(
+        name="Apply Rotation on Export",
+        default=True,
+        description="Apply object rotation during export"
+    )
+
     # UI and Handlers Registration
     bpy.app.handlers.depsgraph_update_pre.append(edit_object_change_handler)
     bpy.app.handlers.load_post.append(load_handler)
@@ -444,6 +477,11 @@ def unregister():
         bpy.app.handlers.load_post.remove(load_handler)
     bpy.app.handlers.depsgraph_update_pre.remove(edit_object_change_handler)
     
+    del bpy.types.Scene.apply_rotation_on_export
+    del bpy.types.Scene.apply_scale_on_export
+    del bpy.types.Scene.export_without_texture
+    del bpy.types.Scene.triangulate_ngons_enabled
+    del bpy.types.Scene.revolt_dir
     del bpy.types.Object.fin_envcol
     del bpy.types.Object.fin_env
     del bpy.types.Object.is_instance
@@ -472,10 +510,11 @@ def unregister():
     bpy.utils.unregister_class(RVIO_PT_RevoltHullPanel)
     bpy.utils.unregister_class(RVIO_PT_RevoltHelpersPanelMesh)
     bpy.utils.unregister_class(RVIO_PT_RevoltIOToolPanel)
-    bpy.utils.unregister_class(RVIO_PT_EditModeHeader)
     bpy.utils.unregister_class(RVIO_PT_RevoltFacePropertiesPanel)
     
     # Unregister Operators
+    bpy.utils.unregister_class(RVGLAddonPreferences)
+    bpy.utils.unregister_class(RVIO_OT_SelectRevoltDirectory)
     bpy.utils.unregister_class(VertexColorRemove)
     bpy.utils.unregister_class(EnvMapColorPickerProperties)
     bpy.utils.unregister_class(VertexColorPickerProperties)
@@ -492,6 +531,10 @@ def unregister():
     bpy.utils.unregister_class(SetModelColor)
     bpy.utils.unregister_class(PickInstanceColor)
     bpy.utils.unregister_class(SetBCubeMeshIndices)
+    bpy.utils.unregister_class(ToggleApplyRotation)
+    bpy.utils.unregister_class(ToggleApplyScale)
+    bpy.utils.unregister_class(ToggleExportWithoutTexture)
+    bpy.utils.unregister_class(ToggleTriangulateNgons)
     bpy.utils.unregister_class(IgnoreNCP)
     bpy.utils.unregister_class(OBJECT_OT_add_revolt_track_zone)
     bpy.utils.unregister_class(ButtonZoneHide)
@@ -525,6 +568,7 @@ def unregister():
     bpy.utils.unregister_class(ButtonSelectFaceProp)
     bpy.utils.unregister_class(ButtonReExport)
     bpy.utils.unregister_class(AssignEnvColorProperty)
+    bpy.utils.unregister_class(RVIO_OT_ReadCarParameters)
     bpy.utils.unregister_class(ExportRV)
     bpy.utils.unregister_class(ImportRV)
     bpy.utils.unregister_class(DialogOperator)

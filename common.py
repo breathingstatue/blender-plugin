@@ -617,18 +617,6 @@ def redraw_uvedit():
                 bpy.ops.wm.redraw_factory(**override)
 
 
-def enable_any_tex_mode(context):
-    """ Enables the preferred shading mode according to settings """
-    props = context.scene.revolt
-
-    # Decide what "prefer_tex_solid_mode" corresponds to in the context of your add-on
-    # For example, you might choose 'MATERIAL' mode to represent the preferred texture mode
-    if props.prefer_tex_solid_mode:
-        enable_material_mode()  # Assuming this is the preferred mode
-    else:
-        enable_solid_mode()  # Fall back to solid mode
-
-
 def enable_material_mode():
     """ Enables material preview in the viewport """
     for area in bpy.context.screen.areas:

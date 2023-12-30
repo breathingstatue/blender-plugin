@@ -1411,8 +1411,6 @@ class RIM:
         for x in range(self.num_mirror_planes):
             self.mirror_planes[x].write(file)
 
-# Assuming MirrorPlane and other necessary classes are defined elsewhere
-
 # Creating the singleton instance of RIM
 rim_instance = RIM()
 

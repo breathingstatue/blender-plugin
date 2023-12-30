@@ -7,19 +7,16 @@ Zone files contain numbered boxes to identify tracks space.
 
 """
 
-
 import os
 import bmesh
 import bpy
 import mathutils
+from . import common
 
-from . import (
-    common,
-    rvstruct,
-)
-from .common import *
 from .rvstruct import TrackZones
 
+# Add specific imports from common as needed
+# Example: from .common import specific_function, SpecificClass
 
 def export_file(filepath, scene):
     # Collect all zones
@@ -39,7 +36,7 @@ def export_file(filepath, scene):
 
 def transforms_to_revolt(location, rotation_euler = (0,0,0), scale = (1,1,1)):
     """
-    This function takes blender's order transformation parameters values and converts
+    This function takes Blender's order transformation parameters values and converts
     them into values ready to export
     """
     location =          to_revolt_coord(location)

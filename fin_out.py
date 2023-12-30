@@ -7,21 +7,24 @@ Imports Instance files.
 
 """
 
-if "bpy" in locals():
-    import imp
-    imp.reload(common)
-    imp.reload(rvstruct)
-
 import bpy
 import bmesh
 import mathutils
-
+import importlib
 from . import common
 from . import rvstruct
 from . import prm_out
 
+# Check if 'bpy' is already in locals to determine if this is a reload scenario
+if "bpy" in locals():
+    importlib.reload(common)
+    importlib.reload(rvstruct)
+
+# Importing specific classes and functions
 from .rvstruct import Instances, Instance, Vector, Color
-from .common import *
+
+# Add specific imports from common as needed
+# Example: from .common import specific_function, SpecificClass
 
 
 def export_file(filepath, scene):
@@ -95,12 +98,12 @@ def export_file(filepath, scene):
             prev_apply_scale = scene.revolt.apply_scale
             prev_apply_rotation = scene.revolt.apply_rotation
 
-            scene.revolt.apply_rotation = False
             scene.revolt.apply_scale = False
+            scene.revolt.apply_rotation = False
             prm_out.export_file(os.path.join(folder, prm_fname), scene)
 
-            scene.revolt.apply_rotation = prev_apply_scale
-            scene.revolt.apply_scale = prev_apply_rotation
+            scene.revolt.apply_scale = prev_apply_scale
+            scene.revolt.apply_rotation = prev_apply_rotation
 
 
         instance.name += "\x00"

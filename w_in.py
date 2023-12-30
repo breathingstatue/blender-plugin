@@ -16,17 +16,19 @@ from . import rvstruct
 from . import img_in
 from . import prm_in
 
-from .rvstruct import World
-from .common import *
-from .prm_in import import_mesh
-
 if "bpy" in locals():
     import imp
     imp.reload(common)
     imp.reload(rvstruct)
     imp.reload(img_in)
     imp.reload(prm_in)
+    
+# Importing specific classes and functions
+from .rvstruct import World
+from .prm_in import import_mesh
 
+# Add specific imports from common as needed
+# Example: from .common import specific_function, SpecificClass
 
 def import_file(filepath, scene):
     """

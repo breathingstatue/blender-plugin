@@ -7,22 +7,23 @@ Imports entire cars using the carinfo module.
 
 """
 
-if "bpy" in locals():
-    import imp
-    imp.reload(common)
-    imp.reload(carinfo)
-    imp.reload(prm_in)
-
 import os
 import bpy
 import bmesh
+import importlib
 from mathutils import Vector
 from . import common
 from . import carinfo
 from . import prm_in
 
-from .common import *
+# Check if 'bpy' is already in locals to determine if this is a reload scenario
+if "bpy" in locals():
+    importlib.reload(common)
+    importlib.reload(carinfo)
+    importlib.reload(prm_in)
 
+# Add specific imports from common as needed
+# Example: from .common import specific_function, SpecificClass
 
 def import_file(filepath, scene):
     """

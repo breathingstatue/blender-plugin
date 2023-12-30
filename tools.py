@@ -7,6 +7,7 @@ Some functions that are called by operators
 (e.g. the light panel, helpers, etc.).
 
 """
+
 import bpy
 import bmesh
 import mathutils
@@ -22,7 +23,8 @@ from bpy.props import (
     StringProperty,
 )
 
-if "bpy" in locals():
+# Reloading the 'common' module if it's already in locals
+if "common" in locals():
     importlib.reload(common)
 
     # from common

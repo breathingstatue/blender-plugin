@@ -6,20 +6,17 @@ Description:
 Moved from operators and panels here to reduce script line amount
 
 """
+
 import bmesh
-
-if "bpy" in locals():
-    import imp
-    imp.reload(common)
-
 import bpy
 from . import common
 from . import rvstruct
-from .common import *
 
-
-import bpy
-
+if "bpy" in locals():
+    import importlib
+    importlib.reload(common)
+    
+from .common import TEX_PAGES_MAX
 
 class ButtonCopyUvToFrame(bpy.types.Operator):
     bl_idname = "texanim.copy_uv_to_frame"

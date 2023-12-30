@@ -7,22 +7,25 @@ Meshes used for cars, game objects and track instances.
 
 """
 
-if "bpy" in locals():
-    import imp
-    imp.reload(common)
-    imp.reload(rvstruct)
-    imp.reload(img_in)
-
 import os
 import bpy
 import bmesh
+import importlib
 from mathutils import Color, Vector
 from . import common
 from . import rvstruct
 from . import img_in
 
+# Check if 'bpy' is already in locals to determine if this is a reload scenario
+if "bpy" in locals():
+    importlib.reload(common)
+    importlib.reload(rvstruct)
+    importlib.reload(img_in)
+
 from .rvstruct import PRM
-from .common import *
+
+# Add specific imports from common as needed
+# Example: from .common import specific_function, SpecificClass
 
 
 def import_file(filepath, scene):

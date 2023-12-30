@@ -18,7 +18,6 @@ from .common import NCP_PROP_MASK
 from .common import FACE_PROP_MASK
 from .common import objects_to_bmesh
 from .prm_in import add_rvmesh_to_bmesh
-from .prm_out import export_mesh
 
 def color_from_face(context):
     obj = context.object
