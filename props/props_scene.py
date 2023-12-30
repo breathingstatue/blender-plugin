@@ -138,7 +138,7 @@ class RVSceneProperties(bpy.types.PropertyGroup):
     apply_translation = bpy.props.BoolProperty(
         name = "Apply Translation",
         default = False,
-        description = "Applies the object location on export. Should be disabled disabled for single/instance ncp files"
+        description = "Applies the object location on export. Should be disabled for single/instance ncp files"
     )
 
     prm_check_parameters = bpy.props.BoolProperty(
