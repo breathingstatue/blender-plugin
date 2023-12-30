@@ -1,8 +1,5 @@
 import bpy
 import bmesh
-from ..common import *
-from .. import tools
-
 from ..tools import generate_chull
 
 class RVIO_PT_RevoltHullPanel(bpy.types.Panel):
@@ -68,5 +65,3 @@ class OBJECT_OT_add_revolt_hull_sphere(bpy.types.Operator):
         bpy.context.view_layer.objects.active = obj
 
         return {'FINISHED'}
-    
-dprint

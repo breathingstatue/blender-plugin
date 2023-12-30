@@ -7,7 +7,6 @@ a custom color which is chosen with a color picker.
 
 import bpy
 import bmesh
-from ..common import *
 from ..operators import *
 
 class VertexColorPickerProperties(bpy.types.PropertyGroup):
@@ -92,5 +91,3 @@ class RVIO_PT_VertexPanel(bpy.types.Panel):
         for alpha, label in alpha_presets:
             op = box.operator("vertexcolor.set_alpha", text=label)
             op.alpha = alpha
-            
-dprint

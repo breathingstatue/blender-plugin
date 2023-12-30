@@ -1,6 +1,5 @@
 import bpy
 import bmesh
-from ..common import *
 
 class RVIO_PT_RevoltZonePanel(bpy.types.Panel):
     bl_label = "Track Zones"
@@ -46,6 +45,4 @@ class OBJECT_OT_add_revolt_track_zone(bpy.types.Operator):
         from ..taz_in import create_zone
         obj = create_zone(None, bpy.context.scene.cursor_location)
 
-        return {'FINISHED'} 
-    
-dprint
+        return {'FINISHED'}

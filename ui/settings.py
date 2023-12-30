@@ -1,67 +1,60 @@
 import bpy
 import bmesh
-from ..common import *
+import os
+from ..operators import *
 
-class RVIO_PT_RevoltSettingsPanel(bpy.types.Panel):
-    
-    bl_label = "Add-On Settings"
-    bl_space_type = "PROPERTIES"
-    bl_region_type = "WINDOW"
-    bl_context = "data"
-    bl_options = {"DEFAULT_CLOSED"}
+class RVGLAddonPreferences(bpy.types.AddonPreferences):
+    bl_idname = __name__.split('.')[0]
 
-    def draw_header(self, context):
-        self.layout.label(text="", icon="PREFERENCES")
+    revolt_dir: bpy.props.StringProperty(
+        name="RVGL Directory",
+        subtype='DIR_PATH',
+        default=""  # Set a default value
+    )
 
     def draw(self, context):
-        props = context.scene.revolt
+        layout = self.layout
+        layout.prop(self, "revolt_dir")
+
+class RVIO_PT_RevoltSettingsPanel(bpy.types.Panel):
+    bl_label = "RVGL Settings"
+    bl_space_type = "PROPERTIES"
+    bl_region_type = "WINDOW"
+    bl_context = "output"
+    bl_options = {"HIDE_HEADER"}
+
+    def draw(self, context):
+        addon_prefs = get_addon_preferences()
         layout = self.layout
 
-        # General settings
-        
-        layout.label("Re-Volt Directory:")
-        box = self.layout.box()
-        box.prop(props, "revolt_dir", text="")
-        if props.revolt_dir == "":
-            box.label("No directory specified", icon="INFO")
-        elif os.path.isdir(props.revolt_dir):
-            if "rvgl.exe" in os.listdir(props.revolt_dir):
-                box.label(
-                    "Folder exists (RVGL for Windows)",
-                    icon="FILE_TICK"
-                )
-            elif "rvgl" in os.listdir(props.revolt_dir):
-                box.label(
-                    "Folder exists (RVGL for Linux)",
-                    icon="FILE_TICK"
-                )
-            else:
-                box.label(
-                    "Folder exists, RVGL not found",
-                    icon="INFO"
-                )
+        # Directory selection
+        layout.label(text="Select RVGL Directory:")
+        box = layout.box()
+        box.operator("rvio.select_revolt_dir", text="Browse")
+        # Tagging the area for a redraw
+        for area in context.screen.areas:
+            if area.type == 'PROPERTIES':
+                area.tag_redraw()
 
+        # Display current directory
+        directory = addon_prefs.revolt_dir
+        if directory:
+            box.label(text=f"Current Directory: {directory}")
         else:
-            box.label("Not found", icon="ERROR")
-
-
-        layout.label(text="General:")
-        layout.prop(props, "prefer_tex_solid_mode")
-        layout.separator()
-
+            box.label(text="No directory selected")
+        
         # General import settings
         layout.label(text="Import:")
-        layout.prop(props, "enable_tex_mode")
-        layout.prop(props, "prm_check_parameters")
+        layout.operator("rvio.read_car_parameters", text="Read Car Parameters")
         layout.separator()
 
         # General export settings
+        scene = context.scene
         layout.label(text="Export:")
-        layout.prop(props, "triangulate_ngons")
-        layout.prop(props, "use_tex_num")
-        layout.prop(props, "apply_scale")
-        layout.prop(props, "apply_rotation")
-        layout.prop(props, "apply_translation")
+        layout.prop(scene, "triangulate_ngons_enabled")
+        layout.prop(scene, "export_without_texture")
+        layout.prop(scene, "apply_scale_on_export")
+        layout.prop(scene, "apply_rotation_on_export")
         layout.separator()
 
         # PRM Export settings
@@ -87,6 +80,4 @@ class RVIO_PT_RevoltSettingsPanel(bpy.types.Panel):
         layout.prop(props, "ncp_export_selected")
         layout.prop(props, "ncp_export_collgrid")
         layout.prop(props, "ncp_collgrid_size")
-        
-dprint
 

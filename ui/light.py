@@ -1,9 +1,6 @@
 import bpy
 import bmesh
-from ..common import *
-from .. import tools
 from math import pi
-from ..props.props_scene import RVSceneProperties
 
 class RVIO_PT_RevoltLightPanel(bpy.types.Panel):
     bl_label = "Light and Shadow"
@@ -162,5 +159,3 @@ class ButtonBakeLightToVertex(bpy.types.Operator):
     def execute(self, context):
         self.bake_vertex(context)
         return {"FINISHED"}
-    
-dprint

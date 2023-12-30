@@ -1,6 +1,5 @@
 import bpy
 import bmesh
-from ..props.props_scene import RVSceneProperties
 from ..operators import *
 
 class RVIO_PT_RevoltInstancesPanel(bpy.types.Panel):
@@ -28,5 +27,3 @@ class RVIO_PT_RevoltInstancesPanel(bpy.types.Panel):
         col = layout.column(align=True)
         col.operator("helpers.set_instance_property")
         col.operator("helpers.rem_instance_property")
-        
-dprint

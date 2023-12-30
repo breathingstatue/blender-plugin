@@ -1,11 +1,8 @@
 import bpy
 import bmesh
-from ..common import *
 from ..operators import *
 from .hull import *
-from ..props.props_obj import RVObjectProperties
 from ..rvstruct import *
-
 from bpy.props import (BoolProperty,
                        FloatVectorProperty, 
                        IntProperty
@@ -74,5 +71,3 @@ class RVIO_PT_RevoltObjectPanel(bpy.types.Panel):
         row = box.row(align=True)
         row.operator("hull.generate")
         row.operator("object.add_hull_sphere")
-        
-dprint

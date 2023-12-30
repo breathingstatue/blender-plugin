@@ -1,11 +1,10 @@
 import bpy
-from ..common import *
 
 class RVIO_PT_RevoltFacePropertiesPanel(bpy.types.Panel):
     bl_label = "Face Properties"
     bl_space_type = "PROPERTIES"
     bl_region_type = "WINDOW"
-    bl_context = "object"
+    bl_context = "data"
     bl_options = {"HIDE_HEADER"}
 
     selection = None
@@ -176,5 +175,3 @@ def ncp_edit_panel(self, context):
     # Dropdown list for selecting materials
     row = layout.row()
     row.prop(props, "select_material", text="Select all")
-    
-dprint
