@@ -24,6 +24,8 @@ from .texanim import *
 from .rvstruct import *
 from .ui.settings import RVGLAddonPreferences
 from . import carinfo
+from .common import get_format, FORMAT_PRM, FORMAT_FIN, FORMAT_NCP, FORMAT_HUL, FORMAT_W, FORMAT_RIM, FORMAT_TA_CSV, FORMAT_TAZ
+from .common import get_errors, msg_box, FORMATS
 
 from bpy.props import (
     BoolProperty,
@@ -195,48 +197,16 @@ class ExportRV(bpy.types.Operator):
     bl_idname = "export_scene.revolt"
     bl_label = "Export Re-Volt Files"
     bl_description = "Export Re-Volt game files"
-
-    filepath = bpy.props.StringProperty(subtype="FILE_PATH")
+    filepath: bpy.props.StringProperty(subtype="FILE_PATH") 
 
     def execute(self, context):
-        return exec_export(self.filepath, context)
+        return exec_export(self, self.filepath, context)
 
     def invoke(self, context, event):
         context.window_manager.fileselect_add(self)
-        return {"RUNNING_MODAL"}
-
-    def draw(self, context):
-        props = context.scene.revolt
-        layout = self.layout
-        space = context.space_data
-
-        # Gets the format from the file path
-        frmt = get_format(space.params.filename)
-
-        if frmt == -1 and not space.params.filename == "":
-            layout.label("Format not supported", icon="ERROR")
-        elif frmt != -1:
-            layout.label("Export {}:".format(FORMATS[frmt]))
-
-        # NCP settings
-        if frmt == FORMAT_NCP:
-            box = layout.box()
-            box.prop(props, "ncp_export_selected")
-            box.prop(props, "ncp_export_collgrid")
-            box.prop(props, "ncp_collgrid_size")
-
-        # Texture mesh settings
-        if frmt in [FORMAT_PRM, FORMAT_W]:
-            box = layout.box()
-            box.prop(props, "use_tex_num")
-
-        # Mesh settings
-        if frmt in [FORMAT_PRM, FORMAT_W]:
-            box = layout.box()
-            box.prop(props, "apply_scale")
-            box.prop(props, "apply_rotation")
-
-
+     
+        return {'RUNNING_MODAL'}
+    
 def exec_export(self, filepath, context):
     scene = context.scene
     props = context.scene.revolt
@@ -250,64 +220,56 @@ def exec_export(self, filepath, context):
 
     frmt = get_format(filepath)
 
-    if frmt == FORMAT_UNK:
-        msg_box("Not supported for export.", "INFO")
-        return {"FINISHED"}
-    else:
-        # Turns off undo for better performance
-        use_global_undo = bpy.context.user_preferences.edit.use_global_undo
-        bpy.context.user_preferences.edit.use_global_undo = False
+    # Turns off undo for better performance
+    use_global_undo = bpy.context.preferences.edit.use_global_undo
+    bpy.context.preferences.edit.use_global_undo = False
 
-        if bpy.ops.object.mode_set.poll():
-            bpy.ops.object.mode_set(mode="OBJECT")
+    if bpy.ops.object.mode_set.poll():
+        bpy.ops.object.mode_set(mode="OBJECT")
 
-        # Saves filepath for re-exporting the same file
-        props.last_exported_filepath = filepath
+    # Saves filepath for re-exporting the same file
+    props.last_exported_filepath = filepath
 
-        if frmt == FORMAT_PRM:
-            from . import prm_out
-            print("Exporting to .prm...")
-            prm_out.export_file(filepath, scene)
+    if frmt == FORMAT_PRM:
+        from . import prm_out
+        prm_out.export_file(filepath)
 
-        elif frmt == FORMAT_FIN:
-            from . import fin_out
-            print("Exporting to .fin...")
-            fin_out.export_file(filepath, scene)
+    elif frmt == FORMAT_FIN:
+        from . import fin_out
+        print("Exporting to .fin...")
+        fin_out.export_file(filepath)
 
-        elif frmt == FORMAT_NCP:
-            from . import ncp_out
-            print("Exporting to .ncp...")
-            ncp_out.export_file(filepath, scene)
+    elif frmt == FORMAT_NCP:
+        from . import ncp_out
+        print("Exporting to .ncp...")
+        ncp_out.export_file(filepath)
 
-        elif frmt == FORMAT_HUL:   
-            from . import hul_out
-            print("Exporting to .hul...")
-            hul_out.export_file(filepath, scene)
+    elif frmt == FORMAT_HUL:   
+        from . import hul_out
+        print("Exporting to .hul...")
+        hul_out.export_file(filepath)
 
-        elif frmt == FORMAT_W:
-            from . import w_out
-            print("Exporting to .w...")
-            w_out.export_file(filepath, scene)
+    elif frmt == FORMAT_W:
+        from . import w_out
+        print("Exporting to .w...")
+        w_out.export_file(filepath)
 
-        elif frmt == FORMAT_RIM:
-            from . import rim_out
-            print("Exporting to .rim...")
-            rim_out.export_file(filepath, scene)
+    elif frmt == FORMAT_RIM:
+        from . import rim_out
+        print("Exporting to .rim...")
+        rim_out.export_file(filepath)
 
-        elif frmt == FORMAT_TA_CSV:
-            from . import ta_csv_out
-            print("Exporting texture animation sheet...")
-            ta_csv_out.export_file(filepath, scene)
+    elif frmt == FORMAT_TA_CSV:
+        from . import ta_csv_out
+        print("Exporting texture animation sheet...")
+        ta_csv_out.export_file(filepath)
 
-        elif frmt == FORMAT_TAZ:
-            from . import taz_out
-            taz_out.export_file(filepath, scene)
+    elif frmt == FORMAT_TAZ:
+        from . import taz_out
+        taz_out.export_file(filepath)
         
-        else:
-            msg_box("Format not yet supported: {}".format(FORMATS[frmt]))
-
-        # Re-enables undo and cleanup
-        bpy.context.user_preferences.edit.use_global_undo = use_global_undo
+    # Re-enables undo and cleanup
+    bpy.context.preferences.edit.use_global_undo = use_global_undo
         
     context.window.cursor_set("DEFAULT")
 

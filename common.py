@@ -18,7 +18,6 @@ import os
 
 from math import sqrt
 from mathutils import Color, Matrix
-from .carinfo import read_parameters
 
 # Global dictionaries
 global ERRORS
@@ -471,7 +470,6 @@ def objects_to_bmesh(objs, transform=True):
 
         # Makes sure all layers exist so values don't get lost while exporting
         uv_layer = bm.loops.layers.uv.get("UVMap")
-        tex_layer = bm.faces.layers.tex.get("UVMap")
         vc_layer = (bm.loops.layers.color.get("Col") or
                     bm.loops.layers.color.new("Col"))
         env_layer = (bm.loops.layers.color.get("Env") or

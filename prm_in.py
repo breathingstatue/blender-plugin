@@ -101,7 +101,6 @@ def add_rvmesh_to_bmesh(prm, bm, filepath, scene, envlist=None):
     """
     props = bpy.context.scene.revolt
     uv_layer = bm.loops.layers.uv.new("UVMap")
-    tex_layer = bm.faces.layers.tex.new("UVMap")
     vc_layer = bm.loops.layers.color.new("Col")
     env_layer = bm.loops.layers.color.new("Env")
     env_alpha_layer = bm.faces.layers.float.new("EnvAlpha")
