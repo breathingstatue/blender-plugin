@@ -24,7 +24,7 @@ from .texanim import *
 from .rvstruct import *
 from .ui.settings import RVGLAddonPreferences
 from . import carinfo
-from .common import get_format, FORMAT_PRM, FORMAT_FIN, FORMAT_NCP, FORMAT_HUL, FORMAT_W, FORMAT_RIM, FORMAT_TA_CSV, FORMAT_TAZ
+from .common import get_format, FORMAT_PRM, FORMAT_FIN, FORMAT_NCP, FORMAT_HUL, FORMAT_W, FORMAT_RIM, FORMAT_TA_CSV, FORMAT_TAZ, FORMAT_UNK
 from .common import get_errors, msg_box, FORMATS
 
 from bpy.props import (
@@ -48,14 +48,11 @@ IMPORT AND EXPORT -------------------------------------------------------------
 """
 
 class ImportRV(bpy.types.Operator):
-    """
-    Import Operator for all file types
-    """
+    """ Import Operator for all file types """
     bl_idname = "import_scene.revolt"
     bl_label = "Import Re-Volt Files"
     bl_description = "Import Re-Volt game files"
-
-    filepath = bpy.props.StringProperty(subtype="FILE_PATH")
+    filepath: bpy.props.StringProperty(subtype="FILE_PATH")
 
     def execute(self, context):
         scene = context.scene
@@ -63,21 +60,18 @@ class ImportRV(bpy.types.Operator):
         frmt = get_format(self.filepath)
 
         start_time = time.time()
-
         context.window.cursor_set("WAIT")
 
         print("Importing {}".format(self.filepath))
 
+        # Handle different formats
         if frmt == FORMAT_UNK:
-            msg_box("Unsupported format.")
+            self.report({'ERROR'}, "Unsupported format.")
+            return {'CANCELLED'}
 
         elif frmt == FORMAT_PRM:
             from . import prm_in
             prm_in.import_file(self.filepath, scene)
-
-            # Enables texture mode after import
-            if props.enable_tex_mode:
-                enable_any_tex_mode(context)
 
         elif frmt == FORMAT_CAR:
             from . import parameters_in
@@ -85,32 +79,18 @@ class ImportRV(bpy.types.Operator):
             props.prm_check_parameters = True
             parameters_in.import_file(self.filepath, scene)
             props.prm_check_parameters = old_check
-            # Enables texture mode after import
-            if props.enable_tex_mode:
-                enable_any_tex_mode(context)
 
         elif frmt == FORMAT_NCP:
             from . import ncp_in
             ncp_in.import_file(self.filepath, scene)
 
-            # Enables texture mode after import
-            if props.enable_tex_mode:
-                enable_any_tex_mode(context)
-
         elif frmt == FORMAT_FIN:
             from . import fin_in
             fin_in.import_file(self.filepath, scene)
 
-            # Enables texture mode after import
-            if props.enable_tex_mode:
-                enable_any_tex_mode(context)
-
         elif frmt == FORMAT_HUL:
             from . import hul_in
             hul_in.import_file(self.filepath, scene)
-
-            # Enables solid mode after import
-            enable_solid_mode()
 
         elif frmt == FORMAT_TA_CSV:
             from . import ta_csv_in
@@ -119,11 +99,6 @@ class ImportRV(bpy.types.Operator):
         elif frmt == FORMAT_W:
             from . import w_in
             w_in.import_file(self.filepath, scene)
-
-            # Enables texture mode after import
-            if props.enable_tex_mode:
-                enable_any_tex_mode(context)
-
 
         elif frmt == FORMAT_RIM:
             from . import rim_in
@@ -134,28 +109,13 @@ class ImportRV(bpy.types.Operator):
             taz_in.import_file(self.filepath, scene)
         
         else:
-            msg_box("Format not yet supported: {}".format(FORMATS[frmt]))
-
-        end_time = time.time() - start_time
+            self.report({'ERROR'}, "Format not yet supported: {}".format(FORMATS.get(frmt, "Unknown Format")))
+            return {'CANCELLED'}
 
         # Gets any encountered errors
         errors = get_errors()
-
-        # Defines the icon depending on the errors
-        if errors == "Successfully completed.":
-            ico = "FILE_TICK"
-        else:
-            ico = "ERROR"
-
-        # Displays a message box with the import results
-        msg_box(
-            "Import of {} done in {:.3f} seconds.\n{}".format(
-                FORMATS[frmt], end_time, errors),
-            icon=ico
-        )
-
+            
         context.window.cursor_set("DEFAULT")
-
         return {"FINISHED"}
 
     def draw(self, context):
@@ -229,6 +189,11 @@ def exec_export(self, filepath, context):
 
     # Saves filepath for re-exporting the same file
     props.last_exported_filepath = filepath
+    
+    # Handle different formats
+    if frmt == FORMAT_UNK:
+        self.report({'ERROR'}, "Unsupported format.")
+        return {'CANCELLED'}
 
     if frmt == FORMAT_PRM:
         from . import prm_out
@@ -275,12 +240,6 @@ def exec_export(self, filepath, context):
 
     # Gets any encountered errors
     errors = get_errors()
-
-    # Defines the icon depending on the errors
-    if errors == "Successfully completed.":
-        ico = "FILE_TICK"
-    else:
-        ico = "ERROR"
 
     # Display export results
     end_time = time.time() - start_time

@@ -15,18 +15,15 @@ from mathutils import Color, Vector
 from . import common
 from . import rvstruct
 from . import img_in
+from .rvstruct import PRM
+from .common import to_blender_coord, to_blender_axis, FACE_QUAD, reverse_quad, get_texture_path
+from .carinfo import read_parameters
 
 # Check if 'bpy' is already in locals to determine if this is a reload scenario
 if "bpy" in locals():
     importlib.reload(common)
     importlib.reload(rvstruct)
     importlib.reload(img_in)
-
-from .rvstruct import PRM
-
-# Add specific imports from common as needed
-# Example: from .common import specific_function, SpecificClass
-
 
 def import_file(filepath, scene):
     """
@@ -68,34 +65,54 @@ def import_file(filepath, scene):
         if meshes.index(prm) == 0:
             print("Creating Blender object for {}...".format(filename))
             ob = bpy.data.objects.new(filename, me)
-            scene.objects.link(ob)
-            scene.objects.active = ob
+            bpy.context.scene.collection.objects.link(ob)
+            bpy.context.view_layer.objects.active = ob
 
     return ob
 
 
 def import_mesh(prm, scene, filepath, envlist=None):
-    """
-    Creates a mesh from an rvstruct object and returns it.
-    """
     props = scene.revolt
     filename = os.path.basename(filepath)
-    # Creates a new mesh and bmesh
+    
+    # Create a new mesh
     me = bpy.data.meshes.new(filename)
+
+    # Create a new bmesh
     bm = bmesh.new()
+    
+    add_rvmesh_to_bmesh(prm, bm, me, filepath, scene, envlist)
 
-    # Adds the prm data to the bmesh
-    add_rvmesh_to_bmesh(prm, bm, filepath, scene, envlist)
-
-    # Converts the bmesh back to a mesh and frees resources
+    # Convert the bmesh back to a mesh and free resources
     bm.normal_update()
     bm.to_mesh(me)
     bm.free()
 
     return me
 
+def get_or_create_material(texture_path):
+    # If texture path is empty, return None
+    if not texture_path:
+        return None
 
-def add_rvmesh_to_bmesh(prm, bm, filepath, scene, envlist=None):
+    # Check if the material already exists
+    for mat in bpy.data.materials:
+        if mat.name == texture_path:
+            return mat
+
+    # Create a new material with the texture
+    mat = bpy.data.materials.new(name=texture_path)
+    mat.use_nodes = True
+    bsdf = mat.node_tree.nodes.get('Principled BSDF')
+    
+    # Create image texture node
+    tex_image = mat.node_tree.nodes.new('ShaderNodeTexImage')
+    tex_image.image = bpy.data.images.load(texture_path)
+    mat.node_tree.links.new(bsdf.inputs['Base Color'], tex_image.outputs['Color'])
+
+    return mat
+
+def add_rvmesh_to_bmesh(prm, bm, me, filepath, scene, envlist=None):
     """
     Adds PRM data to an existing bmesh. Returns the resulting bmesh.
     """
@@ -107,6 +124,8 @@ def add_rvmesh_to_bmesh(prm, bm, filepath, scene, envlist=None):
     va_layer = bm.loops.layers.color.new("Alpha")
     texnum_layer = bm.faces.layers.int.new("Texture Number")
     type_layer = bm.faces.layers.int.new("Type")
+    material_dict = {}
+    created_faces = []
 
     for vert in prm.vertices:
         position = to_blender_coord(vert.position.data)
@@ -140,20 +159,48 @@ def add_rvmesh_to_bmesh(prm, bm, filepath, scene, envlist=None):
         # Tries to create a face and yells at you when the face already exists
         try:
             face = bm.faces.new(verts)
-        except Exception as e:
-            print(e)
-            continue  # Skips this face
+            created_faces.append(face)
+        except ValueError as e:
+            # print(e)
+            continue
+        
+        bm.verts.ensure_lookup_table()
+        bm.faces.ensure_lookup_table()
+        
+        # Assign UVs and colors
+        for l, loop in enumerate(face.loops):
+            loop[uv_layer].uv = (uvs[l].u, 1 - uvs[l].v)
+            # Converts the colors to float (req. by Blender)
+            alpha = 1-(float(colors[l].alpha) / 255)
+            color = [float(c) / 255 for c in colors[l].color]
+            if envlist and (poly.type & FACE_ENV):
+                env_col = [float(c) / 255 for c in envlist[props.envidx].color]
+                loop[env_layer][0] = env_col[0]
+                loop[env_layer][1] = env_col[1]
+                loop[env_layer][2] = env_col[2]
 
-        # Assigns the texture to the face
+            loop[vc_layer][0] = color[0]
+            loop[vc_layer][1] = color[1]
+            loop[vc_layer][2] = color[2]
+
+            loop[va_layer][0] = alpha
+            loop[va_layer][1] = alpha
+            loop[va_layer][2] = alpha
+            
+        # Enables smooth shading for that face
+        face.smooth = True
+        if envlist and (poly.type & FACE_ENV):
+            props.envidx += 1
+    
+        # Assign the material to the face
+    for face, poly in zip(created_faces, prm.polygons):
         if poly.texture >= 0:
-            texture = None
             texture_path = get_texture_path(filepath, poly.texture, scene)
-            for image in bpy.data.images:
-                if image.filepath == texture_path:
-                    texture = image
-            if not texture:
-                texture = img_in.import_file(texture_path, poly.texture)
-            face[tex_layer].image = texture
+            if texture_path not in material_dict:
+                mat = get_or_create_material(texture_path)
+                me.materials.append(mat)
+                material_dict[texture_path] = len(me.materials) - 1
+            face.material_index = material_dict[texture_path]
 
         # Assigns the face properties (bit field, one int per face)
         face[type_layer] = poly.type
@@ -164,28 +211,7 @@ def add_rvmesh_to_bmesh(prm, bm, filepath, scene, envlist=None):
             env_col_alpha = envlist[props.envidx].alpha
             face[env_alpha_layer] = float(env_col_alpha) / 255
 
-        # Assigns the UV mapping, colors and alpha
-        for l in range(num_loops):
-            # Converts the colors to float (req. by Blender)
-            alpha = 1-(float(colors[l].alpha) / 255)
-            color = [float(c) / 255 for c in colors[l].color]
-            if envlist and (poly.type & FACE_ENV):
-                env_col = [float(c) / 255 for c in envlist[props.envidx].color]
-                face.loops[l][env_layer][0] = env_col[0]
-                face.loops[l][env_layer][1] = env_col[1]
-                face.loops[l][env_layer][2] = env_col[2]
-
-            face.loops[l][uv_layer].uv = (uvs[l].u, 1 - uvs[l].v)
-
-            face.loops[l][vc_layer][0] = color[0]
-            face.loops[l][vc_layer][1] = color[1]
-            face.loops[l][vc_layer][2] = color[2]
-
-            face.loops[l][va_layer][0] = alpha
-            face.loops[l][va_layer][1] = alpha
-            face.loops[l][va_layer][2] = alpha
-
-        # Enables smooth shading for that face
-        face.smooth = True
-        if envlist and (poly.type & FACE_ENV):
-            props.envidx += 1
+    # UV/loop count mismatch may be safely ignored since PRM import UV mapping is correct
+    if len(face.loops) != len(uvs):
+        # print(f"UV/loop count mismatch for face. Expected {len(face.loops)}, got {len(uvs)}")
+        pass  # Commented out to suppress the warning

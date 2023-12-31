@@ -27,10 +27,6 @@ if "bpy" in locals():
     importlib.reload(img_in)
     importlib.reload(layers)
     
-# Add specific imports from common as needed
-# Example: from .common import specific_function, SpecificClass
-
-
 def export_file(filepath):
     obj = bpy.context.view_layer.objects.active
     scene = bpy.context.scene
