@@ -27,19 +27,14 @@ if "bpy" in locals():
     importlib.reload(img_in)
     importlib.reload(layers)
     
-def export_file(filepath):
-    obj = bpy.context.view_layer.objects.active
-    scene = bpy.context.scene
-    if obj is None:
-        print("No active object selected.")
-        return
-
+def export_file(filepath, scene, context):
+    obj = context.view_layer.objects.active
     print("Exporting PRM for {}...".format(obj.name))
     meshes = []
 
     # Checks if other LoDs are present
     if "|q" in obj.data.name:
-        dprint("LODs present.")
+        print("LODs present.")
         meshes = get_all_lod(obj.data.name.split('|')[0])
         print([m.name for m in meshes])
     else:
@@ -49,15 +44,16 @@ def export_file(filepath):
     # Exports all meshes to the PRM file
     with open(filepath, "wb") as file:
         for me in meshes:
-            print("Exporting mesh {} of {}".format(meshes.index(me), len(meshes)))
+            print("Exporting mesh {} of {}".format(
+                meshes.index(me), len(meshes)))
             # Exports the mesh as a PRM object
-            prm = export_mesh(me, obj, scene, filepath, bpy.context, bpy.context.scene.world)
+            prm = export_mesh(me, obj, scene, context, filepath)
             # Writes the PRM object to a file
             if prm:
                 prm.write(file)
 
 
-def export_mesh(me, obj, scene, filepath, context, world):
+def export_mesh(me, obj, scene, context, filepath, world=None):
     """
     This exports an object to an rvstruct object. This is also used for .w
     meshes since they're pretty much the same as PRM. The only additions are
@@ -175,20 +171,14 @@ def export_mesh(me, obj, scene, filepath, context, world):
             poly.type |= FACE_QUAD
 
         # Gets the texture number from the integer layer if setting enabled
-        if context.scene.revolt.use_tex_num and texnum_layer:
+        # use_tex_num is the only way to achieve no texture
+        if scene.revolt.use_tex_num and texnum_layer:
             poly.texture = face[texnum_layer]
+        # Falls back to texture if not enabled or texnum layer not found
+        elif tex_layer and face[tex_layer] and face[tex_layer].image:
+            poly.texture = texture_to_int(face[tex_layer].image.name)
         else:
-            # Check for a material with an image texture
-            mat = None
-            if face.material_index < len(obj.material_slots):
-                mat = obj.material_slots[face.material_index].material
-
-            if mat and mat.use_nodes:
-                image_node = next((node for node in mat.node_tree.nodes if node.type == 'TEX_IMAGE'), None)
-                if image_node and image_node.image:
-                    poly.texture = texture_to_int(image_node.image.name)
-            else:
-                poly.texture = -1
+            poly.texture = -1
 
         # Sets vertex indices for the polygon
         vert_order = [2, 1, 0, 3] if not is_quad else [3, 2, 1, 0]

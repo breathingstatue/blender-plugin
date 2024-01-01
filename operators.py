@@ -174,10 +174,6 @@ def exec_export(self, filepath, context):
     start_time = time.time()
     context.window.cursor_set("WAIT")
 
-    if filepath == "":
-        msg_box("File not specified.", "ERROR")
-        return {"FINISHED"}
-
     frmt = get_format(filepath)
 
     # Turns off undo for better performance
@@ -197,41 +193,41 @@ def exec_export(self, filepath, context):
 
     if frmt == FORMAT_PRM:
         from . import prm_out
-        prm_out.export_file(filepath)
+        prm_out.export_file(filepath, scene, context)
 
     elif frmt == FORMAT_FIN:
         from . import fin_out
         print("Exporting to .fin...")
-        fin_out.export_file(filepath)
+        fin_out.export_file(filepath, scene)
 
     elif frmt == FORMAT_NCP:
         from . import ncp_out
         print("Exporting to .ncp...")
-        ncp_out.export_file(filepath)
+        ncp_out.export_file(filepath, scene)
 
     elif frmt == FORMAT_HUL:   
         from . import hul_out
         print("Exporting to .hul...")
-        hul_out.export_file(filepath)
+        hul_out.export_file(filepath, scene)
 
     elif frmt == FORMAT_W:
         from . import w_out
         print("Exporting to .w...")
-        w_out.export_file(filepath)
+        w_out.export_file(filepath, scene)
 
     elif frmt == FORMAT_RIM:
         from . import rim_out
         print("Exporting to .rim...")
-        rim_out.export_file(filepath)
+        rim_out.export_file(filepath, scene)
 
     elif frmt == FORMAT_TA_CSV:
         from . import ta_csv_out
         print("Exporting texture animation sheet...")
-        ta_csv_out.export_file(filepath)
+        ta_csv_out.export_file(filepath, scene)
 
     elif frmt == FORMAT_TAZ:
         from . import taz_out
-        taz_out.export_file(filepath)
+        taz_out.export_file(filepath, scene)
         
     # Re-enables undo and cleanup
     bpy.context.preferences.edit.use_global_undo = use_global_undo
@@ -243,7 +239,11 @@ def exec_export(self, filepath, context):
 
     # Display export results
     end_time = time.time() - start_time
-    msg_box("Export to {} done in {:.3f} seconds.\n{}".format(FORMATS[frmt], end_time, get_errors()),icon=ico)
+
+    # Define an icon (replace 'ICON_NAME' with the actual icon name you want to use)
+    icon = 'INFO'  # You can change this to 'ERROR' if needed
+
+    self.report({'INFO'}, "Export to {} done in {:.3f} seconds.\n{}".format(FORMATS[frmt], end_time, errors))
 
     return {"FINISHED"}
 
