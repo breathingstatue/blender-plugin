@@ -465,18 +465,29 @@ def register():
         default=True,
         description="Apply object rotation during export"
     )
-
+    
+    bpy.types.Scene.enable_env_mapping = bpy.props.BoolProperty(
+        name="Enable Environment Mapping",
+        description="Toggle environment mapping for selected objects",
+        default=True
+    )
+    
     # UI and Handlers Registration
     bpy.app.handlers.depsgraph_update_pre.append(edit_object_change_handler)
     bpy.app.handlers.load_post.append(load_handler)
+    if set_default_face_envmapping not in bpy.app.handlers.depsgraph_update_post:
+        bpy.app.handlers.depsgraph_update_post.append(set_default_face_envmapping)
 
 def unregister():
     
     # UI and Handlers Unregistration
+    if set_default_face_envmapping in bpy.app.handlers.depsgraph_update_post:
+        bpy.app.handlers.depsgraph_update_post.remove(set_default_face_envmapping)
     if load_handler in bpy.app.handlers.load_post:
         bpy.app.handlers.load_post.remove(load_handler)
     bpy.app.handlers.depsgraph_update_pre.remove(edit_object_change_handler)
     
+    del bpy.types.Scene.enable_env_mapping
     del bpy.types.Scene.apply_rotation_on_export
     del bpy.types.Scene.apply_scale_on_export
     del bpy.types.Scene.export_without_texture

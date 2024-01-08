@@ -131,10 +131,6 @@ class ImportRV(bpy.types.Operator):
         elif frmt != -1:
             layout.label(text="Import {}:".format(FORMATS[frmt]))
 
-        if frmt in [FORMAT_W, FORMAT_PRM, FORMAT_NCP]:
-            box = layout.box()
-            box.prop(props, "enable_tex_mode")
-
         if frmt == FORMAT_W:
             box = layout.box()
             box.prop(props, "w_parent_meshes")
@@ -586,6 +582,8 @@ class ButtonEnableSolidMode(bpy.types.Operator):
         return {"FINISHED"}
 
 
+import bpy
+
 class ButtonRenameAllObjects(bpy.types.Operator):
     bl_idname = "object.rename_selected_objects"
     bl_label = "Rename Selected Objects"
@@ -593,14 +591,33 @@ class ButtonRenameAllObjects(bpy.types.Operator):
 
     new_name: bpy.props.StringProperty(
         name="New Name",
-        default="NewName",
-        description="Enter a new name for the selected objects"
+        default="",
+        description="Enter a new name for the selected objects (max 8 characters)"
     )
 
+    @classmethod
+    def poll(cls, context):
+        return len(context.selected_objects) > 0
+
+    def invoke(self, context, event):
+        wm = context.window_manager
+        return wm.invoke_props_dialog(self)
+
     def execute(self, context):
-        # Loop through selected objects and rename them
-        for obj in bpy.context.selected_objects:
-            obj.name = self.new_name
+        selected_objects = bpy.context.selected_objects
+        if len(selected_objects) == 0:
+            self.report({'WARNING'}, "No objects selected")
+            return {'CANCELLED'}
+
+        if len(self.new_name) > 8:
+            self.report({'ERROR'}, "Name too long. Max 8 characters.")
+            return {'CANCELLED'}
+
+        base_name = self.new_name[:7] if len(selected_objects) > 1 else self.new_name
+
+        for index, obj in enumerate(selected_objects):
+            suffix = str(index + 1) if len(selected_objects) > 1 else ""
+            obj.name = base_name + suffix
 
         return {'FINISHED'}
 
@@ -608,67 +625,90 @@ class ButtonRenameAllObjects(bpy.types.Operator):
 class SelectByName(bpy.types.Operator):
     bl_idname = "helpers.select_by_name"
     bl_label = "Select by name"
-    bl_description = (
-        "Selects all objects that contain the name"
-        )
+    bl_description = "Selects all objects that contain the name"
+
+    name_filter: bpy.props.StringProperty(
+        name="Name Filter",
+        default="",
+        description="Enter a part of the name to filter objects"
+    )
+
+    def invoke(self, context, event):
+        wm = context.window_manager
+        return wm.invoke_props_dialog(self)
 
     def execute(self, context):
-        n = tools.select_by_name(self, context)
-        msg_box("Selected {} objects".format(n))
-        return{"FINISHED"}
+        name_filter = self.name_filter
+        selected_count = 0
+
+        for obj in bpy.data.objects:
+            if name_filter in obj.name:
+                obj.select_set(True)
+                selected_count += 1
+            else:
+                obj.select_set(False)
+
+        self.report({'INFO'}, "Selected {} objects".format(selected_count))
+        return {'FINISHED'}
 
 
 class SelectByData(bpy.types.Operator):
     bl_idname = "helpers.select_by_data"
     bl_label = "Select by data"
-    bl_description = (
-        "Selects all objects with the same object data (mesh)"
-    )
+    bl_description = "Selects all objects with the same object data (mesh)"
 
     def execute(self, context):
-        n = tools.select_by_data(self, context)
-        msg_box("Selected {} objects".format(n))
-        return{"FINISHED"}
+        active_obj = context.active_object
+
+        # Check if there is an active object and it has mesh data
+        if not active_obj or active_obj.type != 'MESH':
+            self.report({'WARNING'}, "No active mesh object selected")
+            return {'CANCELLED'}
+
+        mesh_data = active_obj.data
+        selected_count = 0
+
+        for obj in bpy.data.objects:
+            if obj.type == 'MESH' and obj.data == mesh_data:
+                obj.select_set(True)
+                selected_count += 1
+            else:
+                obj.select_set(False)
+
+        # Optionally, you might want to reselect the initially active object
+        active_obj.select_set(True)
+
+        self.report({'INFO'}, "Selected {} objects".format(selected_count))
+        return {'FINISHED'}
 
 
 class SetInstanceProperty(bpy.types.Operator):
     bl_idname = "helpers.set_instance_property"
     bl_label = "Mark as Instance"
-    bl_description = ("Marks all selected objects as instances")
-
-    def set_property_to_selected(self, context, property_name, value):
-        count = 0
-        for obj in context.selected_objects:
-            setattr(obj, property_name, value)
-            count += 1
-        return count
+    bl_description = "Marks all selected objects as instances"
 
     def execute(self, context):
         for obj in context.selected_objects:
-            obj.is_instance = True
+            obj["is_instance"] = True  # Using Blender's custom properties
         context.view_layer.update()
         self.report({'INFO'}, "Marked {} objects as instances".format(len(context.selected_objects)))
-        return{'FINISHED'}
+        return {'FINISHED'}
 
 
 class RemoveInstanceProperty(bpy.types.Operator):
     bl_idname = "helpers.rem_instance_property"
     bl_label = "Remove Instance property"
-    bl_description = ("")
-
-    def set_property_to_selected(self, context, property_name, value):
-        count = 0
-        for obj in context.selected_objects:
-            setattr(obj, property_name, value)
-            count += 1
-        return count
+    bl_description = "Removes the 'is_instance' property from all selected objects"
 
     def execute(self, context):
+        removed_count = 0
         for obj in context.selected_objects:
-            obj.is_instance = False
+            if "is_instance" in obj:
+                del obj["is_instance"]
+                removed_count += 1
         context.view_layer.update()
-        self.report({'INFO'}, "Removed instance property from {} objects".format(len(context.selected_objects)))
-        return{'FINISHED'}
+        self.report({'INFO'}, "Removed 'is_instance' property from {} objects".format(removed_count))
+        return {'FINISHED'}
     
 class AssignEnvColorProperty(bpy.types.Operator):
     """Assign Environment Color Property to Selected Objects"""
@@ -762,18 +802,49 @@ class TexturesSave(bpy.types.Operator):
 
 class TexturesRename(bpy.types.Operator):
     bl_idname = "helpers.texture_rename"
-    bl_label = "Rename track textures"
+    bl_label = "Rename Texture"
     bl_description = (
-        "Assigns a proper name to each texture image used and makes their id numbers consistent"
+        "Rename selected object's texture(s) with a base name and a letter suffix for multiple textures"
+    )
+
+    base_name: bpy.props.StringProperty(
+        name="Base Name",
+        description="Base name for the textures",
+        maxlength=8  # Maximum length is 8 characters
     )
 
     def execute(self, context):
-        number = 0
-        for image in bpy.data.images:
-            if image.source == 'FILE':
-                image.name = f"{number:04d}.bmp"
-                number += 1
+        textures = self.get_textures(context)
+
+        if not textures:
+            self.report({'WARNING'}, "No textures found in selected objects")
+            return {'CANCELLED'}
+
+        if len(textures) == 1:
+            # If only one texture, use the full base name
+            textures[0].name = self.base_name[:8]
+        else:
+            # If multiple textures, limit base name to 7 characters and add a suffix
+            for i, texture in enumerate(textures):
+                suffix = self.number_to_letter(i)
+                texture.name = self.base_name[:7] + suffix
+
         return {'FINISHED'}
+
+    def get_textures(self, context):
+        # Retrieve all textures from selected objects
+        textures = []
+        for obj in context.selected_objects:
+            for slot in obj.material_slots:
+                if slot.material and slot.material.use_nodes:
+                    for node in slot.material.node_tree.nodes:
+                        if node.type == 'TEX_IMAGE' and node.image and node.image.source == 'FILE':
+                            textures.append(node.image)
+        return textures
+
+    def number_to_letter(self, number):
+        # Convert a number to a letter, starting from 'a'
+        return chr(97 + number % 26)  # Modulo 26 to loop back after 'z'
     
 
 class CarParametersExport(bpy.types.Operator):
@@ -910,38 +981,23 @@ class SetModelColor(bpy.types.Operator):
 class ToggleEnvironmentMap(bpy.types.Operator):
     bl_idname = "object.toggle_environment_map"
     bl_label = "Toggle Environment Map"
+    bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
-        obj = context.active_object
-        if obj is None:
-            self.report({'WARNING'}, "No active object")
-            return {'CANCELLED'}
+        enable_env_mapping = context.scene.enable_env_mapping
 
-        if obj.get("is_instance", False):
-            # If object is an instance, handle 'env_layer' and 'env_alpha_layer'
-            # This code assumes you have a way to handle these properties
-            # For demonstration, just toggling a custom property
-            if "env_layer_info" in obj:
-                del obj["env_layer_info"]
-                self.report({'INFO'}, "Environment layer info turned off for instance")
+        for obj in context.selected_objects:
+            if obj.get("is_instance", False):
+                obj["fin_env"] = self.enable_env_mapping
+                self.update_material_reflection(obj, self.enable_env_mapping)
+                self.report({'INFO'}, "Environment map {} for instance object".format("enabled" if self.enable_env_mapping else "disabled"))
             else:
-                obj["env_layer_info"] = True
-                self.report({'INFO'}, "Environment layer info turned on for instance")
-        else:
-            # If object is not an instance, handle 'fin_env'
-            if "fin_env" in obj:
-                del obj["fin_env"]
-                self.update_material_reflection(obj, False)
-                self.report({'INFO'}, "Environment map turned off")
-            else:
-                obj["fin_env"] = True
-                self.update_material_reflection(obj, True)
-                self.report({'INFO'}, "Environment map turned on")
+                self.set_face_property(obj, self.enable_env_mapping)
+                self.report({'INFO'}, "{} set for non-instance object".format("face_envmapping" if self.enable_env_mapping else "face_no_envmapping"))
 
         return {'FINISHED'}
 
     def update_material_reflection(self, obj, enable_reflection):
-        """Update material's reflection properties based on enable_reflection."""
         if obj.type == 'MESH' and obj.data.materials:
             for mat in obj.data.materials:
                 if mat and mat.use_nodes:
@@ -949,6 +1005,11 @@ class ToggleEnvironmentMap(bpy.types.Operator):
                         if node.type == 'BSDF_PRINCIPLED':
                             node.inputs['Roughness'].default_value = 0.0 if enable_reflection else 0.5
                             node.inputs['Metallic'].default_value = 1.0 if enable_reflection else 0.0
+
+    def set_face_property(self, obj, enable_env_mapping):
+        if obj.type == 'MESH':
+            for poly in obj.data.polygons:
+                poly["face_envmapping" if enable_env_mapping else "face_no_envmapping"] = True
 
 class SetEnvironmentMapColor(bpy.types.Operator):
     bl_idname = "object.set_environment_map_color"

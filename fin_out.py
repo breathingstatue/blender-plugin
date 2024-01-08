@@ -14,6 +14,7 @@ import importlib
 from . import common
 from . import rvstruct
 from . import prm_out
+from . import operators
 
 # Check if 'bpy' is already in locals to determine if this is a reload scenario
 if "bpy" in locals():
@@ -22,6 +23,7 @@ if "bpy" in locals():
 
 # Importing specific classes and functions
 from .rvstruct import Instances, Instance, Vector, Color
+from .operators import SetInstanceProperty
 
 # Add specific imports from common as needed
 # Example: from .common import specific_function, SpecificClass
@@ -31,7 +33,7 @@ def export_file(filepath, scene):
     fin = Instances()
 
     # Gathers list of instance objects
-    objs = [obj for obj in scene.objects if obj.revolt.is_instance]
+    objs = [obj for obj in scene.objects if "is_instance" in obj and obj["is_instance"]]
 
 
     for obj in objs:

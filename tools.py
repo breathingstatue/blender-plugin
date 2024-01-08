@@ -16,65 +16,18 @@ import time
 from . import common
 import importlib
 
-from .props.props_scene import RVSceneProperties
 from bpy.props import (
     FloatProperty,
     IntProperty,
     StringProperty,
 )
 
+from .props.props_scene import RVSceneProperties
+
 # Reloading the 'common' module if it's already in locals
 if "common" in locals():
     importlib.reload(common)
 
-    # from common
-BAKE_SHADOW_METHODS = [
-    ("ADAPTIVE_QMC", "Default (fast)", "", "ALIASED", 0),
-    ("CONSTANT_QMC", "Nicer (slow)", "", "ANTIALIASED", 1)
-]
-    # from props_scene
-shadow_method = bpy.props.EnumProperty(
-    name="Method",
-    items=BAKE_SHADOW_METHODS,
-    description="Default (Adaptive QMC):\nFaster option, recommended "
-                "for testing the shadow settings.\n\n"
-                "High Quality:\nSlower and less grainy option, "
-                "recommended for creating the final shadow"
-)
-
-shadow_quality = IntProperty(
-    name = "Quality",
-    min = 0,
-    max = 32,
-    default = 15,
-    description = "The amount of samples the shadow is rendered with "
-                  "(number of samples taken extra)"
-)
-    
-shadow_resolution = IntProperty(
-    name = "Resolution",
-    min = 32,
-    max = 8192,
-    default = 128,
-    description = "Texture resolution of the shadow.\n"
-                  "Default: 128x128 pixels"
-)
-    
-shadow_softness = FloatProperty(
-    name = "Softness",
-    min = 0.0,
-    max = 100.0,
-    default = 1,
-    description = "Softness of the shadow "
-                  "(Light size for ray shadow sampling)"
-)
-    
-shadow_table = StringProperty(
-    name = "Shadowtable",
-    default = "",
-    description = "Shadow coordinates for use in parameters.txt of cars.\n"
-                  "Click to select all, then CTRL C to copy"
-)
 
 def bake_shadow(self, context):
     # This will create a negative shadow (Re-Volt requires a neg. texture)
@@ -360,3 +313,10 @@ def generate_chull(context):
     ob.matrix_world = obj.matrix_world.copy()
     scene.objects.link(ob)
     scene.objects.active = ob
+    
+def set_default_face_envmapping(scene):
+    for obj in scene.objects:
+        if obj.type == 'MESH' and "default_face_envmapping_set" not in obj:
+            for poly in obj.data.polygons:
+                poly["face_envmapping"] = True
+            obj["default_face_envmapping_set"] = True
