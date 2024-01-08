@@ -6,6 +6,7 @@ class RVIO_PT_RevoltHelpersPanelMesh(bpy.types.Panel):
     bl_space_type = "PROPERTIES"
     bl_region_type = "WINDOW"
     bl_context = "output"
+    bl_options = {"HIDE_HEADER"}
 
     def draw_header(self, context):
         pass
@@ -24,6 +25,10 @@ class RVIO_PT_RevoltHelpersPanelMesh(bpy.types.Panel):
         box = layout.box()
         box.label(text="Rename texture")
         box.operator("helpers.texture_rename")
+        
+        box = layout.box()
+        box.label(text="Use Texture Number")
+        box.operator("helpers.use_texture_number")
 
         box = layout.box()
         box.label(text="Car tools:")

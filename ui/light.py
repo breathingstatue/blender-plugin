@@ -7,7 +7,6 @@ class RVIO_PT_RevoltLightPanel(bpy.types.Panel):
     bl_space_type = "PROPERTIES"
     bl_region_type = "WINDOW"
     bl_context = "object"
-    bl_options = {"HIDE_HEADER"}
     
     @staticmethod
     def warn_texture_mode(layout):
@@ -18,12 +17,7 @@ class RVIO_PT_RevoltLightPanel(bpy.types.Panel):
                 break
 
         if shading_type and shading_type not in {'MATERIAL', 'RENDERED'}:
-            layout.label(text="Warning: Viewport shading mode may not display textures properly.", icon='INFO')
-
-    @staticmethod
-    def has_vertex_color_layer(obj):
-        """Check if the object has any vertex color layers."""
-        return obj.type == 'MESH' and obj.data.vertex_colors
+            layout.label(text="Tip: Change Shading Mode.", icon='INFO')
 
     def draw_header(self, context):
         self.layout.label(text="Light and Shadow")
@@ -35,47 +29,46 @@ class RVIO_PT_RevoltLightPanel(bpy.types.Panel):
 
         self.warn_texture_mode(layout)
 
-        if obj and obj.select_get() and not RVIO_PT_RevoltLightPanel.has_vertex_color_layer(obj):
-            # Light orientation selection
-            box = layout.box()
-            box.label(text="Shade Object")
+        # Light orientation selection
+        box = layout.box()
+        box.label(text="Shade Object")
 
-            # Find the first two lights in the scene
-            lights = [o for o in scene.objects if o.type == 'LIGHT']
-            light1 = lights[0] if len(lights) > 0 else None
-            light2 = lights[1] if len(lights) > 1 else None
+        # Find the first two lights in the scene
+        lights = [o for o in scene.objects if o.type == 'LIGHT']
+        light1 = lights[0] if len(lights) > 0 else None
+        light2 = lights[1] if len(lights) > 1 else None
 
-            # UI for the first light
-            if light1:
-                box.label(text=f"Light 1: {light1.name}")
-                row = box.row()
-                row.label(text="Orientation X")
-                row.prop(light1, "rotation_euler", index=0, text="")
-                row = box.row()
-                row.label(text="Orientation Y")
-                row.prop(light1, "rotation_euler", index=1, text="")
-                row = box.row()
-                row.label(text="Orientation Z")
-                row.prop(light1, "rotation_euler", index=2, text="")
-                row = box.row()
-                row.label(text="Intensity")
-                row.prop(light1.data, "energy", text="")
+        # UI for the first light
+        if light1:
+            box.label(text=f"Light 1: {light1.name}")
+            row = box.row()
+            row.label(text="Orientation X")
+            row.prop(light1, "rotation_euler", index=0, text="")
+            row = box.row()
+            row.label(text="Orientation Y")
+            row.prop(light1, "rotation_euler", index=1, text="")
+            row = box.row()
+            row.label(text="Orientation Z")
+            row.prop(light1, "rotation_euler", index=2, text="")
+            row = box.row()
+            row.label(text="Intensity")
+            row.prop(light1.data, "energy", text="")
 
-            # UI for the second light
-            if light2:
-                box.label(text=f"Light 2: {light2.name}")
-                row = box.row()
-                row.label(text="Orientation X")
-                row.prop(light2, "rotation_euler", index=0, text="")
-                row = box.row()
-                row.label(text="Orientation Y")
-                row.prop(light2, "rotation_euler", index=1, text="")
-                row = box.row()
-                row.label(text="Orientation Z")
-                row.prop(light2, "rotation_euler", index=2, text="")
-                row = box.row()
-                row.label(text="Intensity")
-                row.prop(light2.data, "energy", text="")
+        # UI for the second light
+        if light2:
+            box.label(text=f"Light 2: {light2.name}")
+            row = box.row()
+            row.label(text="Orientation X")
+            row.prop(light2, "rotation_euler", index=0, text="")
+            row = box.row()
+            row.label(text="Orientation Y")
+            row.prop(light2, "rotation_euler", index=1, text="")
+            row = box.row()
+            row.label(text="Orientation Z")
+            row.prop(light2, "rotation_euler", index=2, text="")
+            row = box.row()
+            row.label(text="Intensity")
+            row.prop(light2.data, "energy", text="")
 
 class ButtonBakeLightToVertex(bpy.types.Operator):
     bl_idname = "lighttools.bakevertex"
