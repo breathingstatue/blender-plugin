@@ -313,10 +313,3 @@ def generate_chull(context):
     ob.matrix_world = obj.matrix_world.copy()
     scene.objects.link(ob)
     scene.objects.active = ob
-    
-def set_default_face_envmapping(scene):
-    for obj in scene.objects:
-        if obj.type == 'MESH' and "default_face_envmapping_set" not in obj:
-            for poly in obj.data.polygons:
-                poly["face_envmapping"] = True
-            obj["default_face_envmapping_set"] = True
