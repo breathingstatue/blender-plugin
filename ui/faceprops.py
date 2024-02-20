@@ -5,7 +5,6 @@ class RVIO_PT_RevoltFacePropertiesPanel(bpy.types.Panel):
     bl_space_type = "PROPERTIES"
     bl_region_type = "WINDOW"
     bl_context = "data"
-    bl_options = {"HIDE_HEADER"}
 
     selection = None
     selected_face_count = None

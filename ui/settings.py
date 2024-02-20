@@ -1,20 +1,7 @@
 import bpy
 import bmesh
 import os
-from ..operators import *
-
-class RVGLAddonPreferences(bpy.types.AddonPreferences):
-    bl_idname = __name__.split('.')[0]
-
-    revolt_dir: bpy.props.StringProperty(
-        name="RVGL Directory",
-        subtype='DIR_PATH',
-        default=""  # Set a default value
-    )
-
-    def draw(self, context):
-        layout = self.layout
-        layout.prop(self, "revolt_dir")
+from ..operators import RVIO_OT_SelectRevoltDirectory
 
 class RVIO_PT_RevoltSettingsPanel(bpy.types.Panel):
     bl_label = "RVGL Settings"
@@ -24,20 +11,20 @@ class RVIO_PT_RevoltSettingsPanel(bpy.types.Panel):
     bl_options = {"HIDE_HEADER"}
 
     def draw(self, context):
-        addon_prefs = get_addon_preferences()
         layout = self.layout
 
         # Directory selection
         layout.label(text="Select RVGL Directory:")
         box = layout.box()
-        box.operator("rvio.select_revolt_dir", text="Browse")
+        box.operator("rvio.select_rvgl_dir", text="Browse")
         # Tagging the area for a redraw
         for area in context.screen.areas:
             if area.type == 'PROPERTIES':
                 area.tag_redraw()
 
         # Display current directory
-        directory = addon_prefs.revolt_dir
+        rvgl_dir = context.scene.rvgl_dir
+        directory = rvgl_dir
         if directory:
             box.label(text=f"Current Directory: {directory}")
         else:
