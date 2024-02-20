@@ -85,7 +85,7 @@ class RVSceneProperties(bpy.types.PropertyGroup):
         description = "Current env color index for importing. Internal only"
     )
     
-    revolt_dir = bpy.props.StringProperty(
+    rvgl_dir = bpy.props.StringProperty(
         name = "Re-Volt Directory",
         default = "",
         description = "Manually define a Re-Volt installation for loading "
