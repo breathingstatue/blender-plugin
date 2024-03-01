@@ -19,17 +19,6 @@ class VertexColorPickerProperties(bpy.types.PropertyGroup):
         description="Vertex color picker"
     )
     
-class EnvMapColorPickerProperties(bpy.types.PropertyGroup):
-    envmap_color: bpy.props.FloatVectorProperty(
-        name="EnvMap Color",
-        subtype='COLOR',
-        default=(1.0, 1.0, 1.0, 1.0),  # Default to white with alpha
-        min=0.0,
-        max=1.0,
-        size=4,  # Including alpha
-        description="Environment map color picker"
-    )
-
 class RVIO_PT_VertexPanel(bpy.types.Panel):
     bl_label = "Vertex Colors"
     bl_space_type = "PROPERTIES"

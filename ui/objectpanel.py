@@ -19,25 +19,20 @@ class RVIO_PT_RevoltObjectPanel(bpy.types.Panel):
         scene = context.scene
         # Get the active object
         obj = context.active_object
-
-        # Ensure there is an active object
+        objprops = obj.revolt
+        
         if obj:
-            # Needed for showing the BigCube Properties dynamically
-            objprops = obj.revolt
-
             col = layout.column()
             col.prop(obj, "is_instance", text="Is Instance")
-            col = layout.column()
-            col.prop(scene, "enable_env_mapping", text="Environment Mapping")
 
-            # Display the current color from EnvMapColorPickerProperties
-            if hasattr(scene, 'envmap_color_picker'):
-                layout.prop(scene.envmap_color_picker, "envmap_color", text="EnvMap Color")
+            col.prop(obj, "fin_env", text="Environment Map")
 
-            # Button to set environment map color
-            col = layout.box()
-            col.operator("object.set_environment_map_color", text="Set EnvMap Color")
+            col.operator("object.toggle_environment_map", text="Environment Map On/Off")
 
+            # Display the color picker only if 'fin_env' is enabled
+            if getattr(obj, "fin_env", False):
+                col.prop(obj, "fin_envcol", text="EnvMap Color")
+    
             # Ignore NCP
             layout.operator("object.toggle_ignore_ncp", text="Toggle Ignore Collision (.ncp)")
 
