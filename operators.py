@@ -510,17 +510,6 @@ class SelectByData(bpy.types.Operator):
 
         self.report({'INFO'}, "Selected {} objects".format(selected_count))
         return {'FINISHED'}
-    
-    
-class AssignEnvColorProperty(bpy.types.Operator):
-    """Assign Environment Color Property to Selected Objects"""
-    bl_idname = "object.assign_env_color_property"
-    bl_label = "Assign Env Color Property"
-
-    def execute(self, context):
-        for obj in context.selected_objects:
-            obj.fin_envcol = (1.0, 1.0, 1.0, 1.0)  # Default color
-        return {'FINISHED'}
 
 class BatchBake(bpy.types.Operator):
     bl_idname = "helpers.batch_bake_model"
@@ -713,72 +702,44 @@ class ToggleEnvironmentMap(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
-        enable_env_mapping = context.scene.enable_env_mapping
-
         for obj in context.selected_objects:
-            if obj.get("is_instance", False):
-                obj["fin_env"] = self.enable_env_mapping
-                self.update_material_reflection(obj, self.enable_env_mapping)
-                self.report({'INFO'}, "Environment map {} for instance object".format("enabled" if self.enable_env_mapping else "disabled"))
-            else:
-                self.set_face_property(obj, self.enable_env_mapping)
-                self.report({'INFO'}, "{} set for non-instance object".format("face_envmapping" if self.enable_env_mapping else "face_no_envmapping"))
+            # Toggle the fin_env property for the object.
+            current_state = getattr(obj, "fin_env", False)
+            obj.fin_env = not current_state
+            
+            # If turning on environment map, set fin_envcol property
+            if not current_state:
+                obj.fin_envcol = (1.0, 1.0, 1.0, 1.0)  # Default color, you can change it if needed
+                
+            self.report({'INFO'}, f"Environment map {'enabled' if not current_state else 'disabled'} for {obj.name}")
 
         return {'FINISHED'}
-
-    def update_material_reflection(self, obj, enable_reflection):
-        if obj.type == 'MESH' and obj.data.materials:
-            for mat in obj.data.materials:
-                if mat and mat.use_nodes:
-                    for node in mat.node_tree.nodes:
-                        if node.type == 'BSDF_PRINCIPLED':
-                            node.inputs['Roughness'].default_value = 0.0 if enable_reflection else 0.5
-                            node.inputs['Metallic'].default_value = 1.0 if enable_reflection else 0.0
-
-    def set_face_property(self, obj, enable_env_mapping):
-        if obj.type == 'MESH':
-            for poly in obj.data.polygons:
-                poly["face_envmapping" if enable_env_mapping else "face_no_envmapping"] = True
                 
 class SetEnvironmentMapColor(bpy.types.Operator):
     bl_idname = "object.set_environment_map_color"
-    bl_label = "Set EnvMap Color"
+    bl_label = "Set Environment Map Color"
 
     def execute(self, context):
-        props = context.scene.envmap_color_picker
-        obj = context.active_object
-
-        if obj is None:
-            self.report({'WARNING'}, "No active object")
-            return {'CANCELLED'}
-
-        # Convert color to 0-255 range and store it
-        color = tuple(int(c * 255) for c in props.envmap_color[:3])
-        alpha = int((1 - props.envmap_color[3]) * 255)
-
-        # Use your rvstruct.Color class to store the color and alpha
-        env_color = rvstruct.Color(color=color, alpha=alpha)
-        obj["fin_envcol"] = env_color.as_dict()
-
-        # Update BSDF material color
-        self.update_bsdf_color(obj, props.envmap_color)
-
-        self.report({'INFO'}, "Environment map color set")
+        objs = context.selected_objects if context.selected_objects else [context.object]
+        
+        for obj in objs:
+            # Ensure that the "revolt" property is defined in the object
+            if "revolt" not in obj:
+                obj["revolt"] = {}
+                
+            # Set the fin_envcol property in the "revolt" dictionary
+            obj["revolt"]["fin_envcol"] = obj.get("fin_envcol", (1.0, 1.0, 1.0, 1.0))
+            
+            # Add any additional logic here
+            self.report({'INFO'}, f"Environment map color set for {obj.name}")
+        
         return {'FINISHED'}
 
-    def invoke(self, context, event):
-        return context.window_manager.invoke_props_dialog(self, width=200)
-
-    def update_bsdf_color(self, obj, color):
-        """Update BSDF material color."""
-        if obj.type == 'MESH' and obj.data.materials:
-            for mat in obj.data.materials:
-                if mat and mat.use_nodes:
-                    for node in mat.node_tree.nodes:
-                        if node.type == 'BSDF_PRINCIPLED':
-                            # Set the Base Color of the BSDF node
-                            node.inputs['Base Color'].default_value = [color[0], color[1], color[2], 1]
-
+    # Update callback for fin_envcol
+    def fin_envcol_update(self, context):
+        # Invoke the operator when fin_envcol changes
+        bpy.ops.object.set_environment_map_color()
+                            
 class IgnoreNCP(bpy.types.Operator):
     bl_idname = "object.toggle_ignore_ncp"
     bl_label = "Toggle Ignore Collision (.ncp)"
@@ -1060,7 +1021,7 @@ class ButtonHullSphere(bpy.types.Operator):
         return {'FINISHED'}
     
 """
-VERTEX COLROS -----------------------------------------------------------------
+VERTEX COLORS -----------------------------------------------------------------
 """
 
 class ButtonVertexColorSet(bpy.types.Operator):
@@ -1193,4 +1154,21 @@ class VertexColorRemove(bpy.types.Operator):
 
         bmesh.update_edit_mesh(mesh)
         self.report({'INFO'}, "Vertex color removed.")
+        return {'FINISHED'}
+
+"""
+WINDOW MANAGER -----------------------------------------------------------------
+"""
+
+class WM_OT_set_environment_map_error(bpy.types.Operator):
+    bl_idname = "wm.set_environment_map_error"
+    bl_label = "Environment Map Error"
+    
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+
+    def draw(self, context):
+        self.layout.label(text="Environment Map is not enabled.")
+
+    def execute(self, context):
         return {'FINISHED'}

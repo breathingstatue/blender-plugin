@@ -83,7 +83,7 @@ from .operators import SetInstanceProperty, RemoveInstanceProperty, BatchBake, L
 from .operators import TexturesRename, CarParametersExport, IgnoreNCP 
 from .operators import ToggleTriangulateNgons, ToggleExportWithoutTexture, ToggleApplyScale, ToggleApplyRotation
 from .operators import PickInstanceColor, SetModelColor, ToggleEnvironmentMap, ToggleNoMirror
-from .operators import AssignEnvColorProperty, SetEnvironmentMapColor, ToggleNoLights, ToggleNoCameraCollision
+from .operators import SetEnvironmentMapColor, ToggleNoLights, ToggleNoCameraCollision
 from .operators import ToggleNoObjectCollision, SetInstancePriority, SetLoDBias, ToggleMirrorPlane
 from .operators import SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere
 from .rvstruct import World, PRM, Mesh, BoundingBox, Vector, Matrix, Polygon, Vertex, UV, BigCube, TexAnimation
@@ -103,7 +103,7 @@ from .ui.light import ButtonBakeLightToVertex, RVIO_PT_RevoltLightPanel
 from .ui.texanim import RVIO_PT_AnimModesPanel
 from .ui.objectpanel import RVIO_PT_RevoltObjectPanel
 from .ui.settings import RVIO_PT_RevoltSettingsPanel
-from .ui.vertex import VertexColorPickerProperties, EnvMapColorPickerProperties, RVIO_PT_VertexPanel
+from .ui.vertex import VertexColorPickerProperties, RVIO_PT_VertexPanel
 from .ui.zone import ButtonZoneHide, OBJECT_OT_add_revolt_track_zone, RVIO_PT_RevoltZonePanel
 
 # Reloaded here because it's used in a class which is instanced here
@@ -193,6 +193,11 @@ def menu_func_export(self, context):
     
 def load_handler(dummy):
     initialize_custom_properties()
+    
+# Update callback for fin_envcol
+def fin_envcol_update(self, context):
+    # Invoke the operator when fin_envcol changes
+    bpy.ops.object.set_environment_map_color()
 
 classes = (    
        
@@ -201,7 +206,6 @@ classes = (
     ImportRV,
     ExportRV,
     RVIO_OT_ReadCarParameters,
-    AssignEnvColorProperty,
     ButtonReExport,
     ButtonSelectFaceProp,
     ButtonSelectNCPFaceProp,
@@ -250,7 +254,6 @@ classes = (
     SetLoDBias,
     ToggleMirrorPlane,
     VertexColorPickerProperties,
-    EnvMapColorPickerProperties,
     VertexColorRemove,
     RVIO_OT_SelectRevoltDirectory,
     
@@ -324,7 +327,6 @@ def register():
     bpy.utils.register_class(ImportRV)
     bpy.utils.register_class(ExportRV)
     bpy.utils.register_class(RVIO_OT_ReadCarParameters)
-    bpy.utils.register_class(AssignEnvColorProperty)
     bpy.utils.register_class(ButtonReExport)
     bpy.utils.register_class(ButtonSelectFaceProp)
     bpy.utils.register_class(ButtonSelectNCPFaceProp)
@@ -373,7 +375,6 @@ def register():
     bpy.utils.register_class(SetLoDBias)
     bpy.utils.register_class(ToggleMirrorPlane)
     bpy.utils.register_class(VertexColorPickerProperties)
-    bpy.utils.register_class(EnvMapColorPickerProperties)
     bpy.utils.register_class(VertexColorRemove)
     bpy.utils.register_class(RVIO_OT_SelectRevoltDirectory)
     
@@ -395,7 +396,6 @@ def register():
     bpy.types.Object.revolt = bpy.props.PointerProperty(type=RVObjectProperties)
     bpy.types.Mesh.revolt = bpy.props.PointerProperty(type=RVMeshProperties)
     bpy.types.Scene.vertex_color_picker_props = bpy.props.PointerProperty(type=VertexColorPickerProperties)
-    bpy.types.Scene.envmap_color_picker = bpy.props.PointerProperty(type=EnvMapColorPickerProperties)
     
     bpy.types.Scene.vertex_alpha_value = bpy.props.FloatProperty(
         name="Vertex Alpha Value",
@@ -421,17 +421,17 @@ def register():
     
     bpy.types.Object.fin_env = bpy.props.BoolProperty(
         name="Environment Map",
-        description="Enable or disable environment map",
-        default=False
+        description="Enable or disable environment mapping",
+        default=False,
     )
     
     bpy.types.Object.fin_envcol = bpy.props.FloatVectorProperty(
         name="Environment Map Color",
+        description="Color used for environment mapping",
         subtype='COLOR',
+        size=4,
         default=(1.0, 1.0, 1.0, 1.0),
-        min=0.0,
-        max=1.0,
-        size=4
+        update=fin_envcol_update
     )
     
     bpy.types.Scene.triangulate_ngons_enabled = bpy.props.BoolProperty(
@@ -492,7 +492,6 @@ def unregister():
     del bpy.types.Object.is_instance
     del bpy.types.Scene.stored_vertex_color
     del bpy.types.Scene.vertex_alpha_value
-    del bpy.types.Scene.envmap_color_picker
     del bpy.types.Scene.vertex_color_picker_props
     del bpy.types.Mesh.revolt
     del bpy.types.Object.revolt
@@ -520,7 +519,6 @@ def unregister():
     # Unregister Operators
     bpy.utils.unregister_class(RVIO_OT_SelectRevoltDirectory)
     bpy.utils.unregister_class(VertexColorRemove)
-    bpy.utils.unregister_class(EnvMapColorPickerProperties)
     bpy.utils.unregister_class(VertexColorPickerProperties)
     bpy.utils.unregister_class(ToggleMirrorPlane)
     bpy.utils.unregister_class(SetLoDBias)
@@ -569,7 +567,6 @@ def unregister():
     bpy.utils.unregister_class(ButtonSelectNCPFaceProp)
     bpy.utils.unregister_class(ButtonSelectFaceProp)
     bpy.utils.unregister_class(ButtonReExport)
-    bpy.utils.unregister_class(AssignEnvColorProperty)
     bpy.utils.unregister_class(RVIO_OT_ReadCarParameters)
     bpy.utils.unregister_class(ExportRV)
     bpy.utils.unregister_class(ImportRV)
