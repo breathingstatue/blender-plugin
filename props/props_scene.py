@@ -419,8 +419,11 @@ class RVSceneProperties(bpy.types.PropertyGroup):
 
 def register():
     bpy.utils.register_class(RVSceneProperties)
+    bpy.types.Scene.revolt = bpy.props.PointerProperty(type=RVSceneProperties)
     
 def unregister():
+    del bpy.types.Scene.revolt
     bpy.utils.unregister_class(RVSceneProperties)
+
 
 dprint

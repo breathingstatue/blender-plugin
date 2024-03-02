@@ -25,6 +25,10 @@ from bpy.props import (
 )
 from ..common import *
 
+# Update callback for fin_envcol
+def fin_envcol_update(self, context):
+    # Invoke the operator when fin_envcol changes
+    bpy.ops.object.set_environment_map_color()
 
 class RVObjectProperties(bpy.types.PropertyGroup):
     bl_idname = "RVObjectProperties"
@@ -99,7 +103,8 @@ class RVObjectProperties(bpy.types.PropertyGroup):
        default=(1.0, 1.0, 1.0, 1.0),
        min=0.0, max=1.0,
        description="Color of the EnvMap",
-       size=4
+       size=4,
+       update=fin_envcol_update
     )
     
     fin_priority = bpy.props.IntProperty(
@@ -163,5 +168,13 @@ class RVObjectProperties(bpy.types.PropertyGroup):
         default = False,
         description = "This object is a track zone box"
     )
+
+def register():
+    bpy.utils.register_class(RVObjectProperties)
+    bpy.types.Object.revolt = bpy.props.PointerProperty(type=RVObjectProperties)
+
+def unregister():
+    del bpy.types.Object.revolt
+    bpy.utils.unregister_class(RVObjectProperties)
     
 dprint

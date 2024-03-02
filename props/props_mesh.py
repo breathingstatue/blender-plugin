@@ -175,4 +175,12 @@ class RVMeshProperties(bpy.types.PropertyGroup):
         description="Face will be ignored when exporting"
     )
     
+def register():
+    bpy.utils.register_class(RVMeshProperties)
+    bpy.types.Mesh.revolt = bpy.props.PointerProperty(type=RVMeshProperties)
+    
+def unregister():
+    del bpy.types.Mesh.revolt
+    bpy.utils.unregister_class(RVMeshProperties)
+    
 dprint
