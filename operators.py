@@ -17,8 +17,6 @@ import shutil
 import bmesh
 
 from . import tools
-from .props.props_obj import RVObjectProperties
-from .props.props_scene import RVSceneProperties
 from .layers import *
 from .texanim import *
 from .rvstruct import *
@@ -671,9 +669,11 @@ class SetInstanceProperty(bpy.types.Operator):
 
     def execute(self, context):
         for obj in context.selected_objects:
-            obj["is_instance"] = True  # Using Blender's custom properties
+            # Set 'is_instance' as a custom property
+            obj["is_instance"] = True
+
         context.view_layer.update()
-        self.report({'INFO'}, "Marked {} objects as instances".format(len(context.selected_objects)))
+        self.report({'INFO'}, f"Marked {len(context.selected_objects)} objects as is_instance")
         return {'FINISHED'}
 
 
@@ -684,12 +684,15 @@ class RemoveInstanceProperty(bpy.types.Operator):
 
     def execute(self, context):
         removed_count = 0
+
         for obj in context.selected_objects:
+            # Check if 'is_instance' property exists and then remove it
             if "is_instance" in obj:
                 del obj["is_instance"]
                 removed_count += 1
+
         context.view_layer.update()
-        self.report({'INFO'}, "Removed 'is_instance' property from {} objects".format(removed_count))
+        self.report({'INFO'}, f"Removed 'is_instance' property from {removed_count} objects")
         return {'FINISHED'}
     
 """
@@ -698,58 +701,73 @@ OBJECTS -----------------------------------------------------------------------
     
 class ToggleEnvironmentMap(bpy.types.Operator):
     bl_idname = "object.toggle_environment_map"
-    bl_label = "Toggle Environment Map"
+    bl_label = "Environment Map On/Off"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         for obj in context.selected_objects:
             # Toggle the fin_env property for the object.
-            current_state = getattr(obj, "fin_env", False)
-            obj.fin_env = not current_state
+            if "fin_env" in obj and isinstance(obj["fin_env"], bool):
+                current_state = obj["fin_env"]
+            else:
+                current_state = False
+
+            # Update the fin_env property to its new state
+            obj["fin_env"] = not current_state
             
-            # If turning on environment map, set fin_envcol property
-            if not current_state:
-                obj.fin_envcol = (1.0, 1.0, 1.0, 1.0)  # Default color, you can change it if needed
-                
-            self.report({'INFO'}, f"Environment map {'enabled' if not current_state else 'disabled'} for {obj.name}")
+            self.report({'INFO'}, f"Environment map {'enabled' if obj['fin_env'] else 'disabled'} for {obj.name}")
 
         return {'FINISHED'}
                 
 class SetEnvironmentMapColor(bpy.types.Operator):
     bl_idname = "object.set_environment_map_color"
-    bl_label = "Set Environment Map Color"
+    bl_label = "Set EnvMap Color"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    # Define a color property to use as a color picker in the UI
+    color: bpy.props.FloatVectorProperty(
+        name="EnvMap Color",
+        subtype='COLOR',
+        default=(1.0, 1.0, 1.0, 1.0),
+        min=0.0,
+        max=1.0,
+        size=4,
+        description="Pick a color for the environment map"
+    )
 
     def execute(self, context):
         objs = context.selected_objects if context.selected_objects else [context.object]
-        
+
         for obj in objs:
-            # Ensure that the "revolt" property is defined in the object
-            if "revolt" not in obj:
-                obj["revolt"] = {}
-                
-            # Set the fin_envcol property in the "revolt" dictionary
-            obj["revolt"]["fin_envcol"] = obj.get("fin_envcol", (1.0, 1.0, 1.0, 1.0))
-            
-            # Add any additional logic here
-            self.report({'INFO'}, f"Environment map color set for {obj.name}")
-        
+            # Directly access the custom property to set the color
+            # Ensure that 'fin_envcol' is defined as a custom property for the object
+            obj["fin_envcol"] = self.color
+
+            self.report({'INFO'}, f"Environment map color set to {self.color} for {obj.name}")
+
         return {'FINISHED'}
 
-    # Update callback for fin_envcol
-    def fin_envcol_update(self, context):
-        # Invoke the operator when fin_envcol changes
-        bpy.ops.object.set_environment_map_color()
+    def invoke(self, context, event):
+        # This method is called when the operator is invoked to display the color picker
+        return context.window_manager.invoke_props_dialog(self)
                             
 class IgnoreNCP(bpy.types.Operator):
     bl_idname = "object.toggle_ignore_ncp"
     bl_label = "Toggle Ignore Collision (.ncp)"
     
     def execute(self, context):
-        # Toggle the ignore_ncp property
         obj = context.object
-        obj.revolt.ignore_ncp = not obj.revolt.ignore_ncp
-        return {'FINISHED'}
-    
+        
+        # Directly toggle the ignore_ncp property on the object
+        if "ignore_ncp" in obj:
+            obj["ignore_ncp"] = not obj["ignore_ncp"]
+            self.report({'INFO'}, f"Ignore collision (.ncp) toggled for {obj.name}.")
+        else:
+            # Initialize the property if it doesn't exist
+            obj["ignore_ncp"] = True
+            self.report({'INFO'}, f"Ignore collision (.ncp) property initialized and set to True for {obj.name}.")
+
+        return {'FINISHED'}  
 
 class SetBCubeMeshIndices(bpy.types.Operator):
     bl_idname = "object.set_bcube_mesh_indices"
@@ -757,105 +775,19 @@ class SetBCubeMeshIndices(bpy.types.Operator):
     
     def execute(self, context):
         obj = context.object
-        revolt_props = obj.revolt
         
         # Clear any previous mesh indices
-        revolt_props.bcube_mesh_indices = ""
+        obj["bcube_mesh_indices"] = ""
         
         # Iterate through child meshes and add their indices
         for child_obj in obj.children:
             if child_obj.type == 'MESH':
-                if revolt_props.bcube_mesh_indices:
-                    revolt_props.bcube_mesh_indices += ","
-                revolt_props.bcube_mesh_indices += str(child_obj.data.index)
+                if obj["bcube_mesh_indices"]:
+                    obj["bcube_mesh_indices"] += ","
+                # Ensure you're getting the right index or identifier for the child mesh here
+                obj["bcube_mesh_indices"] += str(child_obj.data.index)  # Verify if 'data.index' is correct
         
-        return {'FINISHED'}
-    
-
-class PickInstanceColor(bpy.types.Operator):
-    bl_idname = "object.pick_instance_color"
-    bl_label = "Pick Instance Color"
-    
-    def execute(self, context):
-        # Check if there's a selected object
-        if context.selected_objects:
-            selected_object = context.selected_objects[0]
-            
-            # Check if the selected object is an instance (you can customize this check)
-            if "instance" in selected_object.name.lower():
-                # Open the color picker dialog
-                bpy.context.window_manager.invoke_props_dialog(self)
-                return {'RUNNING_MODAL'}
-        
-        # If no valid instance is selected, do nothing
-        return {'CANCELLED'}
-    
-    # Properties for the color picker
-    color: bpy.props.FloatVectorProperty(
-        name="Color",
-        subtype='COLOR',
-        size=3,  # Set size to 3 for RGB color
-        min=0.0,
-        max=1.0,
-        default=(1.0, 1.0, 1.0)
-    )
-    
-    def draw(self, context):
-        layout = self.layout
-        layout.prop(self, "color")
-    
-    def invoke(self, context, event):
-        return context.window_manager.invoke_props_dialog(self)
-
-    def finish(self, context):
-        # Apply the picked color to the selected instance object
-        if context.selected_objects:
-            selected_object = context.selected_objects[0]
-            
-            # Check if the selected object is an instance (you can customize this check)
-            if "instance" in selected_object.name.lower():
-                selected_object.color = self.color
-        
-        return {'FINISHED'}
-    
-class SetModelColor(bpy.types.Operator):
-    bl_idname = "object.set_model_color"
-    bl_label = "Set Model Color"
-    bl_description = "Open the color picker to set the Model Color"
-    
-    def execute(self, context):
-        return {'RUNNING_MODAL'}
-    
-    def invoke(self, context, event):
-        # Open the color picker dialog and set the result to update the color
-        context.window_manager.invoke_props_dialog(self)
-        return {'RUNNING_MODAL'}
-    
-    # Property for the color picker
-    color: bpy.props.FloatVectorProperty(
-        name="Model Color",
-        subtype='COLOR',
-        default=(0.5, 0.5, 0.5),
-        min=0.0, max=1.0,
-        description="Model RGB color to be added/subtracted:\n1.0: Bright, overrides vertex colors\n"
-            "0.5: Default, leaves vertex colors intact\n"
-            "0.0: Dark",
-        size=3  # Ensure size is set to 3 for RGB color
-    )
-    
-    def draw(self, context):
-        layout = self.layout
-        layout.prop(self, "color")
-    
-    def finish(self, context):
-        # Check if there's a selected object
-        if context.selected_objects:
-            selected_object = context.selected_objects[0]
-            
-            # Check if the selected object is an instance (you can customize this check)
-            if "instance" in selected_object.name.lower():
-                selected_object.revolt.fin_col = self.color[:3]  # Set RGB values from the color picker
-        
+        self.report({'INFO'}, f"BCube mesh indices set for {obj.name}.")
         return {'FINISHED'}
     
 class ToggleNoMirror(bpy.types.Operator):
@@ -865,8 +797,12 @@ class ToggleNoMirror(bpy.types.Operator):
 
     def execute(self, context):
         obj = context.object
-        if obj and obj.type == 'MESH' and obj.get("is_instance", False):
-            obj.revolt.fin_no_mirror = not obj.revolt.fin_no_mirror
+        if obj and "is_instance" in obj and obj["is_instance"]:
+            current_state = obj.get("fin_no_mirror", False)
+            obj["fin_no_mirror"] = not current_state
+            self.report({'INFO'}, f"No Mirror Mode {'enabled' if not current_state else 'disabled'} for {obj.name}.")
+        else:
+            self.report({'WARNING'}, "'is_instance' property not found or not true.")
         return {'FINISHED'}
 
 class ToggleNoLights(bpy.types.Operator):
@@ -876,16 +812,14 @@ class ToggleNoLights(bpy.types.Operator):
 
     def execute(self, context):
         obj = context.object
-        if obj and obj.type == 'MESH' and obj.get("is_instance", False):
-            obj.revolt.fin_no_lights = not obj.revolt.fin_no_lights
+        if obj and "is_instance" in obj and obj["is_instance"]:
+            # Directly toggle the fin_no_lights property on the object
+            current_state = obj.get("fin_no_lights", False)
+            obj["fin_no_lights"] = not current_state
+            self.report({'INFO'}, f"'Is affected by Light' property {'enabled' if not current_state else 'disabled'} for {obj.name}.")
+        else:
+            self.report({'WARNING'}, "'is_instance' property not found or not set to True.")
         return {'FINISHED'}
-
-def menu_func(self, context):
-    layout = self.layout
-    obj = context.object
-
-    if obj and obj.type == 'MESH' and obj.get("is_instance", False):
-        layout.operator(ToggleNoLightsOperator.bl_idname)
         
 class ToggleNoCameraCollision(bpy.types.Operator):
     bl_idname = "object.toggle_no_cam_coll"
@@ -894,8 +828,9 @@ class ToggleNoCameraCollision(bpy.types.Operator):
 
     def execute(self, context):
         obj = context.object
-        if obj and "instance" in obj.name.lower():
-            obj.revolt.fin_no_cam_coll = not obj.revolt.fin_no_cam_coll
+        current_state = obj.get("fin_no_cam_coll", False)
+        obj["fin_no_cam_coll"] = not current_state
+        self.report({'INFO'}, f"No Camera Collision property {'enabled' if not current_state else 'disabled'} for {obj.name}.")
         return {'FINISHED'}
     
 class ToggleNoObjectCollision(bpy.types.Operator):
@@ -905,44 +840,11 @@ class ToggleNoObjectCollision(bpy.types.Operator):
 
     def execute(self, context):
         obj = context.object
-        if obj and "instance" in obj.name.lower():
-            obj.revolt.fin_no_obj_coll = not obj.revolt.fin_no_obj_coll
+        current_state = obj.get("fin_no_obj_coll", False)
+        obj["fin_no_obj_coll"] = not current_state
+        self.report({'INFO'}, f"No Object Collision property {'enabled' if not current_state else 'disabled'} for {obj.name}.")
         return {'FINISHED'}
-    
-class SetInstancePriority(bpy.types.Operator):
-    bl_idname = "object.set_instance_priority"
-    bl_label = "Set Instance Priority"
-    bl_description = "Set the priority for the instance"
-
-    fin_priority: bpy.props.IntProperty(
-        name="Priority",
-        default=1,
-        description="Priority for instance. Instance will always be shown if set to 1."
-    )
-
-    def execute(self, context):
-        obj = context.object
-        if obj and "instance" in obj.name.lower():
-            obj.revolt.fin_priority = self.fin_priority
-        return {'FINISHED'}
-    
-class SetLoDBias(bpy.types.Operator):
-    bl_idname = "object.set_lod_bias"
-    bl_label = "Set LoD Bias (Unused)"
-    bl_description = "Set the LoD Bias (Unused)"
-
-    fin_lod_bias: bpy.props.IntProperty(
-        name="LoD Bias",
-        default=1024,
-        description="Unused"
-    )
-
-    def execute(self, context):
-        obj = context.object
-        if obj and "instance" in obj.name.lower():
-            obj.revolt.fin_lod_bias = self.fin_lod_bias
-        return {'FINISHED'}
-    
+   
 class ToggleMirrorPlane(bpy.types.Operator):
     bl_idname = "object.toggle_mirror_plane"
     bl_label = "Toggle Mirror Plane"

@@ -14,7 +14,6 @@ import importlib
 from . import common
 from . import rvstruct
 from . import prm_out
-from . import operators
 
 # Check if 'bpy' is already in locals to determine if this is a reload scenario
 if "bpy" in locals():
@@ -22,8 +21,9 @@ if "bpy" in locals():
     importlib.reload(rvstruct)
 
 # Importing specific classes and functions
+from .props.props_obj import RVObjectProperties
+from .props.props_scene import RVSceneProperties
 from .rvstruct import Instances, Instance, Vector, Color
-from .operators import SetInstanceProperty
 
 # Add specific imports from common as needed
 # Example: from .common import specific_function, SpecificClass

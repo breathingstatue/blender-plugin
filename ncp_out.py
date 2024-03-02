@@ -19,7 +19,7 @@ from . import rvstruct
 # Check if 'bpy' is already in locals to determine if this is a reload scenario
 if "bpy" in locals():
     importlib.reload(common)
-    importlib.reload(rvstruct
+    importlib.reload(rvstruct)
 
 # Importing specific classes and functions
 from .rvstruct import BoundingBox, LookupGrid, LookupList, NCP, Plane, Polyhedron, Vector

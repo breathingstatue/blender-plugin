@@ -17,7 +17,6 @@ import bmesh
 import os
 from math import sqrt
 from mathutils import Color, Matrix
-from .carinfo import read_parameters
 
 # Global dictionaries
 global ERRORS
