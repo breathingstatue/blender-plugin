@@ -1,6 +1,7 @@
 import bpy
 import bmesh
 from ..operators import *
+from ..props.props_obj import *
 from ..rvstruct import *
 from bpy.props import (BoolProperty,
                        FloatVectorProperty, 
@@ -16,54 +17,39 @@ class RVIO_PT_RevoltObjectPanel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        scene = context.scene
-        # Get the active object
         obj = context.active_object
-        objprops = obj.revolt
-        
+
         if obj:
             col = layout.column()
-            col.prop(obj, "is_instance", text="Is Instance")
-
-            col.prop(obj, "fin_env", text="Environment Map")
-
             col.operator("object.toggle_environment_map", text="Environment Map On/Off")
-
-            # Display the color picker only if 'fin_env' is enabled
-            if getattr(obj, "fin_env", False):
-                col.prop(obj, "fin_envcol", text="EnvMap Color")
+            col.operator("object.set_environment_map_color", text="Set EnvMap Color")
     
-            # Ignore NCP
-            layout.operator("object.toggle_ignore_ncp", text="Toggle Ignore Collision (.ncp)")
+        # Ignore NCP
+        layout.operator("object.toggle_ignore_ncp", text="Toggle Ignore Collision (.ncp)")
 
-            # Debug properties
-            if objprops.is_bcube:
-                box = layout.box()
-                box.label(text="BigCube Properties:")
-                row = box.row()
-                row.operator("object.set_bcube_mesh_indices", text="Set Mesh Indices")
-        
-            # Instance properties
+        # Debug properties
+        if obj.revolt.is_bcube:
             box = layout.box()
-            box.label(text="Instance Properties:")
-            row = box.row(align=True)
-            row.operator("object.pick_instance_color", text="Pick Color")
-            row.operator("object.set_model_color", text="Set Colour", icon='COLOR')
-            col = box.column(align=True)
-            col.operator("object.toggle_no_mirror", text="Toggle No Mirror")
-            col.operator("object.toggle_no_lights", text="Toggle No Lights")
-            col.operator("object.toggle_no_cam_coll", text="Toggle No Camera Collision")
-            col.operator("object.toggle_no_obj_coll", text="Toggle No Object Collision")
-            col.operator("object.set_instance_priority", text="Set Instance Priority")
-            col.operator("object.set_lod_bias", text="Set LOD Bias")
+            box.label(text="BigCube Properties:")
+            row = box.row()
+            row.operator("object.set_bcube_mesh_indices", text="Set Mesh Indices")
+        
+        # Instance properties
+        box = layout.box()
+        box.label(text="Instance Properties:")
+        col = box.column(align=True)
+        col.operator("object.toggle_no_mirror", text="Toggle No Mirror")
+        col.operator("object.toggle_no_lights", text="Toggle No Lights")
+        col.operator("object.toggle_no_cam_coll", text="Toggle No Camera Collision")
+        col.operator("object.toggle_no_obj_coll", text="Toggle No Object Collision")
 
-            # Mirror properties
-            box.label(text="Mirror Properties:")
-            row = box.row(align=True)
-            row.operator("object.toggle_mirror_plane", text="Is Mirror Plane")
+        # Mirror properties
+        box.label(text="Mirror Properties:")
+        row = box.row(align=True)
+        row.operator("object.toggle_mirror_plane", text="Is Mirror Plane")
 
-            # Hull properties
-            box.label(text="Hull Properties:")
-            row = box.row(align=True)
-            row.operator("hull.generate")
-            row.operator("object.add_hull_sphere")
+        # Hull properties
+        box.label(text="Hull Properties:")
+        row = box.row(align=True)
+        row.operator("hull.generate")
+        row.operator("object.add_hull_sphere")
