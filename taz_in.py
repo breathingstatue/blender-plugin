@@ -10,8 +10,8 @@ Zone files contain numbered boxes to identify tracks space.
 import bpy
 import bmesh
 import os
-from . import common
 
+from .common import to_blender_coord, to_blender_axis
 from .rvstruct import TrackZones
 
 # Add specific imports from common as needed

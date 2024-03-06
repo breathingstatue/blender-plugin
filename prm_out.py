@@ -17,8 +17,8 @@ from . import common
 from . import rvstruct
 from . import img_in
 from . import layers
-from .common import triangulate_ngons, FACE_PROP_MASK, FACE_QUAD, FACE_ENV, to_revolt_coord, to_revolt_axis, rvbbox_from_bm 
-from .common import center_from_rvbbox, radius_from_bmesh
+from .common import triangulate_ngons, FACE_PROP_MASK, FACE_QUAD, FACE_ENV, to_revolt_coord, to_revolt_axis, rvbbox_from_bm
+from .common import center_from_rvbbox, radius_from_bmesh, get_all_lod
 
 # Use importlib.reload to reload modules during development
 if "bpy" in locals():
@@ -29,6 +29,10 @@ if "bpy" in locals():
     
 def export_file(filepath, scene, context):
     obj = context.view_layer.objects.active
+    if obj is None:
+        print("No active object found. Please select an object to export.")
+        return {'CANCELLED'}
+
     print("Exporting PRM for {}...".format(obj.name))
     meshes = []
 

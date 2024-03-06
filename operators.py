@@ -16,13 +16,16 @@ import subprocess
 import shutil
 import bmesh
 
+from mathutils import Vector as BlenderVector
 from . import tools
+from .hul_in import create_sphere
 from .layers import *
 from .texanim import *
+from .tools import generate_chull
 from .rvstruct import *
 from . import carinfo
 from .common import get_format, FORMAT_PRM, FORMAT_FIN, FORMAT_NCP, FORMAT_HUL, FORMAT_W, FORMAT_RIM, FORMAT_TA_CSV, FORMAT_TAZ, FORMAT_UNK
-from .common import get_errors, msg_box, FORMATS
+from .common import get_errors, msg_box, FORMATS, to_revolt_scale, FORMAT_CAR
 
 from bpy.props import (
     BoolProperty,
@@ -90,7 +93,7 @@ class ImportRV(bpy.types.Operator):
 
         elif frmt == FORMAT_W:
             from . import w_in
-            w_in.import_file(self.filepath, scene)
+            w_in.import_file(self.filepath, scene, context)
 
         elif frmt == FORMAT_RIM:
             from . import rim_in
@@ -122,19 +125,6 @@ class ImportRV(bpy.types.Operator):
             layout.label(text="Format not supported", icon="ERROR")
         elif frmt != -1:
             layout.label(text="Import {}:".format(FORMATS[frmt]))
-
-        if frmt == FORMAT_W:
-            box = layout.box()
-            box.prop(props, "w_parent_meshes")
-            box.prop(props, "w_import_bound_boxes")
-            if props.w_import_bound_boxes:
-                box.prop(props, "w_bound_box_layers")
-            box.prop(props, "w_import_cubes")
-            if props.w_import_cubes:
-                box.prop(props, "w_cube_layers")
-            box.prop(props, "w_import_big_cubes")
-            if props.w_import_big_cubes:
-                box.prop(props, "w_big_cube_layers")
 
     def invoke(self, context, event):
         context.window_manager.fileselect_add(self)
@@ -408,6 +398,15 @@ class ToggleApplyRotation(bpy.types.Operator):
         context.scene.apply_rotation_on_export = not context.scene.apply_rotation_on_export
         return {'FINISHED'}
     
+class ButtonBakeShadow(bpy.types.Operator):
+    bl_idname = "button.bake_shadow"
+    bl_label = "Bake Shadow"
+    bl_description = "Creates a shadow plane beneath the selected object"
+
+    def execute(self, context):
+        bake_shadow(context)
+        return {"FINISHED"}
+
 """
 HELPERS -----------------------------------------------------------------------
 """
@@ -848,77 +847,72 @@ class ToggleNoObjectCollision(bpy.types.Operator):
 class ToggleMirrorPlane(bpy.types.Operator):
     bl_idname = "object.toggle_mirror_plane"
     bl_label = "Toggle Mirror Plane"
-    bl_description = "Toggle Mirror Plane status for the selected object"
+    bl_description = "Toggle Mirror Plane property for the selected object"
+
+    @classmethod
+    def poll(cls, context):
+        return context.selected_objects
 
     def execute(self, context):
-        # Check if there is an active object
-        if context.active_object:
-            obj = context.active_object
-
-            # Check if the object is already a mirror plane
-            is_mirror_plane = any(mp.object_name == obj.name for mp in rim_instance.mirror_planes)
-
-            if not is_mirror_plane:
-                # Create a new MirrorPlane instance and add it to the RIM instance
-                new_mirror_plane = MirrorPlane()
-                # Set properties of the mirror plane based on the object
-                # Example: new_mirror_plane.object_name = obj.name
-                rim_instance.mirror_planes.append(new_mirror_plane)
-                rim_instance.num_mirror_planes += 1
-
-                # Optionally set a custom property on the object for UI indication
+        for obj in context.selected_objects:
+            if "is_mirror_plane" not in obj.keys():
                 obj["is_mirror_plane"] = True
-
-                self.report({'INFO'}, f"{obj.name} set as a new mirror plane")
             else:
-                # Logic if you want to toggle or update the mirror plane status
-                # Example: remove or update the mirror plane in rim_instance
-                # Update or remove the custom property
-                obj["is_mirror_plane"] = not obj.get("is_mirror_plane", False)
-
-                self.report({'INFO'}, f"{obj.name} mirror plane status updated")
-
-        else:
-            self.report({'WARNING'}, "No active object selected")
-
+                obj["is_mirror_plane"] = not obj["is_mirror_plane"]
+            
+            status = "tagged" if obj["is_mirror_plane"] else "untagged"
+            self.report({'INFO'}, f"Object is {status} as Mirror Plane")
+        
         return {'FINISHED'}
     
 class ButtonHullGenerate(bpy.types.Operator):
     bl_idname = "hull.generate"
     bl_label = "Generate Convex Hull"
     bl_description = "Generates a convex hull from the selected object"
-
+    
     @classmethod
     def poll(cls, context):
-        return context.object is not None and context.object.type == 'MESH'
+        return context.active_object is not None and context.active_object.type == 'MESH'
 
     def execute(self, context):
-        try:
-            tools.generate_chull(context)
-        except Exception as e:
-            self.report({'ERROR'}, f"Failed to generate convex hull: {e}")
-            return {'CANCELLED'}
-
+        hull_object = generate_chull(context)
+        if hull_object:
+            hull_object.name = f"is_hull_convex"
+            hull_object.revolt.is_hull_convex = True  # Marking the object as a convex hull
+            self.report({'INFO'}, "Convex hull generated successfully.")
+        else:
+            self.report({'ERROR'}, "Convex hull generation failed.")
         return {'FINISHED'}
 
 class ButtonHullSphere(bpy.types.Operator):
     bl_idname = "object.add_hull_sphere"
-    bl_label = "Hull Sphere"
-    bl_options = {'UNDO'}
-    
+    bl_label = "Add Hull Sphere"
+    bl_description = "Creates a hull sphere at the 3D cursor's location"
+    bl_options = {'REGISTER', 'UNDO'}
+
     def execute(self, context):
-        from ..hul_in import create_sphere
-        from ..common import to_revolt_scale
-
-        # Create the sphere
-        obj = create_sphere(context.scene, (0, 0, 0), to_revolt_scale(0.1), "Hull Sphere")
+        center = bpy.context.scene.cursor.location
         
-        # Set the object location to the cursor's location
-        obj.location = bpy.context.scene.cursor.location
+        # Assuming to_revolt_scale(0.1) is the desired scale for the radius
+        radius = to_revolt_scale(0.1)
+        
+        filename = "Hull_Sphere"
 
-        # Select the object and make it the active object
-        obj.select_set(True)
-        bpy.context.view_layer.objects.active = obj
+        # Create the sphere at the cursor location with the specified radius
+        ob = create_sphere(context.scene, center, radius, filename)
+
+        # Link the new object to the scene
+        if context.collection:
+            context.collection.objects.link(ob)
+        else:
+            context.scene.collection.objects.link(ob)
+
+        # Assign the custom property 'is_hull_sphere' to the object
+        ob["is_hull_sphere"] = True
+
+        # Select the newly created object and make it active
+        ob.select_set(True)
+        context.view_layer.objects.active = ob
 
         return {'FINISHED'}
     
@@ -1056,21 +1050,4 @@ class VertexColorRemove(bpy.types.Operator):
 
         bmesh.update_edit_mesh(mesh)
         self.report({'INFO'}, "Vertex color removed.")
-        return {'FINISHED'}
-
-"""
-WINDOW MANAGER -----------------------------------------------------------------
-"""
-
-class WM_OT_set_environment_map_error(bpy.types.Operator):
-    bl_idname = "wm.set_environment_map_error"
-    bl_label = "Environment Map Error"
-    
-    def invoke(self, context, event):
-        return context.window_manager.invoke_props_dialog(self)
-
-    def draw(self, context):
-        self.layout.label(text="Environment Map is not enabled.")
-
-    def execute(self, context):
         return {'FINISHED'}

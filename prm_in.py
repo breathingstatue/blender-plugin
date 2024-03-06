@@ -16,7 +16,7 @@ from . import common
 from . import rvstruct
 from . import img_in
 from .rvstruct import PRM
-from .common import to_blender_coord, to_blender_axis, FACE_QUAD, reverse_quad, get_texture_path
+from .common import to_blender_coord, to_blender_axis, FACE_QUAD, reverse_quad, get_texture_path, FACE_ENV
 from .carinfo import read_parameters
 
 # Check if 'bpy' is already in locals to determine if this is a reload scenario

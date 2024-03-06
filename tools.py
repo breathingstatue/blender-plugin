@@ -13,7 +13,7 @@ import bmesh
 import mathutils
 from math import pi
 import time
-from . import common
+from .common import create_material, COL_HULL
 import importlib
 
 from bpy.props import (
@@ -131,15 +131,6 @@ def bake_shadow(self, context):
         sleft, sright, sfront, sback, sheight
     )
     props.shadow_table = shtable
-    
-class ButtonBakeShadow(bpy.types.Operator):
-    bl_idname = "button.bake_shadow"
-    bl_label = "Bake Shadow"
-    bl_description = "Creates a shadow plane beneath the selected object"
-
-    def execute(self, context):
-        bake_shadow(context)
-        return {"FINISHED"}
 
 
 def rename_all_objects(self, context):
@@ -276,7 +267,7 @@ def batch_bake(self, context):
 
 def generate_chull(context):
     props = context.scene.revolt
-    filename = "{}_hull".format(context.object.name)
+    hull_name = f"is_hull_convex"  # Prefix for naming the hull object
 
     scene = context.scene
     obj = context.object
@@ -286,30 +277,52 @@ def generate_chull(context):
 
     # Adds a convex hull to the bmesh
     chull_out = bmesh.ops.convex_hull(bm, input=bm.verts)
+    
+    try:
+        # Gets rid of interior geometry
+        for face in bm.faces:
+            if face not in chull_out["geom"]:
+                bm.faces.remove(face)
 
-    # Gets rid of interior geometry
-    for face in bm.faces:
-        if face not in chull_out["geom"]:
-            bm.faces.remove(face)
+        for edge in bm.edges:
+            if edge not in chull_out["geom"]:
+                bm.edges.remove(edge)
 
-    for edge in bm.edges:
-        if edge not in chull_out["geom"]:
-            bm.edges.remove(edge)
+        for vert in bm.verts:
+            if vert not in chull_out["geom"]:
+                bm.verts.remove(vert)
 
-    for vert in bm.verts:
-        if vert not in chull_out["geom"]:
-            bm.verts.remove(vert)
+        me = bpy.data.meshes.new(hull_name)
+        bm.to_mesh(me)
+        bm.free()
 
-    me = bpy.data.meshes.new(filename)
-    bm.to_mesh(me)
-    bm.free()
-    ob = bpy.data.objects.new(filename, me)
-    #TODO: Check for existing material or return existing one in create_material
-    me.materials.append(create_material("RVHull", COL_HULL, 0.3))
-    ob.show_transparent = True
-    ob.show_wire = True
-    ob.revolt.is_hull_convex = True
-    ob.select = True
-    ob.matrix_world = obj.matrix_world.copy()
-    scene.objects.link(ob)
-    scene.objects.active = ob
+        # Create new hull object
+        hull_ob = bpy.data.objects.new(hull_name, me)
+
+        # Set custom property
+        hull_ob.revolt.is_hull_convex = True
+
+        # Setup materials and other properties
+        hull_ob.show_transparent = True
+        hull_ob.show_wire = True
+        hull_ob.matrix_world = obj.matrix_world.copy()
+        me.materials.append(create_material("RVHull", COL_HULL, 0.3))
+
+        # Link new hull object to the same collections as the original object
+        for collection in bpy.data.collections:
+            if obj.name in collection.objects:
+                collection.objects.link(hull_ob)
+
+        # Remove the original object
+        bpy.data.objects.remove(obj, do_unlink=True)
+
+        # Select and activate hull object
+        context.view_layer.objects.active = hull_ob
+        hull_ob.select_set(True)
+
+        context.view_layer.update()
+
+        return hull_ob
+    except Exception as e:
+        print(f"An error occurred while generating the hull: {e}")
+        return None

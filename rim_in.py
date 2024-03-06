@@ -26,7 +26,7 @@ def import_file(filepath, scene):
     with open(filepath, "rb") as f:
         rim = rvstruct.RIM(f)
 
-    dprint("Mirror planes:", rim.num_mirror_planes)
+    print("Mirror planes:", rim.num_mirror_planes)
 
     filename = filepath.rsplit(os.sep, 1)[1]
 
@@ -54,8 +54,8 @@ def import_file(filepath, scene):
 
         ob = bpy.data.objects.new(filename, me)
         ob.revolt.is_mirror_plane = True
-        scene.objects.link(ob)
+        scene.collection.link(ob)
 
     # flag, plane and BBox information will be ignored
 
-    scene.objects.active = ob
+    context.view_layer.objects.active = ob

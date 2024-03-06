@@ -35,7 +35,7 @@ def export_file(filepath, scene):
     # Collects objects for export
     objs = []
     if props.ncp_export_selected:
-        objs = [ob for ob in scene.objects if ob.select and not ob.revolt.ignore_ncp]
+        objs = [ob for ob in scene.objects if ob.select_get() and not getattr(ob.revolt, 'ignore_ncp', False)]
     else:
         for obj in scene.objects:
             conditions = (

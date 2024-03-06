@@ -59,7 +59,6 @@ from .ui import (
     faceprops,
     headers,
     helpers,
-    hull,
     instances,
     light,
     objectpanel,
@@ -136,7 +135,7 @@ from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, UseTe
 from .operators import SetInstanceProperty, RemoveInstanceProperty, BatchBake, LaunchRV, TexturesSave
 from .operators import TexturesRename, CarParametersExport, IgnoreNCP 
 from .operators import ToggleTriangulateNgons, ToggleExportWithoutTexture, ToggleApplyScale, ToggleApplyRotation
-from .operators import ToggleEnvironmentMap, ToggleNoMirror
+from .operators import ButtonBakeShadow, ToggleEnvironmentMap, ToggleNoMirror
 from .operators import SetEnvironmentMapColor, ToggleNoLights, ToggleNoCameraCollision
 from .operators import ToggleNoObjectCollision, ToggleMirrorPlane
 from .operators import SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere
@@ -144,14 +143,12 @@ from .rvstruct import World, PRM, Mesh, BoundingBox, Vector, Matrix, Polygon, Ve
 from .rvstruct import Frame, Color, Instances, Instance, PosNodes, PosNode, NCP, Polyhedron, Plane, LookupGrid
 from .rvstruct import LookupList, Hull, ConvexHull, Edge, Interior, Sphere, RIM, MirrorPlane, TrackZones, Zone
 from .texanim import ButtonCopyUvToFrame, ButtonCopyFrameToUv, PreviewNextFrame, PreviewPrevFrame, TexAnimTransform, TexAnimGrid
-from .tools import ButtonBakeShadow
 from .props.props_mesh import RVMeshProperties
 from .props.props_obj import RVObjectProperties
 from .props.props_scene import RVSceneProperties
 from .ui.faceprops import RVIO_PT_RevoltFacePropertiesPanel
 from .ui.headers import RVIO_PT_RevoltIOToolPanel
 from .ui.helpers import RVIO_PT_RevoltHelpersPanelMesh
-from .ui.hull import RVIO_PT_RevoltHullPanel
 from .ui.instances import RVIO_PT_RevoltInstancesPanel
 from .ui.light import ButtonBakeLightToVertex, RVIO_PT_RevoltLightPanel
 from .ui.texanim import RVIO_PT_AnimModesPanel
@@ -308,7 +305,6 @@ classes = (
     RVIO_PT_RevoltFacePropertiesPanel,
     RVIO_PT_RevoltIOToolPanel,
     RVIO_PT_RevoltHelpersPanelMesh,
-    RVIO_PT_RevoltHullPanel,
     RVIO_PT_RevoltInstancesPanel,
     RVIO_PT_RevoltLightPanel,
     RVIO_PT_RevoltObjectPanel,
@@ -383,7 +379,6 @@ def register():
     bpy.utils.register_class(RVIO_PT_RevoltFacePropertiesPanel)
     bpy.utils.register_class(RVIO_PT_RevoltIOToolPanel)
     bpy.utils.register_class(RVIO_PT_RevoltHelpersPanelMesh)
-    bpy.utils.register_class(RVIO_PT_RevoltHullPanel)
     bpy.utils.register_class(RVIO_PT_RevoltSettingsPanel)
     bpy.utils.register_class(RVIO_PT_AnimModesPanel)
     bpy.utils.register_class(RVIO_PT_VertexPanel)
@@ -470,7 +465,6 @@ def unregister():
     bpy.utils.unregister_class(RVIO_PT_VertexPanel)
     bpy.utils.unregister_class(RVIO_PT_AnimModesPanel)
     bpy.utils.unregister_class(RVIO_PT_RevoltSettingsPanel)
-    bpy.utils.unregister_class(RVIO_PT_RevoltHullPanel)
     bpy.utils.unregister_class(RVIO_PT_RevoltHelpersPanelMesh)
     bpy.utils.unregister_class(RVIO_PT_RevoltIOToolPanel)
     bpy.utils.unregister_class(RVIO_PT_RevoltFacePropertiesPanel)

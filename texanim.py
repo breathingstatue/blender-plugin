@@ -18,6 +18,7 @@ if "bpy" in locals():
     
 from .common import TEX_PAGES_MAX
 
+
 class ButtonCopyUvToFrame(bpy.types.Operator):
     bl_idname = "texanim.copy_uv_to_frame"
     bl_label = "UV to Frame"
@@ -27,6 +28,7 @@ class ButtonCopyUvToFrame(bpy.types.Operator):
         copy_uv_to_frame(context)
         redraw()
         return{"FINISHED"}
+
 
 class ButtonCopyFrameToUv(bpy.types.Operator):
     bl_idname = "texanim.copy_frame_to_uv"
@@ -63,6 +65,7 @@ class PreviewPrevFrame(bpy.types.Operator):
         props.ta_current_frame -= 1
         copy_frame_to_uv(context)
         return{"FINISHED"}
+
 
 class TexAnimTransform(bpy.types.Operator):
     bl_idname = "texanim.transform"
@@ -180,6 +183,7 @@ class TexAnimTransform(bpy.types.Operator):
         row.prop(self, "delay", icon="PREVIEW_RANGE")
         row.prop(self, "texture", icon="TEXTURE")
 
+
 class TexAnimGrid(bpy.types.Operator):
     bl_idname = "texanim.grid"
     bl_label = "Grid Animation"
@@ -287,7 +291,6 @@ class TexAnimGrid(bpy.types.Operator):
         row.prop(self, "delay", icon="PREVIEW_RANGE")
         row.prop(self, "texture", icon="TEXTURE")
 
-
 def update_ta_max_slots(self, context):
     props = context.scene.revolt
     slot = props.ta_current_slot
@@ -312,7 +315,6 @@ def update_ta_max_slots(self, context):
         # Updates the rest of the UI
         # update_ta_current_slot(self, context)
 
-
 def update_ta_max_frames(self, context):
     props = context.scene.revolt
     slot = props.ta_current_slot
@@ -332,13 +334,12 @@ def update_ta_max_frames(self, context):
 
     props.texture_animations = str(ta)
 
-
 def update_ta_current_slot(self, context):
     props = context.scene.revolt
     slot = props.ta_current_slot
     frame = props.ta_current_frame
 
-    dprint("TexAnim: Updating current slot..")
+    print("TexAnim: Updating current slot..")
 
     # Converts the texture animations from string to dict
     ta = eval(props.texture_animations)
@@ -357,14 +358,13 @@ def update_ta_current_slot(self, context):
     # update_ta_max_frames(self, context)
     update_ta_current_frame(self, context)
 
-
 # Texture Animation
 def update_ta_current_frame(self, context):
     props = context.scene.revolt
     slot = props.ta_current_slot
     frame = props.ta_current_frame
 
-    dprint("TexAnim: Updating current frame..")
+    print("TexAnim: Updating current frame..")
 
     # Converts the texture animations from string to dict
     ta = eval(props.texture_animations)
@@ -382,13 +382,12 @@ def update_ta_current_frame(self, context):
     props.ta_current_frame_uv2 = (uv[1]["u"], 1 - uv[1]["v"])
     props.ta_current_frame_uv3 = (uv[0]["u"], 1 - uv[0]["v"])
 
-
 def update_ta_current_frame_tex(self, context):
     props = context.scene.revolt
     slot = props.ta_current_slot
     frame = props.ta_current_frame
 
-    dprint("TexAnim: Updating current frame texture..")
+    print("TexAnim: Updating current frame texture..")
 
     # Converts the texture animations from string to dict
     ta = eval(props.texture_animations)
@@ -397,13 +396,12 @@ def update_ta_current_frame_tex(self, context):
     # Saves the string again
     props.texture_animations = str(ta)
 
-
 def update_ta_current_frame_delay(self, context):
     props = context.scene.revolt
     slot = props.ta_current_slot
     frame = props.ta_current_frame
 
-    dprint("TexAnim: Updating current frame delay..")
+    print("TexAnim: Updating current frame delay..")
 
     # Converts the texture animations from string to dict
     ta = eval(props.texture_animations)
@@ -411,7 +409,6 @@ def update_ta_current_frame_delay(self, context):
     ta[slot]["frames"][frame]["delay"] = props.ta_current_frame_delay
     # Saves the string again
     props.texture_animations = str(ta)
-
 
 def update_ta_current_frame_uv(context, num):
     props = bpy.context.scene.revolt
@@ -422,13 +419,12 @@ def update_ta_current_frame_uv(context, num):
     # Reverses the accessor since they're saved in reverse order
     num = [0, 1, 2, 3][::-1][num]
 
-    dprint("TexAnim: Updating current frame UV for {}..".format(num))
+    print("TexAnim: Updating current frame UV for {}..".format(num))
 
     ta = eval(props.texture_animations)
     ta[slot]["frames"][frame]["uv"][num]["u"] = getattr(props, prop_str)[0]
     ta[slot]["frames"][frame]["uv"][num]["v"] = 1 - getattr(props, prop_str)[1]
     props.texture_animations = str(ta)
-
 
 def copy_uv_to_frame(context):
     props = context.scene.revolt
@@ -454,8 +450,7 @@ def copy_uv_to_frame(context):
             elif lnum == 3:
                 props.ta_current_frame_uv3 = (uv[0], uv[1])
     else:
-        dprint("No object for UV anim")
-
+        print("No object for UV anim")
 
 def copy_frame_to_uv(context):
     props = context.scene.revolt
@@ -483,4 +478,4 @@ def copy_frame_to_uv(context):
             elif lnum == 3:
                 sel_face.loops[lnum][uv_layer].uv = uv3
     else:
-        dprint("No object for UV anim")
+        print("No object for UV anim")

@@ -1349,9 +1349,11 @@ class Interior:
         self.spheres = [Sphere(file) for x in range(self.sphere_count)]
 
     def write(self, file):
+        # Update sphere_count to match the actual number of spheres just before writing
+        self.sphere_count = len(self.spheres)
         file.write(struct.pack("<h", self.sphere_count))
-        for x in range(self.sphere_count):
-            self.spheres[x].write(file)
+        for sphere in self.spheres:  # This avoids index out of range errors
+            sphere.write(file)
 
     def as_dict(self):
         dic = {"sphere_count": self.sphere_count,

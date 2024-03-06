@@ -370,11 +370,22 @@ def int_to_texture(tex_num, name=""):
 def create_material(name, diffuse, alpha):
     """ Creates a material, mostly used for debugging objects """
     mat = bpy.data.materials.new(name)
-    mat.diffuse_color = diffuse
-    mat.diffuse_intensity = 1.0
-    mat.alpha = alpha
-    if alpha:
-        mat.use_transparency = True
+    mat.use_nodes = True
+    bsdf = mat.node_tree.nodes.get('Principled BSDF')
+
+    if bsdf:
+        # If diffuse is a Blender Color, convert to tuple first
+        if not isinstance(diffuse, tuple):
+            diffuse = tuple(diffuse)
+
+        # Set the base color and alpha
+        bsdf.inputs['Base Color'].default_value = diffuse + (alpha,)
+        bsdf.inputs['Alpha'].default_value = alpha
+
+    # Transparency settings
+    if alpha < 1.0:
+        mat.blend_method = 'BLEND'
+
     return mat
 
 
@@ -697,6 +708,8 @@ Non-Blender helper functions
 def get_texture_path(filepath, tex_num, scene):
     """ Gets the full texture path when given a file and its
         polygon texture number. """
+        
+    from .carinfo import read_parameters
 
     path, fname = filepath.rsplit(os.sep, 1)
     props = scene.revolt

@@ -23,7 +23,7 @@ if "bpy" in locals():
     importlib.reload(prm_in)
 
 # Add specific imports from common as needed
-# Example: from .common import specific_function, SpecificClass
+from .common import PARAMETERS, to_blender_coord
 
 def import_file(filepath, scene):
     """
@@ -96,8 +96,8 @@ def import_car(scene, params, filepath):
     else:
         wheel = bpy.data.objects.new("wheel 0", None)
         scene.objects.link(wheel)
-        wheel.empty_draw_type = "SPHERE"
-        wheel.empty_draw_size = 0.1
+        wheel.empty_display_type = 'SPHERE'
+        wheel.display_size = 0.1
     wheel.location = wheel0loc
     wheel.parent = body_obj
 
@@ -106,8 +106,8 @@ def import_car(scene, params, filepath):
     else:
         wheel = bpy.data.objects.new("wheel 1", None)
         scene.objects.link(wheel)
-        wheel.empty_draw_type = "SPHERE"
-        wheel.empty_draw_size = 0.1
+        wheel.empty_display_type = 'SPHERE'
+        wheel.display_size = 0.1
     wheel.location = wheel1loc
     wheel.parent = body_obj
 
@@ -116,8 +116,8 @@ def import_car(scene, params, filepath):
     else:
         wheel = bpy.data.objects.new("wheel 2", None)
         scene.objects.link(wheel)
-        wheel.empty_draw_type = "SPHERE"
-        wheel.empty_draw_size = 0.1
+        wheel.empty_display_type = 'SPHERE'
+        wheel.display_size = 0.1
     wheel.location = wheel2loc
     wheel.parent = body_obj
 
@@ -126,17 +126,17 @@ def import_car(scene, params, filepath):
     else:
         wheel = bpy.data.objects.new("wheel 3", None)
         scene.objects.link(wheel)
-        wheel.empty_draw_type = "SPHERE"
-        wheel.empty_draw_size = 0.1
+        wheel.empty_display_type = 'SPHERE'
+        wheel.display_size = 0.1
     wheel.location = wheel3loc
     wheel.parent = body_obj
     
     # Aerial representation
     aerial_loc = to_blender_coord(params["aerial"]["offset"])
-    aerial = bpy.data.objects.new( "aerial", None )
-    scene.objects.link(aerial)
+    aerial = bpy.data.objects.new("aerial", None)
+    scene.collection.objects.link(aerial)
     aerial.location = aerial_loc
-    aerial.empty_draw_size = 0.1
-    aerial.empty_draw_type = 'PLAIN_AXES'
+    aerial.empty_display_type = 'PLAIN_AXES'
+    aerial.empty_display_size = 0.1  # This should be the correct attribute
     aerial.parent = body_obj
     

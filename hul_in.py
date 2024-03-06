@@ -4,7 +4,6 @@ Purpose: Imports hull collision files.
 
 Description:
 
-
 """
 
 import os
@@ -24,6 +23,7 @@ if "bpy" in locals():
     importlib.reload(rvstruct)
 
 # Importing specific classes and functions
+from .common import COL_SPHERE, COL_HULL, to_blender_coord, to_blender_scale, create_material
 from .rvstruct import Hull
 from mathutils import Color, Vector
 
@@ -69,7 +69,7 @@ def import_hull(filepath, scene):
             )
         )
 
-        dprint("Fixing convex hull offset: {} {} {}".format(*offset))
+        print("Fixing convex hull offset: {} {} {}".format(*offset))
 
         chull.bbox_offset += offset
         chull.bbox.xlo -= offset[0]
@@ -122,28 +122,26 @@ def import_hull(filepath, scene):
         ob.show_transparent = True
         ob.show_wire = True
         ob.revolt.is_hull_convex = True
-        scene.objects.link(ob)
-        scene.objects.active = ob
+        bpy.context.collection.objects.link(ob)
 
     for sphere in hull.interior.spheres:
         create_sphere(scene, sphere.center, sphere.radius, filename)
 
 
-
 def import_chull(chull, scene, filename):
     # Note: unused
-    dprint("Importing convex hull...")
+    print("Importing convex hull...")
 
     me = bpy.data.meshes.new(filename)
     bm = bmesh.new()
 
-    dprint("verts:", len(chull.vertices))
-    dprint("edges:", len(chull.edges))
-    dprint("faces:", len(chull.faces))
+    print("verts:", len(chull.vertices))
+    print("edges:", len(chull.edges))
+    print("faces:", len(chull.faces))
 
     for vert in chull.vertices:
         position = to_blender_coord(vert)
-        dprint("vertex position:", position)
+        print("vertex position:", position)
 
         # Creates vertices
         bm.verts.new(Vector((position[0], position[1], position[2])))
@@ -153,9 +151,9 @@ def import_chull(chull, scene, filename):
     for edge in chull.edges:
         e = bm.edges.new([bm.verts[edge[0]], bm.verts[edge[1]]])
         if e is None:
-            dprint("could not create edge")
+            print("could not create edge")
     for face in chull.faces:
-        dprint("FACE-----------------")
+        print("FACE-----------------")
         verts = []
         for vert in chull.vertices:
             if face.contains_vertex(vert):
@@ -168,16 +166,13 @@ def import_chull(chull, scene, filename):
             bmesh.ops.contextual_create(bm, geom=verts, use_smooth=True)
             # bm.faces.new(verts)
 
+    bpy.context.collection.objects.link(ob)
+    context.view_layer.objects.active = ob
 
     # Converts the bmesh back to a mesh and frees resources
     bm.normal_update()
     bm.to_mesh(me)
     bm.free()
-
-    ob = bpy.data.objects.new(filename, me)
-    scene.objects.link(ob)
-    scene.objects.active = ob
-
 
 def create_sphere(scene, center, radius, filename):
     col = COL_SPHERE
@@ -187,8 +182,8 @@ def create_sphere(scene, center, radius, filename):
     if mname not in bpy.data.meshes:
         me = bpy.data.meshes.new(mname)
         bm = bmesh.new()
-        # Creates a box
-        bmesh.ops.create_uvsphere(bm, diameter=1, u_segments= 16, v_segments=8, calc_uvs=True)
+        # Creates a UV sphere
+        bmesh.ops.create_uvsphere(bm, radius=radius, u_segments=16, v_segments=8, calc_uvs=True)
         bm.to_mesh(me)
         bm.free()
         # Creates a transparent material for the object
@@ -200,11 +195,11 @@ def create_sphere(scene, center, radius, filename):
         me = bpy.data.meshes[mname]
 
     # Links the object and sets position and scale
-    ob = bpy.data.objects.new("{}_{}".format(mname, filename), me)
-    scene.objects.link(ob)
+    ob = bpy.data.objects.new(f"is_hull_sphere", me)
+    bpy.context.collection.objects.link(ob)
     ob.location = center
     ob.scale = (radius, radius, radius)
-    ob.draw_type = "SOLID"
+    ob.display_type = "SOLID"  # Updated for Blender 2.8+
     ob.revolt.is_hull_sphere = True
     return ob
 

@@ -7,6 +7,7 @@ Imports collision files.
 
 """
 
+import os
 import bpy
 import bmesh
 import mathutils
@@ -20,6 +21,7 @@ if "bpy" in locals():
     importlib.reload(rvstruct)
 
 # Importing specific classes and functions
+from .common import to_blender_axis, to_blender_scale, NCP_QUAD, COLORS
 from .rvstruct import NCP, Vector
 from mathutils import Color
 
@@ -49,7 +51,7 @@ def import_file(filepath, scene):
     with open(filepath, 'rb') as file:
         filename = os.path.basename(filepath)
         ncp = NCP(file)
-        dprint("Imported NCP file.")
+        print("Imported NCP file.")
 
     filename = os.path.basename(filepath)
     # Creates a new mesh and bmesh
@@ -82,7 +84,7 @@ def import_file(filepath, scene):
 
         # Skips the poly if no intersection was found
         if None in verts:
-            dprint('Skipping polyhedron (no intersection).')
+            print('Skipping polyhedron (no intersection).')
             continue
 
         # Creates the bmverts and face
@@ -112,5 +114,6 @@ def import_file(filepath, scene):
     ob = bpy.data.objects.new(filename, me)
     # ob.show_wire = True
     # ob.show_all_edges = True
-    scene.objects.link(ob)
-    scene.objects.active = ob
+    bpy.context.collection.objects.link(ob)
+    scene.view_layer.objects.active = ob
+    ob.select_set(True)

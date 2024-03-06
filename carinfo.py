@@ -7,13 +7,13 @@ Used to import entire cars and getting texture paths for models.
 
 """
 
-if "bpy" in locals():
-    import imp
-    imp.reload(common)
-
 import os
 import bpy
 from . import common
+
+if "bpy" in locals():
+    import imp
+    imp.reload(common)
 
 # Action name for error reporting
 action_name = "reading parameters"
