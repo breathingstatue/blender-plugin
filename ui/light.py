@@ -19,9 +19,6 @@ class RVIO_PT_RevoltLightPanel(bpy.types.Panel):
         if shading_type and shading_type not in {'MATERIAL', 'RENDERED'}:
             layout.label(text="Tip: Change Shading Mode.", icon='INFO')
 
-    def draw_header(self, context):
-        self.layout.label(text="Light and Shadow")
-
     def draw(self, context):
         obj = context.object
         scene = context.scene
