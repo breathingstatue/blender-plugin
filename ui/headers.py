@@ -7,6 +7,7 @@ class RVIO_PT_RevoltIOToolPanel(bpy.types.Panel):
     bl_space_type = "PROPERTIES"
     bl_region_type = "WINDOW"
     bl_context = "output"
+    bl_options = {"HIDE_HEADER"}
 
     def draw(self, context):
         # i/o buttons

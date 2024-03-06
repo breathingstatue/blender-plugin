@@ -1,6 +1,6 @@
 import bpy
 import bmesh
-from ..operators import LaunchRV, RVIO_OT_SelectRevoltDirectory
+from .. import operators
 
 class RVIO_PT_RevoltHelpersPanelMesh(bpy.types.Panel):
     bl_label = "Helpers"

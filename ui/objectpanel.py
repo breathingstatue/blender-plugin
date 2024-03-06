@@ -31,8 +31,8 @@ class RVIO_PT_RevoltObjectPanel(bpy.types.Panel):
         if obj.revolt.is_bcube:
             box = layout.box()
             box.label(text="BigCube Properties:")
-            row = box.row()
-            row.operator("object.set_bcube_mesh_indices", text="Set Mesh Indices")
+            col = box.column()
+            col.operator("object.set_bcube_mesh_indices", text="Set Mesh Indices")
         
         # Instance properties
         box = layout.box()
@@ -45,11 +45,11 @@ class RVIO_PT_RevoltObjectPanel(bpy.types.Panel):
 
         # Mirror properties
         box.label(text="Mirror Properties:")
-        row = box.row(align=True)
-        row.operator("object.toggle_mirror_plane", text="Is Mirror Plane")
+        col = box.column(align=True)
+        col.operator("object.toggle_mirror_plane", text="Is Mirror Plane")
 
         # Hull properties
         box.label(text="Hull Properties:")
-        row = box.row(align=True)
-        row.operator("hull.generate")
-        row.operator("object.add_hull_sphere")
+        col = box.column(align=True)
+        col.operator("hull.generate")
+        col.operator("object.add_hull_sphere")
