@@ -22,20 +22,20 @@ if "bpy" in locals():
     importlib.reload(rvstruct)
 
 # Importing specific classes and functions
+from .common import NCP_NOCOLL, NCP_PROP_MASK, NCP_QUAD, to_revolt_axis, to_revolt_coord, rvbbox_from_verts
 from .rvstruct import BoundingBox, LookupGrid, LookupList, NCP, Plane, Polyhedron, Vector
 
 # Add specific imports from common as needed
 # Example: from .common import specific_function, SpecificClass
 
 
-def export_file(filepath, scene):
+def export_file(filepath, scene, context):
     print("Exporting NCP to {}...".format(filepath))
-    props = scene.revolt
 
     # Collects objects for export
     objs = []
-    if props.ncp_export_selected:
-        objs = [ob for ob in scene.objects if ob.select_get() and not getattr(ob.revolt, 'ignore_ncp', False)]
+    if scene.ncp_export_selected:
+        objs = [ob for ob in scene.objects if ob.select_get()]
     else:
         for obj in scene.objects:
             conditions = (
@@ -44,7 +44,6 @@ def export_file(filepath, scene):
                 not obj.revolt.is_cube and
                 not obj.revolt.is_bcube and
                 not obj.revolt.is_bbox and
-                #not obj.revolt.is_instance and
                 not obj.revolt.ignore_ncp and
                 not obj.revolt.is_mirror_plane and
                 not obj.revolt.is_track_zone
@@ -52,55 +51,37 @@ def export_file(filepath, scene):
             if conditions:
                 objs.append(obj)
 
-    if objs == []:
+    if not objs:
         common.queue_error("exporting NCP", "No suitable objects in scene.")
         return
     else:
-        dprint("Suitable objects: {}".format(", ".join([o.name for o in objs])))
-
-    # Creates a mesh for all objects
-    transform = len(objs) != 1 or props.apply_translation
-    # bm = objects_to_bmesh(objs, transform) this breaks custom props
+        print("Suitable objects: {}".format(", ".join([o.name for o in objs])))
 
     ncp = NCP()
 
-    # Adds all meshes to the ncp
+    # Adds all meshes to the NCP
     for obj in objs:
-        dprint("Adding {} to ncp...".format(obj.name))
+        print("Adding {} to NCP...".format(obj.name))
         bm = bmesh.new()
         bm.from_mesh(obj.data)
+        bm.transform(obj.matrix_world)
 
-    if context.scene.triangulate_ngons_enabled:
-        num_ngons = triangulate_ngons(bm)
-        if num_ngons > 0:
-            print("Triangulated {} n-gons".format(num_ngons))
-
-        # Applies translation, rotation and scale
-        apply_trs(obj, bm, transform)
+        if getattr(context.scene, 'triangulate_ngons_enabled', False):
+            num_ngons = common.triangulate_ngons(bm)
+            if num_ngons > 0:
+                print(f"Triangulated {num_ngons} n-gons")
 
         add_bm_to_ncp(bm, ncp)
+        bm.free()
 
-    # Sets length of polyhedron list
-    ncp.polyhedron_count = len(ncp.polyhedra)
-    if ncp.polyhedron_count > 65535:
-        common.queue_error(
-            "exporting ncp",
-            "Too many collision polygons, try cutting it down."
-        )
-        return None
-
-    # Creates a collision grid
-    if props.ncp_export_collgrid:
-        dprint("Exporting collision grid...")
-        ncp.generate_lookup_grid(grid_size=props.ncp_collgrid_size)
+    # Create a collision grid if needed
+    if scene.ncp_export_collgrid:
+        print("Exporting collision grid...")
+        ncp.generate_lookup_grid(grid_size=scene.ncp_collgrid_size)
 
     # Writes the NCP to file
     with open(filepath, "wb") as f:
         ncp.write(f)
-
-    # Frees the bmesh
-    bm.free()
-
 
 def add_bm_to_ncp(bm, ncp):
 
@@ -119,7 +100,7 @@ def add_bm_to_ncp(bm, ncp):
 
         # Doesn't export if nocoll flag is set (non-RV)
         if face[type_layer] & NCP_NOCOLL:
-            dprint("Ignoring polygon due to nocoll flag")
+            print("Ignoring polygon due to nocoll flag")
             continue
 
         # Sets polyhedron properties

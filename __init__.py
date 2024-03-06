@@ -20,6 +20,13 @@ from bpy.app.handlers import persistent  # For the scene update handler
 from bpy.app.handlers import load_post
 
 # Importing modules from the add-on's package
+
+from .props import (
+    props_mesh,
+    props_obj,
+    props_scene,
+)
+
 from . import (
     carinfo,
     common,
@@ -49,12 +56,6 @@ from . import (
     w_out,
 )
 
-from .props import (
-    props_mesh,
-    props_obj,
-    props_scene,
-)
-
 from .ui import (
     faceprops,
     headers,
@@ -69,15 +70,15 @@ from .ui import (
 )
 
 # Reloads potentially changed modules on reload (F8 in Blender)
+importlib.reload(props_mesh)
+importlib.reload(props_obj)
+importlib.reload(props_scene)
+
 importlib.reload(common)
 importlib.reload(layers)
 importlib.reload(operators)
 importlib.reload(texanim)
 importlib.reload(tools)
-
-importlib.reload(props_mesh)
-importlib.reload(props_obj)
-importlib.reload(props_scene)
 
 # Reloads ui
 importlib.reload(headers)
@@ -125,6 +126,9 @@ if "rim_in" in locals():
 if "rim_out" in locals():
     importlib.reload(rim_out)
 
+from .props.props_mesh import RVMeshProperties
+from .props.props_obj import RVObjectProperties
+from .props.props_scene import RVSceneProperties
 from .common import DialogOperator
 from .operators import ImportRV, ExportRV, RVIO_OT_ReadCarParameters, RVIO_OT_SelectRevoltDirectory
 from .operators import ButtonReExport, ButtonSelectFaceProp, ButtonSelectNCPFaceProp
@@ -137,14 +141,14 @@ from .operators import ToggleTriangulateNgons, ToggleExportWithoutTexture, Toggl
 from .operators import ButtonBakeShadow, ToggleEnvironmentMap, ToggleNoMirror
 from .operators import SetEnvironmentMapColor, ToggleNoLights, ToggleNoCameraCollision
 from .operators import ToggleNoObjectCollision, ToggleMirrorPlane
-from .operators import SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere
+from .operators import SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere, RVIO_OT_ToggleWParentMeshes
+from .operators import RVIO_OT_ToggleWImportBoundBoxes, RVIO_OT_ToggleWImportCubes, RVIO_OT_ToggleWImportBigCubes
+from .operators import RVIO_OT_ToggleNCPExportSelected, RVIO_OT_ToggleNCPExportCollgrid, RVIO_OT_SetBoundBoxCollection
+from .operators import RVIO_OT_SetCubeCollection, RVIO_OT_SetBigCubeCollection, RVIO_OT_SetNCPGridSize
 from .rvstruct import World, PRM, Mesh, BoundingBox, Vector, Matrix, Polygon, Vertex, UV, BigCube, TexAnimation
 from .rvstruct import Frame, Color, Instances, Instance, PosNodes, PosNode, NCP, Polyhedron, Plane, LookupGrid
 from .rvstruct import LookupList, Hull, ConvexHull, Edge, Interior, Sphere, RIM, MirrorPlane, TrackZones, Zone
 from .texanim import ButtonCopyUvToFrame, ButtonCopyFrameToUv, PreviewNextFrame, PreviewPrevFrame, TexAnimTransform, TexAnimGrid
-from .props.props_mesh import RVMeshProperties
-from .props.props_obj import RVObjectProperties
-from .props.props_scene import RVSceneProperties
 from .ui.faceprops import RVIO_PT_RevoltFacePropertiesPanel
 from .ui.headers import RVIO_PT_RevoltIOToolPanel
 from .ui.helpers import RVIO_PT_RevoltHelpersPanelMesh
@@ -208,111 +212,6 @@ def load_handler(dummy):
     initialize_custom_properties()
 
 
-classes = (    
-       
-    # Operator classes
-    DialogOperator,
-    ImportRV,
-    ExportRV,
-    RVIO_OT_ReadCarParameters,
-    ButtonReExport,
-    ButtonSelectFaceProp,
-    ButtonSelectNCPFaceProp,
-    ButtonSelectNCPMaterial,
-    ButtonVertexColorSet,
-    ButtonVertexColorCreateLayer,
-    ButtonVertexAlphaSetLayer,
-    ButtonRenameAllObjects,
-    SelectByName,
-    SelectByData,
-    SetInstanceProperty,
-    RemoveInstanceProperty,
-    BatchBake,
-    LaunchRV,
-    TexturesSave,
-    TexturesRename,
-    UseTextureNumber,
-    CarParametersExport,
-    ButtonHullGenerate,  
-    ButtonBakeShadow,
-    ButtonBakeLightToVertex,
-    ButtonHullSphere,
-    ButtonCopyUvToFrame,
-    ButtonCopyFrameToUv,
-    PreviewNextFrame,
-    PreviewPrevFrame,
-    TexAnimTransform,
-    TexAnimGrid,
-    ButtonZoneHide,
-    OBJECT_OT_add_revolt_track_zone,
-    IgnoreNCP,
-    ToggleTriangulateNgons,
-    ToggleExportWithoutTexture,
-    ToggleApplyScale,
-    ToggleApplyRotation,
-    SetBCubeMeshIndices,
-    ToggleEnvironmentMap,
-    SetEnvironmentMapColor,
-    ToggleNoMirror,
-    ToggleNoLights,
-    ToggleNoCameraCollision,
-    ToggleNoObjectCollision,
-    ToggleMirrorPlane,
-    VertexColorPickerProperties,
-    VertexColorRemove,
-    RVIO_OT_SelectRevoltDirectory,
-    
-    # rvstruct classes
-    World, 
-    PRM, 
-    Mesh, 
-    BoundingBox, 
-    Vector, 
-    Matrix, 
-    Polygon, 
-    Vertex, 
-    UV, 
-    BigCube, 
-    TexAnimation,
-    Frame, 
-    Color, 
-    Instances, 
-    Instance, 
-    PosNodes, 
-    PosNode, 
-    NCP, 
-    Polyhedron, 
-    Plane, 
-    LookupGrid,
-    LookupList, 
-    Hull, 
-    ConvexHull, 
-    Edge, 
-    Interior, 
-    Sphere, 
-    RIM, 
-    MirrorPlane, 
-    TrackZones, 
-    Zone,    
-    
-    #Custom Properties
-    RVSceneProperties,
-    RVObjectProperties,
-    RVMeshProperties,
-
-    # UI Panel classes
-    RVIO_PT_RevoltFacePropertiesPanel,
-    RVIO_PT_RevoltIOToolPanel,
-    RVIO_PT_RevoltHelpersPanelMesh,
-    RVIO_PT_RevoltInstancesPanel,
-    RVIO_PT_RevoltLightPanel,
-    RVIO_PT_RevoltObjectPanel,
-    RVIO_PT_RevoltSettingsPanel,
-    RVIO_PT_AnimModesPanel,
-    RVIO_PT_VertexPanel,
-    RVIO_PT_RevoltZonePanel,
-)
-
 def register():
     
     # Register Classes
@@ -373,6 +272,16 @@ def register():
     bpy.utils.register_class(VertexColorPickerProperties)
     bpy.utils.register_class(VertexColorRemove)
     bpy.utils.register_class(RVIO_OT_SelectRevoltDirectory)
+    bpy.utils.register_class(RVIO_OT_ToggleWParentMeshes)
+    bpy.utils.register_class(RVIO_OT_ToggleWImportBoundBoxes)
+    bpy.utils.register_class(RVIO_OT_SetBoundBoxCollection)
+    bpy.utils.register_class(RVIO_OT_ToggleWImportCubes)
+    bpy.utils.register_class(RVIO_OT_ToggleWImportBigCubes)
+    bpy.utils.register_class(RVIO_OT_ToggleNCPExportSelected)
+    bpy.utils.register_class(RVIO_OT_ToggleNCPExportCollgrid)
+    bpy.utils.register_class(RVIO_OT_SetCubeCollection)
+    bpy.utils.register_class(RVIO_OT_SetBigCubeCollection)
+    bpy.utils.register_class(RVIO_OT_SetNCPGridSize)
     
     # Register UI
     bpy.utils.register_class(RVIO_PT_RevoltFacePropertiesPanel)
@@ -434,6 +343,29 @@ def register():
         description="Directory where RVGL is located"
     )
     
+    bpy.types.Scene.ncp_export_selected = bpy.props.BoolProperty(
+        name = "Only export selected",
+        default = False,
+        description = "Only exports the selected objects"
+    )
+    
+    bpy.types.Scene.ncp_export_collgrid = bpy.props.BoolProperty(
+        name = "Export Collision Grid (.w)",
+        default = True,
+        description = "Export a collision grid to the .ncp file:\n\n"
+                      "Enable this if you want to export a level (.w) "
+                      ".ncp file"
+    )
+
+    bpy.types.Scene.ncp_collgrid_size = bpy.props.IntProperty(
+        name="NCP Grid Size",
+        default=1024,
+        min=512,
+        max=8192,
+        description="Size of the lookup grid"
+    )
+    
+    
     # UI and Handlers Registration
     bpy.app.handlers.depsgraph_update_pre.append(edit_object_change_handler)
     bpy.app.handlers.load_post.append(load_handler)
@@ -445,6 +377,9 @@ def unregister():
         bpy.app.handlers.load_post.remove(load_handler)
     bpy.app.handlers.depsgraph_update_pre.remove(edit_object_change_handler)
     
+    del bpy.types.Scene.ncp_export_selected
+    del bpy.types.Scene.ncp_export_collgrid
+    del bpy.types.Scene.ncp_collgrid_size
     del bpy.types.Scene.rvgl_dir
     del bpy.types.Scene.apply_rotation_on_export
     del bpy.types.Scene.apply_scale_on_export
@@ -469,6 +404,16 @@ def unregister():
     bpy.utils.unregister_class(RVIO_PT_RevoltFacePropertiesPanel)
     
     # Unregister Operators
+    bpy.utils.unregister_class(RVIO_OT_SetNCPGridSize)
+    bpy.utils.unregister_class(RVIO_OT_SetBigCubeCollection)
+    bpy.utils.unregister_class(RVIO_OT_SetCubeCollection)
+    bpy.utils.unregister_class(RVIO_OT_ToggleWParentMeshes)
+    bpy.utils.unregister_class(RVIO_OT_SetBoundBoxCollection)
+    bpy.utils.unregister_class(RVIO_OT_ToggleWImportBoundBoxes)
+    bpy.utils.unregister_class(RVIO_OT_ToggleWImportCubes)
+    bpy.utils.unregister_class(RVIO_OT_ToggleWImportBigCubes)
+    bpy.utils.unregister_class(RVIO_OT_ToggleNCPExportSelected)
+    bpy.utils.unregister_class(RVIO_OT_ToggleNCPExportCollgrid)
     bpy.utils.unregister_class(RVIO_OT_SelectRevoltDirectory)
     bpy.utils.unregister_class(VertexColorRemove)
     bpy.utils.unregister_class(VertexColorPickerProperties)

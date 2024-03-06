@@ -595,7 +595,6 @@ def get_errors():
 
     return errors
 
-
 def redraw():
     redraw_3d()
     redraw_uvedit()
@@ -683,7 +682,7 @@ def triangulate_ngons(bm):
             triangulate.append(face)
     if triangulate:
         bmesh.ops.triangulate(bm, faces=triangulate,
-                              quad_method=0, ngon_method=0)
+                              quad_method='BEAUTY', ngon_method='BEAUTY')
     return len(triangulate)
 
 

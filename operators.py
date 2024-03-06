@@ -180,7 +180,7 @@ def exec_export(self, filepath, context):
     elif frmt == FORMAT_NCP:
         from . import ncp_out
         print("Exporting to .ncp...")
-        ncp_out.export_file(filepath, scene)
+        ncp_out.export_file(filepath, scene, context)
 
     elif frmt == FORMAT_HUL:   
         from . import hul_out
@@ -297,6 +297,238 @@ class ButtonReExport(bpy.types.Operator):
         props = context.scene.revolt
         res = exec_export(props.last_exported_filepath, context)
         return res
+    
+# Operator for toggling w_parent_meshes
+class RVIO_OT_ToggleWParentMeshes(bpy.types.Operator):
+    bl_idname = "rvio.toggle_w_parent_meshes"
+    bl_label = "Toggle Parent Meshes"
+    
+    def execute(self, context):
+        props = context.scene.revolt
+        props.w_parent_meshes = not props.w_parent_meshes
+        return {'FINISHED'}
+
+# Operator for toggling w_import_bound_boxes
+class RVIO_OT_ToggleWImportBoundBoxes(bpy.types.Operator):
+    bl_idname = "rvio.toggle_w_import_bound_boxes"
+    bl_label = "Toggle Import Bound Boxes"
+    
+    def execute(self, context):
+        props = context.scene.revolt
+        props.w_import_bound_boxes = not props.w_import_bound_boxes
+        return {'FINISHED'}
+
+class RVIO_OT_SetBoundBoxCollection(bpy.types.Operator):
+    bl_idname = "rvio.set_bound_box_collection"
+    bl_label = "Set Bound Box Collection"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    num_collections: bpy.props.IntProperty(
+        name="Number of Collections", 
+        default=1, 
+        min=1, 
+        max=19, 
+        description="Number of collections to assign bound boxes to"
+    )
+
+def assign_objects_to_collections(objects, num_collections, context):
+    # Ensure there is at least one collection
+    if num_collections < 1:
+        return
+    
+    # Create or get existing collections
+    collections = []
+    for i in range(num_collections):
+        collection_name = f"Collection_{i+1}"
+        collection = bpy.data.collections.get(collection_name)
+        if not collection:
+            collection = bpy.data.collections.new(collection_name)
+            context.scene.collection.children.link(collection)  # Link collection to the scene
+        collections.append(collection)
+
+    # Distribute objects across collections
+    for index, obj in enumerate(objects):
+        target_collection = collections[min(index, num_collections - 1)]
+        # Link object to target collection and unlink from all others
+        for collection in obj.users_collection:
+            collection.objects.unlink(obj)
+        target_collection.objects.link(obj)
+
+def execute(self, context):
+    props = context.scene.rvgl_props
+
+    imported_bound_boxes = get_imported_bound_boxes()
+
+    assign_objects_to_collections(imported_bound_boxes, self.num_collections, context)
+
+    return {'FINISHED'}
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+
+    def draw(self, context):
+        self.layout.prop(self, "num_collections", text="Number of Collections")
+
+# Operator for toggling w_import_cubes
+class RVIO_OT_ToggleWImportCubes(bpy.types.Operator):
+    bl_idname = "rvio.toggle_w_import_cubes"
+    bl_label = "Toggle Import Cubes"
+    
+    def execute(self, context):
+        props = context.scene.revolt
+        props.w_import_cubes = not props.w_import_cubes
+        return {'FINISHED'}
+
+class RVIO_OT_SetCubeCollection(bpy.types.Operator):
+    bl_idname = "rvio.set_cube_collection"
+    bl_label = "Set Cube Collection"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    num_collections: bpy.props.IntProperty(
+        name="Number of Collections",
+        default=1,
+        min=1,
+        max=19,
+        description="Number of collections to assign cubes to"
+    )
+
+    def assign_objects_to_collections(self, objects, num_collections, context):
+        if num_collections < 1:
+            return
+        
+        # Create or get existing collections
+        collections = []
+        for i in range(num_collections):
+            collection_name = f"Cube_Collection_{i+1}"
+            collection = bpy.data.collections.get(collection_name)
+            if not collection:
+                collection = bpy.data.collections.new(collection_name)
+                context.scene.collection.children.link(collection)
+            collections.append(collection)
+
+        # Distribute cubes across collections
+        for index, obj in enumerate(objects):
+            target_collection = collections[min(index, num_collections - 1)]
+            for collection in obj.users_collection:
+                collection.objects.unlink(obj)
+            target_collection.objects.link(obj)
+
+    def execute(self, context):
+        props = context.scene.revolt
+
+        imported_cubes = get_imported_cubes()
+
+        self.assign_objects_to_collections(imported_cubes, self.num_collections, context)
+
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+
+    def draw(self, context):
+        self.layout.prop(self, "num_collections", text="Number of Collections")
+
+class RVIO_OT_ToggleWImportBigCubes(bpy.types.Operator):
+    bl_idname = "rvio.toggle_w_import_big_cubes"
+    bl_label = "Toggle Import Big Cubes"
+    
+    def execute(self, context):
+        props = context.scene.revolt
+        props.w_import_big_cubes = not props.w_import_big_cubes
+        return {'FINISHED'}
+
+class RVIO_OT_SetBigCubeCollection(bpy.types.Operator):
+    bl_idname = "rvio.set_big_cube_collection"
+    bl_label = "Set Big Cube Collection"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    num_collections: bpy.props.IntProperty(
+        name="Number of Collections",
+        default=1,
+        min=1,
+        max=19,
+        description="Number of collections to assign big cubes to"
+    )
+
+    def assign_objects_to_collections(self, objects, num_collections, context):
+        if num_collections < 1:
+            return
+        
+        # Create or get existing collections
+        collections = []
+        for i in range(num_collections):
+            collection_name = f"Big_Cube_Collection_{i+1}"
+            collection = bpy.data.collections.get(collection_name)
+            if not collection:
+                collection = bpy.data.collections.new(collection_name)
+                context.scene.collection.children.link(collection)
+            collections.append(collection)
+
+        # Distribute big cubes across collections
+        for index, obj in enumerate(objects):
+            target_collection = collections[min(index, num_collections - 1)]
+            for collection in obj.users_collection:
+                collection.objects.unlink(obj)
+            target_collection.objects.link(obj)
+
+    def execute(self, context):
+        props = context.scene.revolt
+
+        imported_big_cubes = get_imported_big_cubes()
+
+        self.assign_objects_to_collections(imported_big_cubes, self.num_collections, context)
+
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+
+    def draw(self, context):
+        self.layout.prop(self, "num_collections", text="Number of Collections")
+
+class RVIO_OT_ToggleNCPExportSelected(bpy.types.Operator):
+    bl_idname = "rvio.toggle_ncp_export_selected"
+    bl_label = "Toggle NCP Export Selected"
+    
+    def execute(self, context):
+        scene = context.scene
+        scene.ncp_export_selected = not scene.ncp_export_selected
+        return {'FINISHED'}
+
+
+class RVIO_OT_ToggleNCPExportCollgrid(bpy.types.Operator):
+    bl_idname = "rvio.toggle_ncp_export_collgrid"
+    bl_label = "Toggle NCP Export Collision Grid"
+    
+    def execute(self, context):
+        scene = context.scene
+        scene.ncp_export_collgrid = not scene.ncp_export_collgrid
+        return {'FINISHED'}
+    
+class RVIO_OT_SetNCPGridSize(bpy.types.Operator):
+    bl_idname = "rvio.set_ncp_grid_size"
+    bl_label = "Set NCP Grid Size"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    grid_size: bpy.props.IntProperty(
+        name="Grid Size",
+        default=1024,
+        min=512,
+        max=8192,
+        description="Size of the lookup grid",
+        subtype='UNSIGNED'
+    )
+
+    def execute(self, context):
+        scene = context.scene
+        scene.ncp_collgrid_size = self.grid_size
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+
+    def draw(self, context):
+        self.layout.prop(self, "grid_size", text="Grid Size", slider=True)
     
 """
 BUTTONS ------------------------------------------------------------------------
