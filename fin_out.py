@@ -21,8 +21,7 @@ if "bpy" in locals():
     importlib.reload(rvstruct)
 
 # Importing specific classes and functions
-from .props.props_obj import RVObjectProperties
-from .props.props_scene import RVSceneProperties
+from .common import FIN_SET_MODEL_RGB, FIN_ENV, FIN_HIDE, FIN_NO_MIRROR, FIN_NO_LIGHTS, FIN_NO_CAMERA_COLLISION, FIN_NO_OBJECT_COLLISION
 from .rvstruct import Instances, Instance, Vector, Color
 
 # Add specific imports from common as needed
