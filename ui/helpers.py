@@ -8,9 +8,6 @@ class RVIO_PT_RevoltHelpersPanelMesh(bpy.types.Panel):
     bl_region_type = "WINDOW"
     bl_context = "output"
 
-    def draw_header(self, context):
-        pass
-
     def draw(self, context):
         layout = self.layout
 

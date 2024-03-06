@@ -2,6 +2,7 @@ import bpy
 import bmesh
 import os
 from ..operators import RVIO_OT_SelectRevoltDirectory
+from ..props.props_scene import RVSceneProperties
 
 class RVIO_PT_RevoltSettingsPanel(bpy.types.Panel):
     bl_label = "RVGL Settings"
@@ -12,7 +13,8 @@ class RVIO_PT_RevoltSettingsPanel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-
+        props = context.scene.revolt
+        
         # Directory selection
         layout.label(text="Select RVGL Directory:")
         box = layout.box()
@@ -50,21 +52,21 @@ class RVIO_PT_RevoltSettingsPanel(bpy.types.Panel):
 
         # World Import settings
         layout.label(text="Import World (.w):")
-        layout.prop(props, "w_parent_meshes")
-        layout.prop(props, "w_import_bound_boxes")
+        layout.operator("rvio.toggle_w_parent_meshes", text="w_parent_meshes")
+        layout.operator("rvio.toggle_w_import_bound_boxes", text="w_import_bound_boxes")
         if props.w_import_bound_boxes:
-            layout.prop(props, "w_bound_box_layers")
-        layout.prop(props, "w_import_cubes")
+            layout.operator("rvio.set_bound_box_collection", text="w_bound_boxes_collections")
+        layout.operator("rvio.toggle_w_import_cubes", text="w_import_cubes")
         if props.w_import_cubes:
-            layout.prop(props, "w_cube_layers")
-        layout.prop(props, "w_import_big_cubes")
+            layout.operator("rvio.set_cube_collection", text="cubes_collections")
+        layout.operator("rvio.toggle_w_import_big_cubes", text="w_import_big_cubes")
         if props.w_import_big_cubes:
-            layout.prop(props, "w_big_cube_layers")
+            layout.operator("rvio.set_big_cube_collection", text="w_big_cube_collections")
         layout.separator()
 
         # NCP Export settings
         layout.label(text="Export Collision (.ncp):")
-        layout.prop(props, "ncp_export_selected")
-        layout.prop(props, "ncp_export_collgrid")
-        layout.prop(props, "ncp_collgrid_size")
+        layout.operator("rvio.toggle_ncp_export_selected", text="ncp_export_selected")
+        layout.operator("rvio.toggle_ncp_export_collgrid", text="ncp_export_collgrid")
+        layout.operator("rvio.set_ncp_grid_size", text="ncp_collgrid_size")
 
