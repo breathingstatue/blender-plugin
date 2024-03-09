@@ -88,7 +88,7 @@ def prm_edit_panel(self, context):
     col.operator("faceprops.select", text="sel").prop = FACE_CLOTH
     col.operator("faceprops.select", text="sel").prop = FACE_SKIP
 
-    if props.use_tex_num:
+    if bpy.context.scene.use_tex_num:
         row = layout.row()
         row.label("Texture:")
         row = layout.row()

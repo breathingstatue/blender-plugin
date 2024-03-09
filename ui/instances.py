@@ -19,3 +19,10 @@ class RVIO_PT_RevoltInstancesPanel(bpy.types.Panel):
         col = layout.column(align=True)
         col.operator("instances.set_instance_property", text="Mark as Instance")
         col.operator("instances.rem_instance_property", text="Remove Instance Property")
+        col.operator("object.use_fin_col", text="Set Instance Color")
+        
+def register():
+    bpy.types.VIEW3D_MT_mesh_add.append(menu_func)
+    
+def unregister():
+    bpy.types.VIEW3D_MT_mesh_add.remove(menu_func)    

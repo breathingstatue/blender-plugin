@@ -31,27 +31,7 @@ class RVIO_PT_VertexPanel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        obj = context.object
-
-        if obj and obj.type == 'MESH':
-            color_props = context.scene.vertex_color_picker_props
-            if obj.mode == 'EDIT':
-                self.draw_edit_mode_ui(context, obj, color_props)
-            else:
-                layout.label(text="Switch to Edit Mode to access Vertex Colors.")
-        else:
-            layout.label(text="Please select a mesh object.")
-
-    def draw_edit_mode_ui(self, context, obj, color_props):
-        layout = self.layout
                         
-        # Draw the UI elements related to vertex colors
-        self.draw_vertex_color_ui(context, layout, color_props)
-        self.draw_alpha_presets(layout)
-
-    def draw_vertex_color_ui(self, context, layout, color_props):
-        me = context.object.data
-
         # Button for Creating Vertex Color Layer
         box = layout.box()
         box.operator("vertexcolor.create_layer", icon="COLOR", text="Create Vertex Color Layer")

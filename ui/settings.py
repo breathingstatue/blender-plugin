@@ -40,10 +40,10 @@ class RVIO_PT_RevoltSettingsPanel(bpy.types.Panel):
         # General export settings
         scene = context.scene
         layout.label(text="Export:")
-        layout.prop(scene, "triangulate_ngons_enabled")
-        layout.prop(scene, "export_without_texture")
-        layout.prop(scene, "apply_scale_on_export")
-        layout.prop(scene, "apply_rotation_on_export")
+        layout.operator("export.triangulate_ngons", text="Triangluate Ngons")
+        layout.operator("export.without_texture", text="Export w/o Texture")
+        layout.operator("export.apply_scale", text="Apply Scale")
+        layout.operator("export.apply_rotation", text= "Apply Rotation")
         layout.separator()
 
         # PRM Export settings
