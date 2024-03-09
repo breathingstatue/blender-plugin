@@ -7,32 +7,28 @@ Imports Instance files.
 
 """
 
+if "bpy" in locals():
+    import imp
+    imp.reload(common)
+    imp.reload(rvstruct)
+
 import bpy
 import bmesh
 import mathutils
-import importlib
+
 from . import common
 from . import rvstruct
 from . import prm_out
 
-# Check if 'bpy' is already in locals to determine if this is a reload scenario
-if "bpy" in locals():
-    importlib.reload(common)
-    importlib.reload(rvstruct)
-
-# Importing specific classes and functions
-from .common import FIN_SET_MODEL_RGB, FIN_ENV, FIN_HIDE, FIN_NO_MIRROR, FIN_NO_LIGHTS, FIN_NO_CAMERA_COLLISION, FIN_NO_OBJECT_COLLISION
 from .rvstruct import Instances, Instance, Vector, Color
-
-# Add specific imports from common as needed
-# Example: from .common import specific_function, SpecificClass
+from .common import *
 
 
 def export_file(filepath, scene):
     fin = Instances()
 
     # Gathers list of instance objects
-    objs = [obj for obj in scene.objects if "is_instance" in obj and obj["is_instance"]]
+    objs = [obj for obj in scene.objects if obj.revolt.is_instance]
 
 
     for obj in objs:
@@ -96,15 +92,15 @@ def export_file(filepath, scene):
         # Searches for files that are longer than 8 chars
         if not prm_fname in os.listdir(folder):
             scene.objects.active = obj
-            prev_apply_scale = scene.revolt.apply_scale
+            prev_apply_scale = scene.apply_scale
             prev_apply_rotation = scene.revolt.apply_rotation
 
-            scene.revolt.apply_scale = False
             scene.revolt.apply_rotation = False
+            scene.apply_scale = False
             prm_out.export_file(os.path.join(folder, prm_fname), scene)
 
-            scene.revolt.apply_scale = prev_apply_scale
-            scene.revolt.apply_rotation = prev_apply_rotation
+            scene.revolt.apply_rotation = prev_apply_scale
+            scene.apply_scale = prev_apply_rotation
 
 
         instance.name += "\x00"

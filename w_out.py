@@ -7,31 +7,28 @@ World files contain meshes, optimization data and texture animations.
 
 """
 
+if "bpy" in locals():
+    import imp
+    imp.reload(common)
+    imp.reload(rvstruct)
+    imp.reload(img_in)
+    imp.reload(prm_out)
+
 import os
 import bpy
 import bmesh
-import importlib
 from mathutils import Color, Vector
-from . import common
-from . import rvstruct
-from . import img_in
-from . import prm_out
-
-# Check if 'bpy' is already in locals to determine if this is a reload scenario
-if "bpy" in locals():
-    importlib.reload(common)
-    importlib.reload(rvstruct)
-    importlib.reload(img_in)
-    importlib.reload(prm_out)
-    
-# Importing specific functions and classes
+from . import (
+    common,
+    rvstruct,
+    img_in,
+    prm_out
+)
+from .common import *
 from .prm_out import export_mesh
 
-# Add specific imports from common as needed
-# Example: from .common import specific_function, SpecificClass
 
 def export_file(filepath, scene):
-    props = scene.revolt
     # Creates an empty world object to put the scene into
     world = rvstruct.World()
 
@@ -41,14 +38,14 @@ def export_file(filepath, scene):
         conditions = (
             obj.data and
             obj.type == "MESH" and
-            not obj.revolt.is_instance and
-            not obj.revolt.is_cube and
-            not obj.revolt.is_bcube and
-            not obj.revolt.is_bbox and
-            not obj.revolt.is_mirror_plane and
-            not obj.revolt.is_hull_sphere and
-            not obj.revolt.is_hull_convex and
-            not obj.revolt.is_track_zone
+            not obj.get("is_instance", False) and
+            not obj.get("is_cube", False) and
+            not obj.get("is_bcube", False) and
+            not obj.get("is_bbox", False) and
+            not obj.get("is_mirror_plane", False) and
+            not obj.get("is_hull_sphere", False) and
+            not obj.get("is_hull_convex", False) and
+            not obj.get("is_track_zone", False)
         )
         if conditions:
             objs.append(obj)
@@ -71,12 +68,12 @@ def export_file(filepath, scene):
     world.generate_bigcubes()
 
     # Exports the texture animation
-    animations = eval(props.texture_animations)
+    animations = eval(scene.texture_animations)
     for animdict in animations:
         anim = rvstruct.TexAnimation()
         anim.from_dict(animdict)
         world.animations.append(anim)
-    world.animation_count = props.ta_max_slots
+    world.animation_count = scene.ta_max_slots
 
     # Writes the world to a file
     with open(filepath, "wb") as file:

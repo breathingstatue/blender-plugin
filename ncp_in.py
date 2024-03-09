@@ -115,5 +115,4 @@ def import_file(filepath, scene):
     # ob.show_wire = True
     # ob.show_all_edges = True
     bpy.context.collection.objects.link(ob)
-    scene.view_layer.objects.active = ob
     ob.select_set(True)

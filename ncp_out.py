@@ -7,74 +7,93 @@ Exports collision files.
 
 """
 
+
+if "bpy" in locals():
+    import imp
+    imp.reload(common)
+    imp.reload(rvstruct)
+
 import os
 import bpy
 import bmesh
-import importlib
+
 from math import ceil
 from mathutils import Color, Matrix
 from . import common
 from . import rvstruct
 
-# Check if 'bpy' is already in locals to determine if this is a reload scenario
-if "bpy" in locals():
-    importlib.reload(common)
-    importlib.reload(rvstruct)
+from .common import *
+from .rvstruct import (
+    BoundingBox,
+    LookupGrid,
+    LookupList,
+    NCP,
+    Plane,
+    Polyhedron,
+    Vector
+)
 
-# Importing specific classes and functions
-from .common import NCP_NOCOLL, NCP_PROP_MASK, NCP_QUAD, to_revolt_axis, to_revolt_coord, rvbbox_from_verts
-from .rvstruct import BoundingBox, LookupGrid, LookupList, NCP, Plane, Polyhedron, Vector
 
-# Add specific imports from common as needed
-# Example: from .common import specific_function, SpecificClass
-
-
-def export_file(filepath, scene, context):
+def export_file(filepath, scene):
     print("Exporting NCP to {}...".format(filepath))
 
     # Collects objects for export
     objs = []
     if scene.ncp_export_selected:
-        objs = [ob for ob in scene.objects if ob.select_get()]
+        objs = [ob for ob in scene.objects if ob.select_get() and not ob.get("ignore_ncp", False)]
     else:
         for obj in scene.objects:
             conditions = (
                 obj.data and
                 obj.type == "MESH" and
-                not obj.revolt.is_cube and
-                not obj.revolt.is_bcube and
-                not obj.revolt.is_bbox and
-                not obj.revolt.ignore_ncp and
-                not obj.revolt.is_mirror_plane and
-                not obj.revolt.is_track_zone
+                not obj.get("is_cube", False) and
+                not obj.get("is_bcube", False) and
+                not obj.get("is_bbox", False) and
+                not obj.get("ignore_ncp", False) and
+                not obj.get("is_mirror_plane", False) and
+                not obj.get("is_track_zone", False)
             )
             if conditions:
                 objs.append(obj)
 
-    if not objs:
+    if objs == []:
         common.queue_error("exporting NCP", "No suitable objects in scene.")
         return
     else:
         print("Suitable objects: {}".format(", ".join([o.name for o in objs])))
 
+    # Creates a mesh for all objects
+    transform = len(objs) != 1 or scene.apply_translation
+    # bm = objects_to_bmesh(objs, transform) this breaks custom props
+
     ncp = NCP()
 
-    # Adds all meshes to the NCP
+    # Adds all meshes to the ncp
     for obj in objs:
-        print("Adding {} to NCP...".format(obj.name))
+        print("Adding {} to ncp...".format(obj.name))
         bm = bmesh.new()
         bm.from_mesh(obj.data)
-        bm.transform(obj.matrix_world)
 
-        if getattr(context.scene, 'triangulate_ngons_enabled', False):
-            num_ngons = common.triangulate_ngons(bm)
-            if num_ngons > 0:
-                print(f"Triangulated {num_ngons} n-gons")
+        if scene.triangulate_ngons:
+            num_ngons = triangulate_ngons(bm)
+            if scene.triangulate_ngons > 0:
+                print("Triangulated {} n-gons".format(num_ngons))
+
+        # Applies translation, rotation and scale
+        apply_trs(obj, bm, transform)
 
         add_bm_to_ncp(bm, ncp)
-        bm.free()
 
-    # Create a collision grid if needed
+    # Sets length of polyhedron list
+    ncp.polyhedron_count = len(ncp.polyhedra)
+    if ncp.polyhedron_count > 65535:
+        common.queue_error(
+            "exporting ncp",
+            "Too many collision polygons, try cutting it down."
+        )
+        return None
+
+    # Creates a collision grid
     if scene.ncp_export_collgrid:
         print("Exporting collision grid...")
         ncp.generate_lookup_grid(grid_size=scene.ncp_collgrid_size)
@@ -82,6 +101,10 @@ def export_file(filepath, scene, context):
     # Writes the NCP to file
     with open(filepath, "wb") as f:
         ncp.write(f)
+
+    # Frees the bmesh
+    bm.free()
+
 
 def add_bm_to_ncp(bm, ncp):
 

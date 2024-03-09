@@ -8,41 +8,39 @@ Meshes used for cars, game objects and track instances.
 """
 
 
+if "bpy" in locals():
+    import imp
+    imp.reload(common)
+    imp.reload(rvstruct)
+    imp.reload(img_in)
+    imp.reload(layers)
+
 import os
 import bpy
 import bmesh
-import importlib
 from mathutils import Color, Vector, Matrix
 from . import common
 from . import rvstruct
 from . import img_in
 from . import layers
-from .common import triangulate_ngons, FACE_PROP_MASK, FACE_QUAD, FACE_ENV, to_revolt_coord, to_revolt_axis, rvbbox_from_bm
-from .common import center_from_rvbbox, radius_from_bmesh, get_all_lod
 
-# Use importlib.reload to reload modules during development
-if "bpy" in locals():
-    importlib.reload(common)
-    importlib.reload(rvstruct)
-    importlib.reload(img_in)
-    importlib.reload(layers)
-    
+from .common import *
+from .layers import *
+from .props.props_scene import RVSceneProperties
+
+
 def export_file(filepath, scene, context):
     obj = context.view_layer.objects.active
-    if obj is None:
-        print("No active object found. Please select an object to export.")
-        return {'CANCELLED'}
-
     print("Exporting PRM for {}...".format(obj.name))
     meshes = []
 
     # Checks if other LoDs are present
     if "|q" in obj.data.name:
-        print("LODs present.")
+        dprint("LODs present.")
         meshes = get_all_lod(obj.data.name.split('|')[0])
         print([m.name for m in meshes])
     else:
-        print("No LOD present.")
+        dprint("No LOD present.")
         meshes.append(obj.data)
 
     # Exports all meshes to the PRM file
@@ -51,13 +49,28 @@ def export_file(filepath, scene, context):
             print("Exporting mesh {} of {}".format(
                 meshes.index(me), len(meshes)))
             # Exports the mesh as a PRM object
-            prm = export_mesh(me, obj, scene, context, filepath)
+            prm = export_mesh(me, obj, scene, filepath)
             # Writes the PRM object to a file
             if prm:
                 prm.write(file)
+                
+def get_texture_from_material(face, obj):
+    # Check if the object has materials
+    if obj.material_slots:
+        # Get the material from the first slot as a starting point
+        # You might need to modify this logic if your object uses multiple materials
+        mat = obj.material_slots[face.material_index].material
+        if mat and mat.node_tree:
+            # Iterate over all nodes in the material
+            for node in mat.node_tree.nodes:
+                # Check if the node is an image texture node
+                if node.type == 'TEX_IMAGE':
+                    # Return the first image texture found
+                    # You might want to extend this logic based on your needs
+                    return node.image
+    return None
 
-
-def export_mesh(me, obj, scene, context, filepath, world=None):
+def export_mesh(me, obj, scene, filepath, world=None):
     """
     This exports an object to an rvstruct object. This is also used for .w
     meshes since they're pretty much the same as PRM. The only additions are
@@ -72,7 +85,7 @@ def export_mesh(me, obj, scene, context, filepath, world=None):
 
     if world is None:
         # Applies the object scale if enabled
-        if props.apply_scale:
+        if scene.apply_scale:
             bmesh.ops.scale(
                 bm,
                 vec=obj.scale,
@@ -123,13 +136,14 @@ def export_mesh(me, obj, scene, context, filepath, world=None):
             obj.parent = parent
             obj.matrix_basis = old_mat
 
-    if context.scene.triangulate_ngons_enabled:
+    if scene.triangulate_ngons:
         num_ngons = triangulate_ngons(bm)
-        if num_ngons > 0:
+        if scene.triangulate_ngons > 0:
             print("Triangulated {} n-gons".format(num_ngons))
 
     # Gets layers
     uv_layer = bm.loops.layers.uv.get("UVMap")
+    tex_layer = bm.loops.layers.uv.get("UVMap")
     vc_layer = (bm.loops.layers.color.get("Col") or 
                 bm.loops.layers.color.new("Col"))
     env_layer = (bm.loops.layers.color.get("Env") or
@@ -176,11 +190,12 @@ def export_mesh(me, obj, scene, context, filepath, world=None):
 
         # Gets the texture number from the integer layer if setting enabled
         # use_tex_num is the only way to achieve no texture
-        if scene.revolt.use_tex_num and texnum_layer:
+        if bpy.context.scene.use_tex_num and texnum_layer:
             poly.texture = face[texnum_layer]
         # Falls back to texture if not enabled or texnum layer not found
-        elif tex_layer and face[tex_layer] and face[tex_layer].image:
-            poly.texture = texture_to_int(face[tex_layer].image.name)
+        image = get_texture_from_material(face, obj)
+        if image:
+            poly.texture = texture_to_int(image.name)
         else:
             poly.texture = -1
 

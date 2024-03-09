@@ -91,8 +91,11 @@ def import_mesh(prm, scene, filepath, envlist=None):
     return me
 
 def get_or_create_material(texture_path):
-    # If texture path is empty, return None
-    if not texture_path:
+    # If texture path is empty or the file does not exist, return None or a placeholder
+    if not texture_path or not os.path.isfile(texture_path):
+        print(f"Warning: Texture file '{texture_path}' not found.")
+        # You can choose to return None or use a default/placeholder texture
+        # Returning None will skip the texture, alternatively, you could specify a path to a default texture
         return None
 
     # Check if the material already exists
@@ -105,7 +108,7 @@ def get_or_create_material(texture_path):
     mat.use_nodes = True
     bsdf = mat.node_tree.nodes.get('Principled BSDF')
     
-    # Create image texture node
+    # Create image texture node and load the texture
     tex_image = mat.node_tree.nodes.new('ShaderNodeTexImage')
     tex_image.image = bpy.data.images.load(texture_path)
     mat.node_tree.links.new(bsdf.inputs['Base Color'], tex_image.outputs['Color'])

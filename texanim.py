@@ -292,7 +292,7 @@ class TexAnimGrid(bpy.types.Operator):
         row.prop(self, "texture", icon="TEXTURE")
 
 def update_ta_max_slots(self, context):
-    props = context.scene.revolt
+    props = context.scene
     slot = props.ta_current_slot
     frame = props.ta_current_frame
 

@@ -93,7 +93,7 @@ class ImportRV(bpy.types.Operator):
 
         elif frmt == FORMAT_W:
             from . import w_in
-            w_in.import_file(self.filepath, scene, context)
+            w_in.import_file(self.filepath, scene)
 
         elif frmt == FORMAT_RIM:
             from . import rim_in
@@ -180,7 +180,7 @@ def exec_export(self, filepath, context):
     elif frmt == FORMAT_NCP:
         from . import ncp_out
         print("Exporting to .ncp...")
-        ncp_out.export_file(filepath, scene, context)
+        ncp_out.export_file(filepath, scene)
 
     elif frmt == FORMAT_HUL:   
         from . import hul_out
@@ -375,8 +375,8 @@ class RVIO_OT_ToggleWImportCubes(bpy.types.Operator):
     bl_label = "Toggle Import Cubes"
     
     def execute(self, context):
-        props = context.scene.revolt
-        props.w_import_cubes = not props.w_import_cubes
+        w_import_cubes = context.scene.get("w_import_cubes", False)
+        context.scene["w_import_cubes"] = not w_import_cubes
         return {'FINISHED'}
 
 class RVIO_OT_SetCubeCollection(bpy.types.Operator):
@@ -414,8 +414,6 @@ class RVIO_OT_SetCubeCollection(bpy.types.Operator):
             target_collection.objects.link(obj)
 
     def execute(self, context):
-        props = context.scene.revolt
-
         imported_cubes = get_imported_cubes()
 
         self.assign_objects_to_collections(imported_cubes, self.num_collections, context)
@@ -433,8 +431,8 @@ class RVIO_OT_ToggleWImportBigCubes(bpy.types.Operator):
     bl_label = "Toggle Import Big Cubes"
     
     def execute(self, context):
-        props = context.scene.revolt
-        props.w_import_big_cubes = not props.w_import_big_cubes
+        w_import_big_cubes = context.scene.get("w_import_big_cubes", False)
+        context.scene["w_import_big_cubes"] = not w_import_big_cubes
         return {'FINISHED'}
 
 class RVIO_OT_SetBigCubeCollection(bpy.types.Operator):
@@ -472,8 +470,6 @@ class RVIO_OT_SetBigCubeCollection(bpy.types.Operator):
             target_collection.objects.link(obj)
 
     def execute(self, context):
-        props = context.scene.revolt
-
         imported_big_cubes = get_imported_big_cubes()
 
         self.assign_objects_to_collections(imported_big_cubes, self.num_collections, context)
@@ -584,50 +580,39 @@ class ButtonSelectNCPMaterial(bpy.types.Operator):
 
 class ToggleTriangulateNgons(bpy.types.Operator):
     """Toggle Triangulate Ngons"""
-    bl_idname = "object.triangulate_ngons"
+    bl_idname = "export.triangulate_ngons"
     bl_label = "Triangulate Ngons"
 
-    # Property to act as a tickbox
-    is_enabled: bpy.props.BoolProperty(
-        name="Enable Triangulation",
-        description="Toggle Triangulation",
-        default=True
-    )
-
     def execute(self, context):
-        context.scene.triangulate_ngons_enabled = not context.scene.triangulate_ngons_enabled
-        self.report({'INFO'}, "Triangulate Ngons: {}".format("Enabled" if context.scene.triangulate_ngons_enabled else "Disabled"))
+        context.scene.triangulate_ngons = not context.scene.triangulate_ngons
+        self.report({'INFO'}, "Triangulate Ngons: {}".format("Enabled" if context.scene.triangulate_ngons else "Disabled"))
         return {'FINISHED'}
 
-    @classmethod
-    def poll(cls, context):
-        return True
-
-class ToggleExportWithoutTexture(bpy.types.Operator):
+class ExportWithoutTexture(bpy.types.Operator):
     """Toggle Export w/o Texture"""
-    bl_idname = "object.export_without_texture"
+    bl_idname = "export.without_texture"
     bl_label = "Toggle Export w/o Texture"
 
     def execute(self, context):
-        context.scene.export_without_texture = not context.scene.export_without_texture
+        context.scene.use_tex_num = not context.scene.use_tex_num
         return {'FINISHED'}
     
 class ToggleApplyScale(bpy.types.Operator):
     """Toggle Apply Scale on Export"""
-    bl_idname = "object.toggle_apply_scale"
+    bl_idname = "export.apply_scale"
     bl_label = "Apply Scale on Export"
 
     def execute(self, context):
-        context.scene.apply_scale_on_export = not context.scene.apply_scale_on_export
+        context.scene.apply_scale = not context.scene.apply_scale
         return {'FINISHED'}
 
 class ToggleApplyRotation(bpy.types.Operator):
     """Toggle Apply Rotation on Export"""
-    bl_idname = "object.toggle_apply_rotation"
+    bl_idname = "export.apply_rotation"
     bl_label = "Toggle Apply Rotation on Export"
 
     def execute(self, context):
-        context.scene.apply_rotation_on_export = not context.scene.apply_rotation_on_export
+        context.scene.apply_rotation = not context.scene.apply_rotation
         return {'FINISHED'}
     
 class ButtonBakeShadow(bpy.types.Operator):
@@ -870,7 +855,7 @@ class UseTextureNumber(bpy.types.Operator):
         scene = context.scene
         if context.selected_objects:  # This ensures it affects all selected objects, not just the active one
             for obj in context.selected_objects:
-                obj.revolt.use_tex_num = scene.revolt.use_tex_num
+                obj.use_tex_num = scene.use_tex_num
         else:
             self.report({'INFO'}, "No object selected")
             return {'CANCELLED'}
@@ -926,6 +911,37 @@ class RemoveInstanceProperty(bpy.types.Operator):
         self.report({'INFO'}, f"Removed 'is_instance' property from {removed_count} objects")
         return {'FINISHED'}
     
+class InstanceColor(bpy.types.Operator):
+    bl_idname = "object.use_fin_col"
+    bl_label = "Apply Fin Color"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    fin_col: bpy.props.FloatVectorProperty(
+        name="Model Color",
+        subtype='COLOR',
+        default=(0.5, 0.5, 0.5),
+        min=0.0, max=1.0,
+        description="Model RGB color"
+    )
+
+    def execute(self, context):
+        obj = context.active_object
+
+        if obj is None:
+            self.report({'WARNING'}, "No active object")
+            return {'CANCELLED'}
+
+        # Example: Just print the color, replace with your functionality
+        print("Applying color", self.fin_col, "to", obj.name)
+
+        # Here you would typically apply the color to the object
+        # For demonstration, we'll just change the object's viewport color
+        obj.color = (self.fin_col[0], self.fin_col[1], self.fin_col[2], 1.0)  # RGBA
+
+        return {'FINISHED'}
+
+    def menu_func(self, context):
+        self.layout.operator(InstanceColor.bl_idname)
 """
 OBJECTS -----------------------------------------------------------------------
 """
@@ -1157,43 +1173,6 @@ class ButtonVertexColorSet(bpy.types.Operator):
     bl_label = "Set Color and Alpha"
     bl_description = "Apply color and alpha to selected faces"
 
-    def set_vertex_color(self, context, color, alpha):
-        obj = context.object
-        if obj.type != 'MESH' or obj.mode != 'EDIT':
-            self.report({'WARNING'}, "Operation requires an active mesh object in edit mode.")
-            return False
-
-        mesh = obj.data
-        bm = bmesh.from_edit_mesh(mesh)
-        color_layer = bm.loops.layers.color.active
-
-        if color_layer is None:
-            self.report({'WARNING'}, "No active vertex color layer found.")
-            return False
-
-        # Apply color and alpha to the vertex colors
-        for face in bm.faces:
-            if face.select:
-                for loop in face.loops:
-                    loop[color_layer] = (color[0], color[1], color[2], alpha)
-
-        bmesh.update_edit_mesh(mesh)
-        return True
-
-    def execute(self, context):
-        scene = context.scene
-        color_props = scene.vertex_color_picker_props  # Fetch color
-        alpha_value = getattr(scene, 'vertex_alpha_value', 1.0)  # Fetch alpha
-
-        # Call set_vertex_color with both color and alpha
-        success = self.set_vertex_color(context, color_props.vertex_color, alpha_value)
-
-        if success:
-            self.report({'INFO'}, "Color and alpha applied to selected faces.")
-        else:
-            self.report({'WARNING'}, "Failed to apply color and alpha.")
-        return {"FINISHED"}
-
 class ButtonVertexColorCreateLayer(bpy.types.Operator):
     bl_idname = "vertexcolor.create_layer"
     bl_label = "Create Vertex Color Layer"
@@ -1283,3 +1262,4 @@ class VertexColorRemove(bpy.types.Operator):
         bmesh.update_edit_mesh(mesh)
         self.report({'INFO'}, "Vertex color removed.")
         return {'FINISHED'}
+    

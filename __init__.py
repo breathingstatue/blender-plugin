@@ -129,7 +129,7 @@ if "rim_out" in locals():
 from .props.props_mesh import RVMeshProperties
 from .props.props_obj import RVObjectProperties
 from .props.props_scene import RVSceneProperties
-from .common import DialogOperator
+from .common import DialogOperator, TEX_ANIM_MAX
 from .operators import ImportRV, ExportRV, RVIO_OT_ReadCarParameters, RVIO_OT_SelectRevoltDirectory
 from .operators import ButtonReExport, ButtonSelectFaceProp, ButtonSelectNCPFaceProp
 from .operators import ButtonSelectNCPMaterial, ButtonVertexColorSet, VertexColorRemove
@@ -137,10 +137,10 @@ from .operators import ButtonVertexColorCreateLayer, ButtonVertexAlphaSetLayer
 from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, UseTextureNumber
 from .operators import SetInstanceProperty, RemoveInstanceProperty, BatchBake, LaunchRV, TexturesSave
 from .operators import TexturesRename, CarParametersExport, IgnoreNCP 
-from .operators import ToggleTriangulateNgons, ToggleExportWithoutTexture, ToggleApplyScale, ToggleApplyRotation
+from .operators import ToggleTriangulateNgons, ExportWithoutTexture, ToggleApplyScale, ToggleApplyRotation
 from .operators import ButtonBakeShadow, ToggleEnvironmentMap, ToggleNoMirror
 from .operators import SetEnvironmentMapColor, ToggleNoLights, ToggleNoCameraCollision
-from .operators import ToggleNoObjectCollision, ToggleMirrorPlane
+from .operators import ToggleNoObjectCollision, ToggleMirrorPlane, InstanceColor
 from .operators import SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere, RVIO_OT_ToggleWParentMeshes
 from .operators import RVIO_OT_ToggleWImportBoundBoxes, RVIO_OT_ToggleWImportCubes, RVIO_OT_ToggleWImportBigCubes
 from .operators import RVIO_OT_ToggleNCPExportSelected, RVIO_OT_ToggleNCPExportCollgrid, RVIO_OT_SetBoundBoxCollection
@@ -149,6 +149,7 @@ from .rvstruct import World, PRM, Mesh, BoundingBox, Vector, Matrix, Polygon, Ve
 from .rvstruct import Frame, Color, Instances, Instance, PosNodes, PosNode, NCP, Polyhedron, Plane, LookupGrid
 from .rvstruct import LookupList, Hull, ConvexHull, Edge, Interior, Sphere, RIM, MirrorPlane, TrackZones, Zone
 from .texanim import ButtonCopyUvToFrame, ButtonCopyFrameToUv, PreviewNextFrame, PreviewPrevFrame, TexAnimTransform, TexAnimGrid
+from .texanim import update_ta_max_slots, update_ta_current_slot, update_ta_current_frame
 from .ui.faceprops import RVIO_PT_RevoltFacePropertiesPanel
 from .ui.headers import RVIO_PT_RevoltIOToolPanel
 from .ui.helpers import RVIO_PT_RevoltHelpersPanelMesh
@@ -221,6 +222,117 @@ def register():
     props_obj.register()
     props_mesh.register()
     
+    bpy.types.Scene.texture_animations = bpy.props.StringProperty(
+        name="Texture Animations",
+        default="[]",
+        description="Storage for Texture animations. Should not be changed by hand"
+    )
+    
+    bpy.types.Scene.ta_max_slots = bpy.props.IntProperty(
+        name="Slots",
+        min=0,
+        max=TEX_ANIM_MAX,
+        default=0,
+        update=update_ta_max_slots,
+        description="Total number of texture animation slots. All higher slots will be ignored on export"
+    )
+    
+    bpy.types.Scene.ta_current_slot = bpy.props.IntProperty(
+        name = "Animation",
+        default = 0,
+        min = 0,
+        max = TEX_ANIM_MAX-1,
+        update = update_ta_current_slot,
+        description = "Texture animation slot"
+    )
+    
+    bpy.types.Scene.ta_current_frame = bpy.props.IntProperty(
+        name = "Frame",
+        default = 0,
+        min = 0,
+        update = update_ta_current_frame,
+        description = "Current frame"
+    )
+    
+    bpy.types.Scene.w_import_cubes = bpy.props.BoolProperty(name="Import Cubes", default=False)
+    bpy.types.Scene.w_import_big_cubes = bpy.props.BoolProperty(name="Import Big Cubes", default=False)
+
+    bpy.types.Scene.vertex_alpha_value = bpy.props.FloatProperty(
+        name="Vertex Alpha Value",
+        description="Alpha value for vertex colors",
+        default=1.0,  # Default to fully opaque
+        min=0.0, max=1.0
+        )
+    
+    bpy.types.Scene.stored_vertex_color = bpy.props.FloatVectorProperty(
+        name="Stored Vertex Color",
+        subtype='COLOR',
+        default=(1.0, 1.0, 1.0),  # Default to white
+        min=0.0,
+        max=1.0,
+        description="Stored vertex color for later use"
+    )
+    
+    bpy.types.Scene.triangulate_ngons = bpy.props.BoolProperty(
+        name="Triangulate Ngons",
+        description="Enable or disable ngon triangulation",
+        default=True
+    )
+  
+    bpy.types.Scene.use_tex_num = bpy.props.BoolProperty(
+        name = "Use Number for Textures",
+        default = False,
+        description = "Uses the texture number from the texture layer "
+                      "accessible in the tool shelf in Edit mode.\n"
+                      "Otherwise, it uses the texture from the texture file"
+    )
+
+    bpy.types.Scene.apply_scale = bpy.props.BoolProperty(
+        name="Apply Scale on Export",
+        default=True,
+        description="Apply object scale during export"
+    )
+    
+    bpy.types.Scene.apply_rotation_on_export = bpy.props.BoolProperty(
+        name="Apply Rotation on Export",
+        default=True,
+        description="Apply object rotation during export"
+    )
+    
+    bpy.types.Scene.apply_translation = bpy.props.BoolProperty(
+        name = "Apply Translation",
+        default = False,
+        description = "Applies the object location on export. Should be disabled for single/instance ncp files"
+    )
+    
+    bpy.types.Scene.rvgl_dir = bpy.props.StringProperty(
+        name="RVGL Directory",
+        subtype='DIR_PATH',
+        description="Directory where RVGL is located"
+    )
+    
+    bpy.types.Scene.ncp_export_selected = bpy.props.BoolProperty(
+        name = "Only export selected",
+        default = False,
+        description = "Only exports the selected objects"
+    )
+    
+    bpy.types.Scene.ncp_export_collgrid = bpy.props.BoolProperty(
+        name = "Export Collision Grid (.w)",
+        default = True,
+        description = "Export a collision grid to the .ncp file:\n\n"
+                      "Enable this if you want to export a level (.w) "
+                      ".ncp file"
+    )
+
+    bpy.types.Scene.ncp_collgrid_size = bpy.props.IntProperty(
+        name="NCP Grid Size",
+        default=1024,
+        min=512,
+        max=8192,
+        description="Size of the lookup grid"
+    )
+    
     #Register Operators
     bpy.utils.register_class(DialogOperator)
     bpy.utils.register_class(ImportRV)
@@ -258,7 +370,7 @@ def register():
     bpy.utils.register_class(OBJECT_OT_add_revolt_track_zone)
     bpy.utils.register_class(IgnoreNCP)
     bpy.utils.register_class(ToggleTriangulateNgons)
-    bpy.utils.register_class(ToggleExportWithoutTexture)
+    bpy.utils.register_class(ExportWithoutTexture)
     bpy.utils.register_class(ToggleApplyScale)
     bpy.utils.register_class(ToggleApplyRotation)
     bpy.utils.register_class(SetBCubeMeshIndices)
@@ -269,6 +381,7 @@ def register():
     bpy.utils.register_class(ToggleNoCameraCollision)
     bpy.utils.register_class(ToggleNoObjectCollision)
     bpy.utils.register_class(ToggleMirrorPlane)
+    bpy.utils.register_class(InstanceColor)
     bpy.utils.register_class(VertexColorPickerProperties)
     bpy.utils.register_class(VertexColorRemove)
     bpy.utils.register_class(RVIO_OT_SelectRevoltDirectory)
@@ -295,77 +408,6 @@ def register():
     bpy.utils.register_class(RVIO_PT_RevoltLightPanel)
     bpy.utils.register_class(RVIO_PT_RevoltObjectPanel)
     
-    bpy.types.Scene.vertex_color_picker_props = bpy.props.PointerProperty(type=VertexColorPickerProperties)
-    
-    bpy.types.Scene.vertex_alpha_value = bpy.props.FloatProperty(
-        name="Vertex Alpha Value",
-        description="Alpha value for vertex colors",
-        default=1.0,  # Default to fully opaque
-        min=0.0, max=1.0
-        )
-    
-    bpy.types.Scene.stored_vertex_color = bpy.props.FloatVectorProperty(
-        name="Stored Vertex Color",
-        subtype='COLOR',
-        default=(1.0, 1.0, 1.0),  # Default to white
-        min=0.0,
-        max=1.0,
-        description="Stored vertex color for later use"
-    )
-    
-    bpy.types.Scene.triangulate_ngons_enabled = bpy.props.BoolProperty(
-        name="Triangulate Ngons",
-        description="Enable or disable ngon triangulation",
-        default=True
-    )
-  
-    bpy.types.Scene.export_without_texture = bpy.props.BoolProperty(
-        name="Export w/o Texture",
-        description="Export objects without textures",
-        default=False
-    )
-
-    bpy.types.Scene.apply_scale_on_export = bpy.props.BoolProperty(
-        name="Apply Scale on Export",
-        default=True,
-        description="Apply object scale during export"
-    )
-    
-    bpy.types.Scene.apply_rotation_on_export = bpy.props.BoolProperty(
-        name="Apply Rotation on Export",
-        default=True,
-        description="Apply object rotation during export"
-    )
-    
-    bpy.types.Scene.rvgl_dir = bpy.props.StringProperty(
-        name="RVGL Directory",
-        subtype='DIR_PATH',
-        description="Directory where RVGL is located"
-    )
-    
-    bpy.types.Scene.ncp_export_selected = bpy.props.BoolProperty(
-        name = "Only export selected",
-        default = False,
-        description = "Only exports the selected objects"
-    )
-    
-    bpy.types.Scene.ncp_export_collgrid = bpy.props.BoolProperty(
-        name = "Export Collision Grid (.w)",
-        default = True,
-        description = "Export a collision grid to the .ncp file:\n\n"
-                      "Enable this if you want to export a level (.w) "
-                      ".ncp file"
-    )
-
-    bpy.types.Scene.ncp_collgrid_size = bpy.props.IntProperty(
-        name="NCP Grid Size",
-        default=1024,
-        min=512,
-        max=8192,
-        description="Size of the lookup grid"
-    )
-    
-    
     # UI and Handlers Registration
     bpy.app.handlers.depsgraph_update_pre.append(edit_object_change_handler)
     bpy.app.handlers.load_post.append(load_handler)
@@ -376,18 +418,8 @@ def unregister():
     if load_handler in bpy.app.handlers.load_post:
         bpy.app.handlers.load_post.remove(load_handler)
     bpy.app.handlers.depsgraph_update_pre.remove(edit_object_change_handler)
-    
-    del bpy.types.Scene.ncp_export_selected
-    del bpy.types.Scene.ncp_export_collgrid
-    del bpy.types.Scene.ncp_collgrid_size
-    del bpy.types.Scene.rvgl_dir
-    del bpy.types.Scene.apply_rotation_on_export
-    del bpy.types.Scene.apply_scale_on_export
-    del bpy.types.Scene.export_without_texture
-    del bpy.types.Scene.triangulate_ngons_enabled
-    del bpy.types.Scene.stored_vertex_color
-    del bpy.types.Scene.vertex_alpha_value
-    del bpy.types.Scene.vertex_color_picker_props
+     
+    bpy.types.VIEW3D_MT_mesh_add.remove(menu_func)
             
     # Unregister Classes
 
@@ -417,6 +449,7 @@ def unregister():
     bpy.utils.unregister_class(RVIO_OT_SelectRevoltDirectory)
     bpy.utils.unregister_class(VertexColorRemove)
     bpy.utils.unregister_class(VertexColorPickerProperties)
+    bpy.utils.unregister_class(InstanceColor)
     bpy.utils.unregister_class(ToggleMirrorPlane)
     bpy.utils.unregister_class(ToggleNoObjectCollision)
     bpy.utils.unregister_class(ToggleNoCameraCollision)
@@ -427,7 +460,7 @@ def unregister():
     bpy.utils.unregister_class(SetBCubeMeshIndices)
     bpy.utils.unregister_class(ToggleApplyRotation)
     bpy.utils.unregister_class(ToggleApplyScale)
-    bpy.utils.unregister_class(ToggleExportWithoutTexture)
+    bpy.utils.unregister_class(ExportWithoutTexture)
     bpy.utils.unregister_class(ToggleTriangulateNgons)
     bpy.utils.unregister_class(IgnoreNCP)
     bpy.utils.unregister_class(OBJECT_OT_add_revolt_track_zone)
@@ -464,6 +497,24 @@ def unregister():
     bpy.utils.unregister_class(ExportRV)
     bpy.utils.unregister_class(ImportRV)
     bpy.utils.unregister_class(DialogOperator)
+    
+    del bpy.types.Scene.ncp_export_selected
+    del bpy.types.Scene.ncp_export_collgrid
+    del bpy.types.Scene.ncp_collgrid_size
+    del bpy.types.Scene.rvgl_dir
+    del bpy.types.Scene.apply_rotation_on_export
+    del bpy.types.Scene.apply_scale
+    del bpy.types.Scene.export_without_texture
+    del bpy.types.Scene.triangulate_ngons
+    del bpy.types.Scene.stored_vertex_color
+    del bpy.types.Scene.vertex_alpha_value
+    
+    del bpy.types.Scene.w_import_cubes
+    del bpy.types.Scene.w_import_big_cubes
+    del bpy.types.Scene.update_ta_current_frame
+    del bpy.types.Scene.update_ta_current_slot
+    del bpy.types.Scene.ta_max_slots
+    del bpy.types.Scene.texture_animations
     
     # Unregister Custom Properties
     props_mesh.unregister()
