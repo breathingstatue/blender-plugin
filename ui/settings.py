@@ -13,7 +13,7 @@ class RVIO_PT_RevoltSettingsPanel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        props = context.scene.revolt
+        scene = context.scene
         
         # Directory selection
         layout.label(text="Select RVGL Directory:")
@@ -38,7 +38,6 @@ class RVIO_PT_RevoltSettingsPanel(bpy.types.Panel):
         layout.separator()
 
         # General export settings
-        scene = context.scene
         layout.label(text="Export:")
         layout.operator("export.triangulate_ngons", text="Triangluate Ngons")
         layout.operator("export.without_texture", text="Export w/o Texture")
@@ -54,14 +53,8 @@ class RVIO_PT_RevoltSettingsPanel(bpy.types.Panel):
         layout.label(text="Import World (.w):")
         layout.operator("rvio.toggle_w_parent_meshes", text="w_parent_meshes")
         layout.operator("rvio.toggle_w_import_bound_boxes", text="w_import_bound_boxes")
-        if props.w_import_bound_boxes:
-            layout.operator("rvio.set_bound_box_collection", text="w_bound_boxes_collections")
         layout.operator("rvio.toggle_w_import_cubes", text="w_import_cubes")
-        if props.w_import_cubes:
-            layout.operator("rvio.set_cube_collection", text="cubes_collections")
         layout.operator("rvio.toggle_w_import_big_cubes", text="w_import_big_cubes")
-        if props.w_import_big_cubes:
-            layout.operator("rvio.set_big_cube_collection", text="w_big_cube_collections")
         layout.separator()
 
         # NCP Export settings

@@ -4,7 +4,7 @@ class RVIO_PT_RevoltFacePropertiesPanel(bpy.types.Panel):
     bl_label = "Face Properties"
     bl_space_type = "PROPERTIES"
     bl_region_type = "WINDOW"
-    bl_context = "data"
+    bl_context = "object"
 
     selection = None
     selected_face_count = None

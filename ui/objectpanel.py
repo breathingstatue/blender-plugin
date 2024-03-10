@@ -52,4 +52,3 @@ class RVIO_PT_RevoltObjectPanel(bpy.types.Panel):
         box.label(text="Hull Properties:")
         col = box.column(align=True)
         col.operator("hull.generate")
-        col.operator("object.add_hull_sphere")
