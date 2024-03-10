@@ -10,16 +10,13 @@ World files contain meshes, optimization data and texture animations.
 import os
 import bpy
 import bmesh
-from mathutils import Color, Vector
-from . import common
-from . import rvstruct
-from . import img_in
-from . import prm_in
-
+from mathutils import Vector
+from . import common, rvstruct, img_in, prm_in
 from .rvstruct import World
 from .common import *
 from .prm_in import import_mesh
 
+# Reload modules if already loaded
 if "bpy" in locals():
     import imp
     imp.reload(common)
@@ -27,60 +24,50 @@ if "bpy" in locals():
     imp.reload(img_in)
     imp.reload(prm_in)
 
-
 def import_file(filepath, scene):
-    """
-    Imports a .w file and links it to the scene as a Blender object.
-    """
-
     with open(filepath, 'rb') as file:
         filename = os.path.basename(filepath)
         world = World(file)
 
     meshes = world.meshes
-    print(f"Imported {filename} ({len(meshes)} meshes)")
+    print(f"Imported {filename} with {len(meshes)} meshes")
 
-    # Creates an empty object to parent meshes to if enabled in settings
+    main_w = None
     if scene.get('w_parent_meshes', False):
-        main_w = bpy.data.objects.new(os.path.basename(filename), None)
+        main_w = bpy.data.objects.new(filename, None)
         scene.collection.objects.link(main_w)
 
-    for rvmesh in meshes:
+    for index, rvmesh in enumerate(meshes):
+        mesh_name = filename if index == 0 else f"{filename}.{str(index).zfill(3)}"
         me = import_mesh(rvmesh, scene, filepath, world.env_list)
-        ob = bpy.data.objects.new(filename, me)
+        ob = bpy.data.objects.new(mesh_name, me)
         scene.collection.objects.link(ob)
 
-        # Set active object
-        bpy.context.view_layer.objects.active = ob
-        ob.select_set(True)
-
-        # Parents the mesh to the main .w object if the setting is enabled
-        if scene.get('w_parent_meshes', False):
+        if main_w:
             ob.parent = main_w
 
-            # Imports bound box for each mesh if enabled in settings
-            if scene.get('w_import_bound_boxes', False):
-                bbox = create_bound_box(scene, rvmesh.bbox, filename)
-                # You need to update the handling of layers and is_bbox flag
-                bbox.parent = ob
+        if scene.get('w_import_bound_boxes', False):
+            bbox = create_bound_box(scene, rvmesh.bbox, mesh_name)
+            bbox.parent = ob if not main_w else main_w
+            bbox["is_bbox"] = True
 
-            # Imports bound cube for each mesh if enabled in settings
-            if scene.get('w_import_cubes', False):
-                radius = rvmesh.bound_ball_radius
-                center = rvmesh.bound_ball_center.data
-                cube = create_cube(scene, "CUBE", center, radius, filename)
-                # You need to update the handling of layers and is_cube flag
-                cube.parent = ob
+        if scene.get('w_import_cubes', False):
+            center = rvmesh.bound_ball_center.data
+            radius = rvmesh.bound_ball_radius
+            cube = create_cube(scene, "CUBE", center, radius, mesh_name)
+            cube.parent = ob if not main_w else main_w
+            cube["is_cube"] = True
 
-    # Creates the big cubes around multiple meshes if enabled
+    # Import big cubes - should be outside the mesh loop
     if scene.get('w_import_big_cubes', False):
-        for cube in world.bigcubes:
-            radius = cube.size
-            center = cube.center.data
+        if world.bigcubes:
+            cube_data = world.bigcubes[0]
+            radius = cube_data.size
+            center = cube_data.center.data
             bcube = create_cube(scene, "BIGCUBE", center, radius, filename)
-            # You need to update the handling of is_bcube flag and layers
-            if scene.get('w_parent_meshes', False):
+            if main_w:
                 bcube.parent = main_w
+            bcube["is_bcube"] = True
 
     scene.texture_animations = str([a.as_dict() for a in world.animations])
     scene.ta_max_slots = world.animation_count

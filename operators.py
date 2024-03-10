@@ -39,6 +39,105 @@ from bpy.props import (
 )
 
 """
+BUTTONS ------------------------------------------------------------------------
+"""
+
+class RVIO_OT_SelectRevoltDirectory(bpy.types.Operator):
+    bl_idname = "rvio.select_rvgl_dir"
+    bl_label = "Select Re-Volt Directory"
+    bl_description = "Select the directory where RVGL is located"
+
+    directory: bpy.props.StringProperty(subtype='DIR_PATH')
+
+    def execute(self, context):
+        context.scene.rvgl_dir = self.directory
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+class ButtonSelectFaceProp(bpy.types.Operator):
+    bl_idname = "faceprops.select"
+    bl_label = "sel"
+    bl_description = "Select or delesect all polygons with this property"
+    prop = bpy.props.IntProperty()
+
+    def execute(self, context):
+        select_faces(context, self.prop)
+        return{"FINISHED"}
+
+
+class ButtonSelectNCPFaceProp(bpy.types.Operator):
+    bl_idname = "ncpfaceprops.select"
+    bl_label = "sel"
+    bl_description = "Select or delesect all polygons with this property"
+    prop = bpy.props.IntProperty()
+
+    def execute(self, context):
+        select_ncp_faces(context, self.prop)
+        return{"FINISHED"}
+
+
+class ButtonSelectNCPMaterial(bpy.types.Operator):
+    bl_idname = "ncpmaterial.select"
+    bl_label = "sel"
+    bl_description = "Select all faces of the same material"
+
+    def execute(self, context):
+        props = context.scene.revolt
+        meshprops = context.object.data.revolt
+        props.select_material = meshprops.face_material
+        return{"FINISHED"}
+
+class ToggleTriangulateNgons(bpy.types.Operator):
+    """Toggle Triangulate Ngons"""
+    bl_idname = "export.triangulate_ngons"
+    bl_label = "Triangulate Ngons"
+
+    def execute(self, context):
+        context.scene.triangulate_ngons = not context.scene.triangulate_ngons
+        self.report({'INFO'}, "Triangulate Ngons: {}".format("Enabled" if context.scene.triangulate_ngons else "Disabled"))
+        return {'FINISHED'}
+
+class ExportWithoutTexture(bpy.types.Operator):
+    """Toggle Export w/o Texture"""
+    bl_idname = "export.without_texture"
+    bl_label = "Toggle Export w/o Texture"
+
+    def execute(self, context):
+        context.scene.use_tex_num = not context.scene.use_tex_num
+        return {'FINISHED'}
+    
+class ToggleApplyScale(bpy.types.Operator):
+    """Toggle Apply Scale on Export"""
+    bl_idname = "export.apply_scale"
+    bl_label = "Apply Scale on Export"
+
+    def execute(self, context):
+        context.scene.apply_scale = not context.scene.apply_scale
+        return {'FINISHED'}
+
+class ToggleApplyRotation(bpy.types.Operator):
+    """Toggle Apply Rotation on Export"""
+    bl_idname = "export.apply_rotation"
+    bl_label = "Toggle Apply Rotation on Export"
+
+    def execute(self, context):
+        context.scene.apply_rotation = not context.scene.apply_rotation
+        return {'FINISHED'}
+    
+class ButtonBakeShadow(bpy.types.Operator):
+    bl_idname = "button.bake_shadow"
+    bl_label = "Bake Shadow"
+    bl_description = "Creates a shadow plane beneath the selected object"
+
+    def execute(self, context):
+        bake_shadow(context)
+        return {"FINISHED"}
+    
+
+"""
 IMPORT AND EXPORT -------------------------------------------------------------
 """
 
@@ -137,14 +236,14 @@ class ExportRV(bpy.types.Operator):
     filepath: bpy.props.StringProperty(subtype="FILE_PATH") 
 
     def execute(self, context):
-        return exec_export(self, self.filepath, context)
+        return exec_export(self.filepath, context)
 
     def invoke(self, context, event):
         context.window_manager.fileselect_add(self)
      
         return {'RUNNING_MODAL'}
     
-def exec_export(self, filepath, context):
+def exec_export(filepath, context):
     scene = context.scene
     props = context.scene.revolt
 
@@ -161,7 +260,7 @@ def exec_export(self, filepath, context):
         bpy.ops.object.mode_set(mode="OBJECT")
 
     # Saves filepath for re-exporting the same file
-    props.last_exported_filepath = filepath
+    scene.last_exported_filepath = filepath
     
     # Handle different formats
     if frmt == FORMAT_UNK:
@@ -211,16 +310,9 @@ def exec_export(self, filepath, context):
         
     context.window.cursor_set("DEFAULT")
 
-    # Gets any encountered errors
-    errors = get_errors()
-
-    # Display export results
     end_time = time.time() - start_time
-
-    # Define an icon (replace 'ICON_NAME' with the actual icon name you want to use)
-    icon = 'INFO'  # You can change this to 'ERROR' if needed
-
-    self.report({'INFO'}, "Export to {} done in {:.3f} seconds.\n{}".format(FORMATS[frmt], end_time, errors))
+    errors = get_errors()  # Make sure this function does not depend on 'self'
+    print("Export to {} done in {:.3f} seconds.\n{}".format(FORMATS[frmt], end_time, errors))
 
     return {"FINISHED"}
     
@@ -294,193 +386,54 @@ class ButtonReExport(bpy.types.Operator):
     bl_description = "Redo the same export again"
 
     def execute(self, context):
-        props = context.scene.revolt
-        res = exec_export(props.last_exported_filepath, context)
-        return res
+        scene = context.scene
+        filepath = scene.last_exported_filepath
+        if filepath:
+            result = exec_export(filepath, context)
+            if result == {'FINISHED'}:
+                self.report({'INFO'}, "Re-export successful.")
+            else:
+                self.report({'WARNING'}, "Re-export may have encountered issues.")
+            return result
+        else:
+            self.report({'WARNING'}, "No file path found for re-exporting.")
+            return {'CANCELLED'}
     
-# Operator for toggling w_parent_meshes
 class RVIO_OT_ToggleWParentMeshes(bpy.types.Operator):
     bl_idname = "rvio.toggle_w_parent_meshes"
     bl_label = "Toggle Parent Meshes"
     
     def execute(self, context):
-        props = context.scene.revolt
-        props.w_parent_meshes = not props.w_parent_meshes
+        context.scene.w_parent_meshes = not context.scene.w_parent_meshes
+        self.report({'INFO'}, f"Toggle Parent Meshes: {'ON' if context.scene.w_parent_meshes else 'OFF'}")
         return {'FINISHED'}
 
-# Operator for toggling w_import_bound_boxes
 class RVIO_OT_ToggleWImportBoundBoxes(bpy.types.Operator):
     bl_idname = "rvio.toggle_w_import_bound_boxes"
     bl_label = "Toggle Import Bound Boxes"
     
     def execute(self, context):
-        props = context.scene.revolt
-        props.w_import_bound_boxes = not props.w_import_bound_boxes
+        context.scene.w_import_bound_boxes = not context.scene.w_import_bound_boxes
+        self.report({'INFO'}, f"Toggle Import Bound Boxes: {'ON' if context.scene.w_import_bound_boxes else 'OFF'}")
         return {'FINISHED'}
 
-class RVIO_OT_SetBoundBoxCollection(bpy.types.Operator):
-    bl_idname = "rvio.set_bound_box_collection"
-    bl_label = "Set Bound Box Collection"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    num_collections: bpy.props.IntProperty(
-        name="Number of Collections", 
-        default=1, 
-        min=1, 
-        max=19, 
-        description="Number of collections to assign bound boxes to"
-    )
-
-def assign_objects_to_collections(objects, num_collections, context):
-    # Ensure there is at least one collection
-    if num_collections < 1:
-        return
-    
-    # Create or get existing collections
-    collections = []
-    for i in range(num_collections):
-        collection_name = f"Collection_{i+1}"
-        collection = bpy.data.collections.get(collection_name)
-        if not collection:
-            collection = bpy.data.collections.new(collection_name)
-            context.scene.collection.children.link(collection)  # Link collection to the scene
-        collections.append(collection)
-
-    # Distribute objects across collections
-    for index, obj in enumerate(objects):
-        target_collection = collections[min(index, num_collections - 1)]
-        # Link object to target collection and unlink from all others
-        for collection in obj.users_collection:
-            collection.objects.unlink(obj)
-        target_collection.objects.link(obj)
-
-def execute(self, context):
-    props = context.scene.rvgl_props
-
-    imported_bound_boxes = get_imported_bound_boxes()
-
-    assign_objects_to_collections(imported_bound_boxes, self.num_collections, context)
-
-    return {'FINISHED'}
-
-    def invoke(self, context, event):
-        return context.window_manager.invoke_props_dialog(self)
-
-    def draw(self, context):
-        self.layout.prop(self, "num_collections", text="Number of Collections")
-
-# Operator for toggling w_import_cubes
 class RVIO_OT_ToggleWImportCubes(bpy.types.Operator):
     bl_idname = "rvio.toggle_w_import_cubes"
     bl_label = "Toggle Import Cubes"
     
     def execute(self, context):
-        w_import_cubes = context.scene.get("w_import_cubes", False)
-        context.scene["w_import_cubes"] = not w_import_cubes
+        context.scene.w_import_cubes = not context.scene.get("w_import_cubes", False)
+        self.report({'INFO'}, f"Toggle Import Cubes: {'ON' if context.scene.w_import_cubes else 'OFF'}")
         return {'FINISHED'}
-
-class RVIO_OT_SetCubeCollection(bpy.types.Operator):
-    bl_idname = "rvio.set_cube_collection"
-    bl_label = "Set Cube Collection"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    num_collections: bpy.props.IntProperty(
-        name="Number of Collections",
-        default=1,
-        min=1,
-        max=19,
-        description="Number of collections to assign cubes to"
-    )
-
-    def assign_objects_to_collections(self, objects, num_collections, context):
-        if num_collections < 1:
-            return
-        
-        # Create or get existing collections
-        collections = []
-        for i in range(num_collections):
-            collection_name = f"Cube_Collection_{i+1}"
-            collection = bpy.data.collections.get(collection_name)
-            if not collection:
-                collection = bpy.data.collections.new(collection_name)
-                context.scene.collection.children.link(collection)
-            collections.append(collection)
-
-        # Distribute cubes across collections
-        for index, obj in enumerate(objects):
-            target_collection = collections[min(index, num_collections - 1)]
-            for collection in obj.users_collection:
-                collection.objects.unlink(obj)
-            target_collection.objects.link(obj)
-
-    def execute(self, context):
-        imported_cubes = get_imported_cubes()
-
-        self.assign_objects_to_collections(imported_cubes, self.num_collections, context)
-
-        return {'FINISHED'}
-
-    def invoke(self, context, event):
-        return context.window_manager.invoke_props_dialog(self)
-
-    def draw(self, context):
-        self.layout.prop(self, "num_collections", text="Number of Collections")
 
 class RVIO_OT_ToggleWImportBigCubes(bpy.types.Operator):
     bl_idname = "rvio.toggle_w_import_big_cubes"
     bl_label = "Toggle Import Big Cubes"
     
     def execute(self, context):
-        w_import_big_cubes = context.scene.get("w_import_big_cubes", False)
-        context.scene["w_import_big_cubes"] = not w_import_big_cubes
+        context.scene.w_import_big_cubes = not context.scene.get("w_import_big_cubes", False)
+        self.report({'INFO'}, f"Toggle Import Big Cubes: {'ON' if context.scene.w_import_big_cubes else 'OFF'}")
         return {'FINISHED'}
-
-class RVIO_OT_SetBigCubeCollection(bpy.types.Operator):
-    bl_idname = "rvio.set_big_cube_collection"
-    bl_label = "Set Big Cube Collection"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    num_collections: bpy.props.IntProperty(
-        name="Number of Collections",
-        default=1,
-        min=1,
-        max=19,
-        description="Number of collections to assign big cubes to"
-    )
-
-    def assign_objects_to_collections(self, objects, num_collections, context):
-        if num_collections < 1:
-            return
-        
-        # Create or get existing collections
-        collections = []
-        for i in range(num_collections):
-            collection_name = f"Big_Cube_Collection_{i+1}"
-            collection = bpy.data.collections.get(collection_name)
-            if not collection:
-                collection = bpy.data.collections.new(collection_name)
-                context.scene.collection.children.link(collection)
-            collections.append(collection)
-
-        # Distribute big cubes across collections
-        for index, obj in enumerate(objects):
-            target_collection = collections[min(index, num_collections - 1)]
-            for collection in obj.users_collection:
-                collection.objects.unlink(obj)
-            target_collection.objects.link(obj)
-
-    def execute(self, context):
-        imported_big_cubes = get_imported_big_cubes()
-
-        self.assign_objects_to_collections(imported_big_cubes, self.num_collections, context)
-
-        return {'FINISHED'}
-
-    def invoke(self, context, event):
-        return context.window_manager.invoke_props_dialog(self)
-
-    def draw(self, context):
-        self.layout.prop(self, "num_collections", text="Number of Collections")
 
 class RVIO_OT_ToggleNCPExportSelected(bpy.types.Operator):
     bl_idname = "rvio.toggle_ncp_export_selected"
@@ -526,103 +479,6 @@ class RVIO_OT_SetNCPGridSize(bpy.types.Operator):
     def draw(self, context):
         self.layout.prop(self, "grid_size", text="Grid Size", slider=True)
     
-"""
-BUTTONS ------------------------------------------------------------------------
-"""
-
-class RVIO_OT_SelectRevoltDirectory(bpy.types.Operator):
-    bl_idname = "rvio.select_rvgl_dir"
-    bl_label = "Select Re-Volt Directory"
-    bl_description = "Select the directory where RVGL is located"
-
-    directory: bpy.props.StringProperty(subtype='DIR_PATH')
-
-    def execute(self, context):
-        context.scene.rvgl_dir = self.directory
-        return {'FINISHED'}
-
-    def invoke(self, context, event):
-        context.window_manager.fileselect_add(self)
-        return {'RUNNING_MODAL'}
-
-class ButtonSelectFaceProp(bpy.types.Operator):
-    bl_idname = "faceprops.select"
-    bl_label = "sel"
-    bl_description = "Select or delesect all polygons with this property"
-    prop = bpy.props.IntProperty()
-
-    def execute(self, context):
-        select_faces(context, self.prop)
-        return{"FINISHED"}
-
-
-class ButtonSelectNCPFaceProp(bpy.types.Operator):
-    bl_idname = "ncpfaceprops.select"
-    bl_label = "sel"
-    bl_description = "Select or delesect all polygons with this property"
-    prop = bpy.props.IntProperty()
-
-    def execute(self, context):
-        select_ncp_faces(context, self.prop)
-        return{"FINISHED"}
-
-
-class ButtonSelectNCPMaterial(bpy.types.Operator):
-    bl_idname = "ncpmaterial.select"
-    bl_label = "sel"
-    bl_description = "Select all faces of the same material"
-
-    def execute(self, context):
-        props = context.scene.revolt
-        meshprops = context.object.data.revolt
-        props.select_material = meshprops.face_material
-        return{"FINISHED"}
-
-class ToggleTriangulateNgons(bpy.types.Operator):
-    """Toggle Triangulate Ngons"""
-    bl_idname = "export.triangulate_ngons"
-    bl_label = "Triangulate Ngons"
-
-    def execute(self, context):
-        context.scene.triangulate_ngons = not context.scene.triangulate_ngons
-        self.report({'INFO'}, "Triangulate Ngons: {}".format("Enabled" if context.scene.triangulate_ngons else "Disabled"))
-        return {'FINISHED'}
-
-class ExportWithoutTexture(bpy.types.Operator):
-    """Toggle Export w/o Texture"""
-    bl_idname = "export.without_texture"
-    bl_label = "Toggle Export w/o Texture"
-
-    def execute(self, context):
-        context.scene.use_tex_num = not context.scene.use_tex_num
-        return {'FINISHED'}
-    
-class ToggleApplyScale(bpy.types.Operator):
-    """Toggle Apply Scale on Export"""
-    bl_idname = "export.apply_scale"
-    bl_label = "Apply Scale on Export"
-
-    def execute(self, context):
-        context.scene.apply_scale = not context.scene.apply_scale
-        return {'FINISHED'}
-
-class ToggleApplyRotation(bpy.types.Operator):
-    """Toggle Apply Rotation on Export"""
-    bl_idname = "export.apply_rotation"
-    bl_label = "Toggle Apply Rotation on Export"
-
-    def execute(self, context):
-        context.scene.apply_rotation = not context.scene.apply_rotation
-        return {'FINISHED'}
-    
-class ButtonBakeShadow(bpy.types.Operator):
-    bl_idname = "button.bake_shadow"
-    bl_label = "Bake Shadow"
-    bl_description = "Creates a shadow plane beneath the selected object"
-
-    def execute(self, context):
-        bake_shadow(context)
-        return {"FINISHED"}
 
 """
 HELPERS -----------------------------------------------------------------------
@@ -1132,8 +988,39 @@ class ButtonHullGenerate(bpy.types.Operator):
             self.report({'ERROR'}, "Convex hull generation failed.")
         return {'FINISHED'}
 
+"""
+TRACK ZONES & HULL SPHERE -------------------------------------------------------
+"""
+
+class ButtonZoneHide(bpy.types.Operator):
+    bl_idname = "scene.zone_hide"
+    bl_label = "Show / Hide Track Zones"
+    bl_description = (
+        "Shows or hides all track zones"
+    )
+    def execute(self, context):
+        if bpy.data.groups.get('TRACK_ZONES'):
+            for obj in bpy.data.groups['TRACK_ZONES'].objects:
+                obj.hide = not obj.hide
+        
+        return{"FINISHED"}
+
+class AddTrackZone(bpy.types.Operator):
+    bl_idname = "scene.add_track_zone"
+    bl_label = "Track Zone"
+    bl_description = (
+        "Adds a new track zone under cursor location"
+    )
+    bl_options = {'UNDO'}
+    
+    def execute(self, context):
+        from ..taz_in import create_zone
+        obj = create_zone(None, bpy.context.scene.cursor_location)
+
+        return {'FINISHED'}
+    
 class ButtonHullSphere(bpy.types.Operator):
-    bl_idname = "object.add_hull_sphere"
+    bl_idname = "scene.add_hull_sphere"
     bl_label = "Add Hull Sphere"
     bl_description = "Creates a hull sphere at the 3D cursor's location"
     bl_options = {'REGISTER', 'UNDO'}
@@ -1163,6 +1050,8 @@ class ButtonHullSphere(bpy.types.Operator):
         context.view_layer.objects.active = ob
 
         return {'FINISHED'}
+    
+
     
 """
 VERTEX COLORS -----------------------------------------------------------------
@@ -1262,4 +1151,3 @@ class VertexColorRemove(bpy.types.Operator):
         bmesh.update_edit_mesh(mesh)
         self.report({'INFO'}, "Vertex color removed.")
         return {'FINISHED'}
-    

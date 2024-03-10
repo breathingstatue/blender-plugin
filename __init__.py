@@ -136,15 +136,15 @@ from .operators import ButtonSelectNCPMaterial, ButtonVertexColorSet, VertexColo
 from .operators import ButtonVertexColorCreateLayer, ButtonVertexAlphaSetLayer
 from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, UseTextureNumber
 from .operators import SetInstanceProperty, RemoveInstanceProperty, BatchBake, LaunchRV, TexturesSave
-from .operators import TexturesRename, CarParametersExport, IgnoreNCP 
+from .operators import TexturesRename, CarParametersExport, IgnoreNCP, ButtonZoneHide, AddTrackZone
 from .operators import ToggleTriangulateNgons, ExportWithoutTexture, ToggleApplyScale, ToggleApplyRotation
 from .operators import ButtonBakeShadow, ToggleEnvironmentMap, ToggleNoMirror
 from .operators import SetEnvironmentMapColor, ToggleNoLights, ToggleNoCameraCollision
 from .operators import ToggleNoObjectCollision, ToggleMirrorPlane, InstanceColor
 from .operators import SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere, RVIO_OT_ToggleWParentMeshes
 from .operators import RVIO_OT_ToggleWImportBoundBoxes, RVIO_OT_ToggleWImportCubes, RVIO_OT_ToggleWImportBigCubes
-from .operators import RVIO_OT_ToggleNCPExportSelected, RVIO_OT_ToggleNCPExportCollgrid, RVIO_OT_SetBoundBoxCollection
-from .operators import RVIO_OT_SetCubeCollection, RVIO_OT_SetBigCubeCollection, RVIO_OT_SetNCPGridSize
+from .operators import RVIO_OT_ToggleNCPExportSelected, RVIO_OT_ToggleNCPExportCollgrid
+from .operators import RVIO_OT_SetNCPGridSize
 from .rvstruct import World, PRM, Mesh, BoundingBox, Vector, Matrix, Polygon, Vertex, UV, BigCube, TexAnimation
 from .rvstruct import Frame, Color, Instances, Instance, PosNodes, PosNode, NCP, Polyhedron, Plane, LookupGrid
 from .rvstruct import LookupList, Hull, ConvexHull, Edge, Interior, Sphere, RIM, MirrorPlane, TrackZones, Zone
@@ -159,7 +159,7 @@ from .ui.texanim import RVIO_PT_AnimModesPanel
 from .ui.objectpanel import RVIO_PT_RevoltObjectPanel
 from .ui.settings import RVIO_PT_RevoltSettingsPanel
 from .ui.vertex import VertexColorPickerProperties, RVIO_PT_VertexPanel
-from .ui.zone import ButtonZoneHide, OBJECT_OT_add_revolt_track_zone, RVIO_PT_RevoltZonePanel
+from .ui.zone import RVIO_PT_RevoltZonePanel
 
 bl_info = {
 "name": "Re-Volt",
@@ -254,8 +254,33 @@ def register():
         description = "Current frame"
     )
     
-    bpy.types.Scene.w_import_cubes = bpy.props.BoolProperty(name="Import Cubes", default=False)
-    bpy.types.Scene.w_import_big_cubes = bpy.props.BoolProperty(name="Import Big Cubes", default=False)
+    bpy.types.Object.is_bbox = bpy.props.BoolProperty(
+        name="Object is a Boundary Box",
+        default=False,
+        description="Makes BoundBox properties visible for this object"
+    )
+    
+    bpy.types.Scene.w_parent_meshes = bpy.props.BoolProperty(
+        name="Toggle Parent Meshes",
+        description="Enable or disable parent meshes",
+        default=False
+    )
+    
+    bpy.types.Scene.w_import_bound_boxes = bpy.props.BoolProperty(
+        name="Toggle Import Bound Boxes",
+        description="Enable or disable import of bounding boxes",
+        default=False
+    )
+    
+    bpy.types.Scene.w_import_cubes = bpy.props.BoolProperty(
+        name="Import Cubes",
+        default=False
+    )
+    
+    bpy.types.Scene.w_import_big_cubes = bpy.props.BoolProperty(
+        name="Import Big Cubes",
+        default=False
+    )
 
     bpy.types.Scene.vertex_alpha_value = bpy.props.FloatProperty(
         name="Vertex Alpha Value",
@@ -332,6 +357,13 @@ def register():
         max=8192,
         description="Size of the lookup grid"
     )
+
+    bpy.types.Scene.last_exported_filepath = bpy.props.StringProperty(
+        name="Last Exported Filepath",
+        description="Filepath used for the last export",
+        default="",
+        subtype='FILE_PATH'
+    )
     
     #Register Operators
     bpy.utils.register_class(DialogOperator)
@@ -367,7 +399,7 @@ def register():
     bpy.utils.register_class(TexAnimTransform)
     bpy.utils.register_class(TexAnimGrid)
     bpy.utils.register_class(ButtonZoneHide)
-    bpy.utils.register_class(OBJECT_OT_add_revolt_track_zone)
+    bpy.utils.register_class(AddTrackZone)
     bpy.utils.register_class(IgnoreNCP)
     bpy.utils.register_class(ToggleTriangulateNgons)
     bpy.utils.register_class(ExportWithoutTexture)
@@ -387,13 +419,10 @@ def register():
     bpy.utils.register_class(RVIO_OT_SelectRevoltDirectory)
     bpy.utils.register_class(RVIO_OT_ToggleWParentMeshes)
     bpy.utils.register_class(RVIO_OT_ToggleWImportBoundBoxes)
-    bpy.utils.register_class(RVIO_OT_SetBoundBoxCollection)
     bpy.utils.register_class(RVIO_OT_ToggleWImportCubes)
     bpy.utils.register_class(RVIO_OT_ToggleWImportBigCubes)
     bpy.utils.register_class(RVIO_OT_ToggleNCPExportSelected)
     bpy.utils.register_class(RVIO_OT_ToggleNCPExportCollgrid)
-    bpy.utils.register_class(RVIO_OT_SetCubeCollection)
-    bpy.utils.register_class(RVIO_OT_SetBigCubeCollection)
     bpy.utils.register_class(RVIO_OT_SetNCPGridSize)
     
     # Register UI
@@ -437,10 +466,7 @@ def unregister():
     
     # Unregister Operators
     bpy.utils.unregister_class(RVIO_OT_SetNCPGridSize)
-    bpy.utils.unregister_class(RVIO_OT_SetBigCubeCollection)
-    bpy.utils.unregister_class(RVIO_OT_SetCubeCollection)
     bpy.utils.unregister_class(RVIO_OT_ToggleWParentMeshes)
-    bpy.utils.unregister_class(RVIO_OT_SetBoundBoxCollection)
     bpy.utils.unregister_class(RVIO_OT_ToggleWImportBoundBoxes)
     bpy.utils.unregister_class(RVIO_OT_ToggleWImportCubes)
     bpy.utils.unregister_class(RVIO_OT_ToggleWImportBigCubes)
@@ -463,7 +489,7 @@ def unregister():
     bpy.utils.unregister_class(ExportWithoutTexture)
     bpy.utils.unregister_class(ToggleTriangulateNgons)
     bpy.utils.unregister_class(IgnoreNCP)
-    bpy.utils.unregister_class(OBJECT_OT_add_revolt_track_zone)
+    bpy.utils.unregister_class(AddTrackZone)
     bpy.utils.unregister_class(ButtonZoneHide)
     bpy.utils.unregister_class(TexAnimGrid)
     bpy.utils.unregister_class(TexAnimTransform)
@@ -498,6 +524,7 @@ def unregister():
     bpy.utils.unregister_class(ImportRV)
     bpy.utils.unregister_class(DialogOperator)
     
+    del bpy.types.Scene.last_exported_filepath    
     del bpy.types.Scene.ncp_export_selected
     del bpy.types.Scene.ncp_export_collgrid
     del bpy.types.Scene.ncp_collgrid_size
@@ -511,6 +538,11 @@ def unregister():
     
     del bpy.types.Scene.w_import_cubes
     del bpy.types.Scene.w_import_big_cubes
+    del bpy.types.Scene.w_import_bound_boxes
+    del bpy.types.Scene.w_parent_meshes
+    
+    del bpy.types.Object.is_bbox
+    
     del bpy.types.Scene.update_ta_current_frame
     del bpy.types.Scene.update_ta_current_slot
     del bpy.types.Scene.ta_max_slots
