@@ -27,13 +27,6 @@ class RVIO_PT_RevoltObjectPanel(bpy.types.Panel):
         # Ignore NCP
         layout.operator("object.toggle_ignore_ncp", text="Toggle Ignore Collision (.ncp)")
 
-        # Debug properties
-        if obj.revolt.is_bcube:
-            box = layout.box()
-            box.label(text="BigCube Properties:")
-            col = box.column()
-            col.operator("object.set_bcube_mesh_indices", text="Set Mesh Indices")
-        
         # Instance properties
         box = layout.box()
         box.label(text="Instance Properties:")
