@@ -133,7 +133,7 @@ from .common import DialogOperator, TEX_ANIM_MAX
 from .operators import ImportRV, ExportRV, RVIO_OT_ReadCarParameters, RVIO_OT_SelectRevoltDirectory
 from .operators import ButtonReExport, ButtonSelectFaceProp, ButtonSelectNCPFaceProp
 from .operators import ButtonSelectNCPMaterial, ButtonVertexColorSet, VertexColorRemove
-from .operators import ButtonVertexColorCreateLayer, ButtonVertexAlphaSetLayer
+from .operators import ButtonVertexColorCreateLayer, ButtonVertexAlphaLayer
 from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, UseTextureNumber
 from .operators import SetInstanceProperty, RemoveInstanceProperty, BatchBake, LaunchRV, TexturesSave
 from .operators import TexturesRename, CarParametersExport, IgnoreNCP, ButtonZoneHide, AddTrackZone
@@ -158,7 +158,7 @@ from .ui.light import ButtonBakeLightToVertex, RVIO_PT_RevoltLightPanel
 from .ui.texanim import RVIO_PT_AnimModesPanel
 from .ui.objectpanel import RVIO_PT_RevoltObjectPanel
 from .ui.settings import RVIO_PT_RevoltSettingsPanel
-from .ui.vertex import VertexColorPickerProperties, RVIO_PT_VertexPanel
+from .ui.vertex import RVIO_PT_VertexPanel
 from .ui.zone import RVIO_PT_RevoltZonePanel
 
 bl_info = {
@@ -221,6 +221,25 @@ def register():
     props_scene.register()
     props_obj.register()
     props_mesh.register()
+    
+    bpy.types.Object.fin_col = bpy.props.FloatVectorProperty(
+        name="Model Color",
+        subtype='COLOR',
+        default=(0.5, 0.5, 0.5),
+        min=0.0, max=1.0,
+        description="Model RGB color to be added/subtracted:\n1.0: Bright, overrides vertex colors\n"
+            "0.5: Default, leaves vertex colors intact\n"
+            "0.0: Dark"
+    )
+    
+    bpy.types.Object.fin_envcol = bpy.props.FloatVectorProperty(
+        name="Env Color",
+        subtype='COLOR',
+        default=(1.0, 1.0, 1.0, 1.0),
+        min=0.0, max=1.0,
+        description="Color of the EnvMap",
+        size=4
+    )
     
     bpy.types.Scene.texture_animations = bpy.props.StringProperty(
         name="Texture Animations",
@@ -288,15 +307,6 @@ def register():
         default=1.0,  # Default to fully opaque
         min=0.0, max=1.0
         )
-    
-    bpy.types.Scene.stored_vertex_color = bpy.props.FloatVectorProperty(
-        name="Stored Vertex Color",
-        subtype='COLOR',
-        default=(1.0, 1.0, 1.0),  # Default to white
-        min=0.0,
-        max=1.0,
-        description="Stored vertex color for later use"
-    )
     
     bpy.types.Scene.triangulate_ngons = bpy.props.BoolProperty(
         name="Triangulate Ngons",
@@ -376,7 +386,7 @@ def register():
     bpy.utils.register_class(ButtonSelectNCPMaterial)
     bpy.utils.register_class(ButtonVertexColorSet)
     bpy.utils.register_class(ButtonVertexColorCreateLayer)
-    bpy.utils.register_class(ButtonVertexAlphaSetLayer)
+    bpy.utils.register_class(ButtonVertexAlphaLayer)
     bpy.utils.register_class(ButtonRenameAllObjects)
     bpy.utils.register_class(SelectByName)
     bpy.utils.register_class(SelectByData)
@@ -414,7 +424,6 @@ def register():
     bpy.utils.register_class(ToggleNoObjectCollision)
     bpy.utils.register_class(ToggleMirrorPlane)
     bpy.utils.register_class(InstanceColor)
-    bpy.utils.register_class(VertexColorPickerProperties)
     bpy.utils.register_class(VertexColorRemove)
     bpy.utils.register_class(RVIO_OT_SelectRevoltDirectory)
     bpy.utils.register_class(RVIO_OT_ToggleWParentMeshes)
@@ -474,7 +483,6 @@ def unregister():
     bpy.utils.unregister_class(RVIO_OT_ToggleNCPExportCollgrid)
     bpy.utils.unregister_class(RVIO_OT_SelectRevoltDirectory)
     bpy.utils.unregister_class(VertexColorRemove)
-    bpy.utils.unregister_class(VertexColorPickerProperties)
     bpy.utils.unregister_class(InstanceColor)
     bpy.utils.unregister_class(ToggleMirrorPlane)
     bpy.utils.unregister_class(ToggleNoObjectCollision)
@@ -512,7 +520,7 @@ def unregister():
     bpy.utils.unregister_class(SelectByData)
     bpy.utils.unregister_class(SelectByName)
     bpy.utils.unregister_class(ButtonRenameAllObjects)
-    bpy.utils.unregister_class(ButtonVertexAlphaSetLayer)
+    bpy.utils.unregister_class(ButtonVertexAlphaLayer)
     bpy.utils.unregister_class(ButtonVertexColorCreateLayer)
     bpy.utils.unregister_class(ButtonVertexColorSet)
     bpy.utils.unregister_class(ButtonSelectNCPMaterial)
@@ -533,7 +541,7 @@ def unregister():
     del bpy.types.Scene.apply_scale
     del bpy.types.Scene.export_without_texture
     del bpy.types.Scene.triangulate_ngons
-    del bpy.types.Scene.stored_vertex_color
+
     del bpy.types.Scene.vertex_alpha_value
     
     del bpy.types.Scene.w_import_cubes
@@ -547,6 +555,8 @@ def unregister():
     del bpy.types.Scene.update_ta_current_slot
     del bpy.types.Scene.ta_max_slots
     del bpy.types.Scene.texture_animations
+    del bpy.types.Object.fin_envcol
+    del bpy.types.Object.fin_col
     
     # Unregister Custom Properties
     props_mesh.unregister()

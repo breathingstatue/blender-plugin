@@ -773,11 +773,11 @@ class InstanceColor(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     fin_col: bpy.props.FloatVectorProperty(
-        name="Model Color",
+        name="Fin Color",
         subtype='COLOR',
         default=(0.5, 0.5, 0.5),
         min=0.0, max=1.0,
-        description="Model RGB color"
+        description="Set the object's color"
     )
 
     def execute(self, context):
@@ -787,17 +787,20 @@ class InstanceColor(bpy.types.Operator):
             self.report({'WARNING'}, "No active object")
             return {'CANCELLED'}
 
-        # Example: Just print the color, replace with your functionality
-        print("Applying color", self.fin_col, "to", obj.name)
+        # Store the color directly in the object's custom properties
+        obj["fin_col"] = self.fin_col[:3]  # Store RGB values
 
-        # Here you would typically apply the color to the object
-        # For demonstration, we'll just change the object's viewport color
-        obj.color = (self.fin_col[0], self.fin_col[1], self.fin_col[2], 1.0)  # RGBA
+        if hasattr(obj, "color"):
+            obj.color = (self.fin_col[0], self.fin_col[1], self.fin_col[2], 1.0)  # Set RGBA
 
+        color_values = tuple(round(val, 3) for val in self.fin_col[:3])
+        self.report({'INFO'}, f"Fin color applied to {obj.name}: {color_values}")
         return {'FINISHED'}
 
-    def menu_func(self, context):
-        self.layout.operator(InstanceColor.bl_idname)
+    def invoke(self, context, event):
+        wm = context.window_manager
+        return wm.invoke_props_dialog(self)
+
 """
 OBJECTS -----------------------------------------------------------------------
 """
@@ -809,13 +812,11 @@ class ToggleEnvironmentMap(bpy.types.Operator):
 
     def execute(self, context):
         for obj in context.selected_objects:
-            # Toggle the fin_env property for the object.
-            if "fin_env" in obj and isinstance(obj["fin_env"], bool):
-                current_state = obj["fin_env"]
-            else:
-                current_state = False
+            # Check if the 'fin_env' property exists and is a boolean.
+            # If it doesn't exist or isn't a boolean, assume it's True by default.
+            current_state = obj.get("fin_env", True)
 
-            # Update the fin_env property to its new state
+            # Toggle the fin_env property for the object.
             obj["fin_env"] = not current_state
             
             self.report({'INFO'}, f"Environment map {'enabled' if obj['fin_env'] else 'disabled'} for {obj.name}")
@@ -824,35 +825,37 @@ class ToggleEnvironmentMap(bpy.types.Operator):
                 
 class SetEnvironmentMapColor(bpy.types.Operator):
     bl_idname = "object.set_environment_map_color"
-    bl_label = "Set EnvMap Color"
+    bl_label = "Set Environment Map Color"
     bl_options = {'REGISTER', 'UNDO'}
 
-    # Define a color property to use as a color picker in the UI
-    color: bpy.props.FloatVectorProperty(
+    fin_envcol: bpy.props.FloatVectorProperty(
         name="EnvMap Color",
         subtype='COLOR',
         default=(1.0, 1.0, 1.0, 1.0),
-        min=0.0,
-        max=1.0,
-        size=4,
-        description="Pick a color for the environment map"
+        size=4,  # Include alpha
+        min=0.0, max=1.0,
+        description="Set the environment map's color and alpha"
     )
 
     def execute(self, context):
-        objs = context.selected_objects if context.selected_objects else [context.object]
+        obj = context.active_object
 
-        for obj in objs:
-            # Directly access the custom property to set the color
-            # Ensure that 'fin_envcol' is defined as a custom property for the object
-            obj["fin_envcol"] = self.color
+        if obj is None:
+            self.report({'WARNING'}, "No active object")
+            return {'CANCELLED'}
 
-            self.report({'INFO'}, f"Environment map color set to {self.color} for {obj.name}")
+        # Store the RGBA color directly in the object's custom properties
+        obj["fin_envcol"] = [self.fin_envcol[0], self.fin_envcol[1], self.fin_envcol[2], self.fin_envcol[3]]
+
+        # Correctly format the message to display color values
+        color_values = tuple(round(val, 3) for val in obj["fin_envcol"])
+        self.report({'INFO'}, f"Environment map color set to {color_values} for {obj.name}")
 
         return {'FINISHED'}
 
     def invoke(self, context, event):
-        # This method is called when the operator is invoked to display the color picker
-        return context.window_manager.invoke_props_dialog(self)
+        wm = context.window_manager
+        return wm.invoke_props_dialog(self)
                             
 class IgnoreNCP(bpy.types.Operator):
     bl_idname = "object.toggle_ignore_ncp"
@@ -864,13 +867,14 @@ class IgnoreNCP(bpy.types.Operator):
         # Directly toggle the ignore_ncp property on the object
         if "ignore_ncp" in obj:
             obj["ignore_ncp"] = not obj["ignore_ncp"]
-            self.report({'INFO'}, f"Ignore collision (.ncp) toggled for {obj.name}.")
+            status = "enabled" if obj["ignore_ncp"] else "disabled"
+            self.report({'INFO'}, f"Ignoring for (.ncp) is now {status} for {obj.name}.")
         else:
-            # Initialize the property if it doesn't exist
+            # Initialize the property if it doesn't exist and set it to True
             obj["ignore_ncp"] = True
-            self.report({'INFO'}, f"Ignore collision (.ncp) property initialized and set to True for {obj.name}.")
+            self.report({'INFO'}, f"Ignoring for (.ncp) is now enabled for {obj.name}.")
 
-        return {'FINISHED'}  
+        return {'FINISHED'} 
 
 class SetBCubeMeshIndices(bpy.types.Operator):
     bl_idname = "object.set_bcube_mesh_indices"
@@ -1051,16 +1055,10 @@ class ButtonHullSphere(bpy.types.Operator):
 
         return {'FINISHED'}
     
-
     
 """
 VERTEX COLORS -----------------------------------------------------------------
 """
-
-class ButtonVertexColorSet(bpy.types.Operator):
-    bl_idname = "vertexcolor.set"
-    bl_label = "Set Color and Alpha"
-    bl_description = "Apply color and alpha to selected faces"
 
 class ButtonVertexColorCreateLayer(bpy.types.Operator):
     bl_idname = "vertexcolor.create_layer"
@@ -1087,7 +1085,7 @@ class ButtonVertexColorCreateLayer(bpy.types.Operator):
         self.report({'INFO'}, "New vertex color layer created.")
         return {'FINISHED'}
 
-class ButtonVertexAlphaSetLayer(bpy.types.Operator):
+class ButtonVertexAlphaLayer(bpy.types.Operator):
     bl_idname = "vertexcolor.set_alpha"
     bl_label = "Set Vertex Alpha"
     bl_description = "Set alpha value for the vertex color layer"
@@ -1123,6 +1121,11 @@ class ButtonVertexAlphaSetLayer(bpy.types.Operator):
         else:
             self.report({'WARNING'}, "Failed to set alpha value.")
         return {'FINISHED' if success else 'CANCELLED'}
+    
+class ButtonVertexColorSet(bpy.types.Operator):
+    bl_idname = "vertexcolor.set"
+    bl_label = "Set Color and Alpha"
+    bl_description = "Apply color and alpha to selected faces"
    
 class VertexColorRemove(bpy.types.Operator):
     bl_idname = "vertexcolor.remove"

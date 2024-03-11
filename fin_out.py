@@ -28,29 +28,29 @@ def export_file(filepath, scene):
     fin = Instances()
 
     # Gathers list of instance objects
-    objs = [obj for obj in scene.objects if obj.revolt.is_instance]
+    objs = [obj for obj in scene.objects if obj.is_instance]
 
 
     for obj in objs:
-        props = obj.revolt
         instance = Instance()
 
         instance.name = obj.name.split(".prm")[0][:8].upper()
+        fin_col = getattr(obj, "fin_col", [0.5, 0.5, 0.5])  # Default to mid-gray if not set
         instance.color = (
-                int(props.fin_col[0] * 255)-128,
-                int(props.fin_col[1] * 255)-128,
-                int(props.fin_col[2] * 255)-128
+            int(fin_col[0] * 255) - 128,
+            int(fin_col[1] * 255) - 128,
+            int(fin_col[2] * 255) - 128,
         )
         print(instance.color)
         instance.env_color = rvstruct.Color(
             color= (
-                int(props.fin_envcol[0] * 255),
-                int(props.fin_envcol[1] * 255),
-                int(props.fin_envcol[2] * 255),
+                int(obj.fin_envcol[0] * 255),
+                int(obj.fin_envcol[1] * 255),
+                int(obj.fin_envcol[2] * 255),
             ), 
             alpha=True
         )
-        instance.env_color.alpha = int((1-props.fin_envcol[3]) * 255)
+        instance.env_color.alpha = int((1-obj.fin_envcol[3]) * 255)
         instance.priority = props.fin_priority
 
         instance.lod_bias = props.fin_lod_bias
@@ -62,7 +62,7 @@ def export_file(filepath, scene):
 
         instance.flag = FIN_SET_MODEL_RGB
 
-        if props.fin_env:
+        if obj.fin_env:
             instance.flag |= FIN_ENV
 
         if props.fin_model_rgb:
