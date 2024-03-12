@@ -456,6 +456,10 @@ class Matrix:
         self.data[0] = struct.unpack("<3f", file.read(12))
         self.data[1] = struct.unpack("<3f", file.read(12))
         self.data[2] = struct.unpack("<3f", file.read(12))
+        
+    def transpose(self):
+        # Transpose the matrix in place
+        self.data = list(map(list, zip(*self.data)))
 
     def write(self, file):
         # Writes the matrix line by line (only the firs three columns and rows)

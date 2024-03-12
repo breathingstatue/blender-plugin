@@ -21,7 +21,7 @@ from . import tools
 from .hul_in import create_sphere
 from .layers import *
 from .texanim import *
-from .tools import generate_chull
+from .tools import generate_chull, bake_shadow
 from .rvstruct import *
 from . import carinfo
 from .common import get_format, FORMAT_PRM, FORMAT_FIN, FORMAT_NCP, FORMAT_HUL, FORMAT_W, FORMAT_RIM, FORMAT_TA_CSV, FORMAT_TAZ, FORMAT_UNK
@@ -1092,15 +1092,20 @@ TRACK ZONES & HULL SPHERE ------------------------------------------------------
 class ButtonZoneHide(bpy.types.Operator):
     bl_idname = "scene.zone_hide"
     bl_label = "Show / Hide Track Zones"
-    bl_description = (
-        "Shows or hides all track zones"
-    )
+    bl_description = "Shows or hides all track zones"
+    
     def execute(self, context):
-        if bpy.data.groups.get('TRACK_ZONES'):
-            for obj in bpy.data.groups['TRACK_ZONES'].objects:
-                obj.hide = not obj.hide
-        
-        return{"FINISHED"}
+        track_zone_collection = bpy.data.collections.get('TRACK_ZONES')
+
+        # Check if the TRACK_ZONES collection exists
+        if track_zone_collection:
+            for obj in track_zone_collection.objects:
+                # Check if the object has the custom property and toggle visibility
+                if "is_track_zone" in obj:
+                    # In Blender 2.8 and later, visibility is controlled by 'hide_viewport'
+                    obj.hide_viewport = not obj.hide_viewport
+
+        return {"FINISHED"}
 
 class AddTrackZone(bpy.types.Operator):
     bl_idname = "scene.add_track_zone"
@@ -1111,9 +1116,9 @@ class AddTrackZone(bpy.types.Operator):
     bl_options = {'UNDO'}
     
     def execute(self, context):
-        from ..taz_in import create_zone
-        obj = create_zone(None, bpy.context.scene.cursor_location)
-
+        from .taz_in import create_zone
+        cursor_location = context.scene.cursor.location
+        obj = create_zone(None, cursor_location)
         return {'FINISHED'}
     
 class ButtonHullSphere(bpy.types.Operator):
@@ -1124,25 +1129,19 @@ class ButtonHullSphere(bpy.types.Operator):
 
     def execute(self, context):
         center = bpy.context.scene.cursor.location
-        
-        # Assuming to_revolt_scale(0.1) is the desired scale for the radius
         radius = to_revolt_scale(0.1)
-        
         filename = "Hull_Sphere"
 
-        # Create the sphere at the cursor location with the specified radius
         ob = create_sphere(context.scene, center, radius, filename)
 
-        # Link the new object to the scene
-        if context.collection:
+        if ob.name not in context.collection.objects:
             context.collection.objects.link(ob)
         else:
-            context.scene.collection.objects.link(ob)
+            self.report({'WARNING'}, f"Object '{ob.name}' is already in the collection")
+            return {'CANCELLED'}
 
-        # Assign the custom property 'is_hull_sphere' to the object
         ob["is_hull_sphere"] = True
 
-        # Select the newly created object and make it active
         ob.select_set(True)
         context.view_layer.objects.active = ob
 

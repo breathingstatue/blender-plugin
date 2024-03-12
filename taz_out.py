@@ -11,7 +11,7 @@ import os
 import bmesh
 import bpy
 import mathutils
-from . import common
+from .common import to_revolt_coord, to_revolt_axis
 
 from .rvstruct import TrackZones
 
@@ -22,11 +22,20 @@ def export_file(filepath, scene):
     # Collect all zones
     zones = TrackZones()
     
-    # Find all boxes and add them as a zone
-    for obj in bpy.data.groups['TRACK_ZONES'].objects:
-        if not obj.revolt.is_track_zone:
+    # Access the 'TRACK_ZONES' collection, assuming it exists
+    track_zones_collection = bpy.data.collections.get('TRACK_ZONES')
+    
+    if track_zones_collection is None:
+        print("No 'TRACK_ZONES' collection found.")
+        return
+    
+    # Find all boxes marked as track zones and add them
+    for obj in track_zones_collection.objects:
+        # Check for the custom property instead of is_track_zone
+        if "is_track_zone" not in obj or not obj["is_track_zone"]:
             continue
-        # Get a name of object and zone id from it
+        
+        # Assuming the object's name is structured as expected to extract the ID
         zid = int(obj.name.split(".", 1)[0][1:])
         zones.append(zid, *transforms_to_revolt(obj.location, obj.rotation_euler, obj.scale))
     
