@@ -89,43 +89,6 @@ class ButtonSelectNCPMaterial(bpy.types.Operator):
         meshprops = context.object.data.revolt
         props.select_material = meshprops.face_material
         return{"FINISHED"}
-
-class ToggleTriangulateNgons(bpy.types.Operator):
-    """Toggle Triangulate Ngons"""
-    bl_idname = "export.triangulate_ngons"
-    bl_label = "Triangulate Ngons"
-
-    def execute(self, context):
-        context.scene.triangulate_ngons = not context.scene.triangulate_ngons
-        self.report({'INFO'}, "Triangulate Ngons: {}".format("Enabled" if context.scene.triangulate_ngons else "Disabled"))
-        return {'FINISHED'}
-
-class ExportWithoutTexture(bpy.types.Operator):
-    """Toggle Export w/o Texture"""
-    bl_idname = "export.without_texture"
-    bl_label = "Toggle Export w/o Texture"
-
-    def execute(self, context):
-        context.scene.use_tex_num = not context.scene.use_tex_num
-        return {'FINISHED'}
-    
-class ToggleApplyScale(bpy.types.Operator):
-    """Toggle Apply Scale on Export"""
-    bl_idname = "export.apply_scale"
-    bl_label = "Apply Scale on Export"
-
-    def execute(self, context):
-        context.scene.apply_scale = not context.scene.apply_scale
-        return {'FINISHED'}
-
-class ToggleApplyRotation(bpy.types.Operator):
-    """Toggle Apply Rotation on Export"""
-    bl_idname = "export.apply_rotation"
-    bl_label = "Toggle Apply Rotation on Export"
-
-    def execute(self, context):
-        context.scene.apply_rotation = not context.scene.apply_rotation
-        return {'FINISHED'}
     
 class ButtonBakeShadow(bpy.types.Operator):
     bl_idname = "button.bake_shadow"
@@ -398,6 +361,68 @@ class ButtonReExport(bpy.types.Operator):
         else:
             self.report({'WARNING'}, "No file path found for re-exporting.")
             return {'CANCELLED'}
+        
+class ToggleTriangulateNgons(bpy.types.Operator):
+    """Toggle Triangulate Ngons"""
+    bl_idname = "export.triangulate_ngons"
+    bl_label = "Triangulate Ngons"
+
+    def execute(self, context):
+        context.scene.triangulate_ngons = not context.scene.triangulate_ngons
+        self.report({'INFO'}, "Triangulate Ngons: {}".format("Enabled" if context.scene.triangulate_ngons else "Disabled"))
+        return {'FINISHED'}
+
+class ExportWithoutTexture(bpy.types.Operator):
+    """Toggle Export w/o Texture"""
+    bl_idname = "export.without_texture"
+    bl_label = "Toggle Export w/o Texture"
+
+    def execute(self, context):
+        context.scene.use_tex_num = not context.scene.use_tex_num
+        if context.scene.use_tex_num:
+            self.report({'INFO'}, "Exports without Texture")
+        else:
+            self.report({'INFO'}, "Uses Texture on Export")
+        return {'FINISHED'}
+    
+class ToggleApplyScale(bpy.types.Operator):
+    """Toggle Apply Scale on Export"""
+    bl_idname = "export.apply_scale"
+    bl_label = "Apply Scale on Export"
+
+    def execute(self, context):
+        context.scene.apply_scale = not context.scene.apply_scale
+        if context.scene.apply_scale:
+            self.report({'INFO'}, "Apply Scale on Export ON")
+        else:
+            self.report({'INFO'}, "Apply Scale on Export OFF")
+        return {'FINISHED'}
+
+class ToggleApplyRotation(bpy.types.Operator):
+    """Toggle Apply Rotation on Export"""
+    bl_idname = "export.apply_rotation"
+    bl_label = "Toggle Apply Rotation on Export"
+
+    def execute(self, context):
+        context.scene.apply_rotation = not context.scene.apply_rotation
+        if context.scene.apply_rotation:
+            self.report({'INFO'}, "Apply Rotation on Export ON")
+        else:
+            self.report({'INFO'}, "Apply Rotation on Export OFF")
+        return {'FINISHED'}
+    
+class ToggleApplyTranslation(bpy.types.Operator):
+    """Toggle Apply Translation on Export.\nDisable for single/instance .ncp files"""
+    bl_idname = "export.apply_translation"
+    bl_label = "Apply Translation on Export."
+
+    def execute(self, context):
+        context.scene.apply_translation = not context.scene.apply_translation
+        if context.scene.apply_translation:
+            self.report({'INFO'}, "Apply Translation on Export ON")
+        else:
+            self.report({'INFO'}, "Apply Translation on Export OFF")
+        return {'FINISHED'}
     
 class RVIO_OT_ToggleWParentMeshes(bpy.types.Operator):
     bl_idname = "rvio.toggle_w_parent_meshes"
@@ -435,27 +460,42 @@ class RVIO_OT_ToggleWImportBigCubes(bpy.types.Operator):
         self.report({'INFO'}, f"Toggle Import Big Cubes: {'ON' if context.scene.w_import_big_cubes else 'OFF'}")
         return {'FINISHED'}
 
-class RVIO_OT_ToggleNCPExportSelected(bpy.types.Operator):
-    bl_idname = "rvio.toggle_ncp_export_selected"
+class RVIO_OT_NCPExportSelected(bpy.types.Operator):
+    bl_idname = "rvio.ncp_export_selected"
     bl_label = "Toggle NCP Export Selected"
     
     def execute(self, context):
         scene = context.scene
+        # Toggle the ncp_export_selected property
         scene.ncp_export_selected = not scene.ncp_export_selected
+        
+        # Conditional message based on the toggled state
+        if scene.ncp_export_selected:
+            self.report({'INFO'}, "Will export selected as .ncp")
+        else:
+            self.report({'INFO'}, ".ncp exporting disabled for object")
+            
         return {'FINISHED'}
 
-
-class RVIO_OT_ToggleNCPExportCollgrid(bpy.types.Operator):
-    bl_idname = "rvio.toggle_ncp_export_collgrid"
+class RVIO_OT_NCPExportCollgrid(bpy.types.Operator):
+    bl_idname = "rvio.ncp_export_collgrid"
     bl_label = "Toggle NCP Export Collision Grid"
     
     def execute(self, context):
         scene = context.scene
+        # Toggle the ncp_export_collgrid property
         scene.ncp_export_collgrid = not scene.ncp_export_collgrid
+        
+        # Conditional message based on the toggled state
+        if scene.ncp_export_collgrid:
+            self.report({'INFO'}, "Exporting collgrid for .ncp")
+        else:
+            self.report({'INFO'}, "Collgrid export disabled")
+            
         return {'FINISHED'}
     
-class RVIO_OT_SetNCPGridSize(bpy.types.Operator):
-    bl_idname = "rvio.set_ncp_grid_size"
+class RVIO_OT_NCPGridSize(bpy.types.Operator):
+    bl_idname = "rvio.ncp_grid_size"
     bl_label = "Set NCP Grid Size"
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -471,6 +511,7 @@ class RVIO_OT_SetNCPGridSize(bpy.types.Operator):
     def execute(self, context):
         scene = context.scene
         scene.ncp_collgrid_size = self.grid_size
+        self.report({'INFO'}, f"Collgrid size set to {self.grid_size}")
         return {'FINISHED'}
 
     def invoke(self, context, event):
@@ -478,7 +519,7 @@ class RVIO_OT_SetNCPGridSize(bpy.types.Operator):
 
     def draw(self, context):
         self.layout.prop(self, "grid_size", text="Grid Size", slider=True)
-    
+
 
 """
 HELPERS -----------------------------------------------------------------------
@@ -856,25 +897,6 @@ class SetEnvironmentMapColor(bpy.types.Operator):
     def invoke(self, context, event):
         wm = context.window_manager
         return wm.invoke_props_dialog(self)
-                            
-class IgnoreNCP(bpy.types.Operator):
-    bl_idname = "object.toggle_ignore_ncp"
-    bl_label = "Toggle Ignore Collision (.ncp)"
-    
-    def execute(self, context):
-        obj = context.object
-        
-        # Directly toggle the ignore_ncp property on the object
-        if "ignore_ncp" in obj:
-            obj["ignore_ncp"] = not obj["ignore_ncp"]
-            status = "enabled" if obj["ignore_ncp"] else "disabled"
-            self.report({'INFO'}, f"Ignoring for (.ncp) is now {status} for {obj.name}.")
-        else:
-            # Initialize the property if it doesn't exist and set it to True
-            obj["ignore_ncp"] = True
-            self.report({'INFO'}, f"Ignoring for (.ncp) is now enabled for {obj.name}.")
-
-        return {'FINISHED'} 
 
 class SetBCubeMeshIndices(bpy.types.Operator):
     bl_idname = "object.set_bcube_mesh_indices"
@@ -895,6 +917,71 @@ class SetBCubeMeshIndices(bpy.types.Operator):
                 obj["bcube_mesh_indices"] += str(child_obj.data.index)  # Verify if 'data.index' is correct
         
         self.report({'INFO'}, f"BCube mesh indices set for {obj.name}.")
+        return {'FINISHED'}
+
+class ToggleModelRGB(bpy.types.Operator):
+    bl_idname = "object.toggle_model_rgb"
+    bl_label = "Toggle Model RGB"
+    bl_description = "Toggle the 'Use Model Color' property"
+
+    def execute(self, context):
+        obj = context.object
+        if obj and "is_instance" in obj and obj["is_instance"]:
+            # Toggle the 'fin_model_rgb' property
+            current_state = obj.get("fin_model_rgb", False)
+            obj["fin_model_rgb"] = not current_state
+            # Report the new state of 'fin_model_rgb'
+            self.report({'INFO'}, f"Use Model Color {'enabled' if obj['fin_model_rgb'] else 'disabled'} for {obj.name}.")
+        else:
+            # Report if 'is_instance' is not found or not true
+            self.report({'WARNING'}, "'is_instance' property not found or not true.")
+
+        return {'FINISHED'}
+
+class ToggleFinHide(bpy.types.Operator):
+    bl_idname = "object.toggle_fin_hide"
+    bl_label = "Toggle Hide Property"
+    bl_description = "Toggle the 'Hide' property for the object"
+
+    def execute(self, context):
+        obj = context.object
+        if obj and "is_instance" in obj and obj["is_instance"]:
+            obj.fin_hide = not obj.fin_hide
+            self.report({'INFO'}, f"Hide property {'enabled' if obj.fin_hide else 'disabled'} for {obj.name}.")
+        else:
+            self.report({'WARNING'}, "'is_instance' property not found or not true.")
+        
+        return {'FINISHED'}
+    
+class ToggleFinPriority(bpy.types.Operator):
+    bl_idname = "object.toggle_fin_priority"
+    bl_label = "Toggle Priority Property"
+    bl_description = "Toggle the 'Priority' property for the object between 0 and 1"
+
+    def execute(self, context):
+        obj = context.object
+        if obj and "is_instance" in obj and obj["is_instance"]:
+            # Toggle the 'fin_priority' property between 0 and 1
+            obj.fin_priority = 1 if obj.fin_priority == 0 else 0
+            self.report({'INFO'}, f"Priority set to {obj.fin_priority} for {obj.name}.")
+        else:
+            self.report({'WARNING'}, "'is_instance' property not found or not true.")
+        
+        return {'FINISHED'}
+    
+class ResetFinLoDBias(bpy.types.Operator):
+    bl_idname = "object.reset_fin_lod_bias"
+    bl_label = "Reset LoD Bias"
+    bl_description = "Reset the 'LoD Bias' to its default value"
+
+    def execute(self, context):
+        obj = context.object
+        if obj and "is_instance" in obj and obj["is_instance"]:
+            obj.fin_lod_bias = 1024  # Reset to default
+            self.report({'INFO'}, f"LoD Bias reset to 1024 for {obj.name}.")
+        else:
+            self.report({'WARNING'}, "'is_instance' property not found or not true.")
+        
         return {'FINISHED'}
     
 class ToggleNoMirror(bpy.types.Operator):
@@ -935,9 +1022,12 @@ class ToggleNoCameraCollision(bpy.types.Operator):
 
     def execute(self, context):
         obj = context.object
-        current_state = obj.get("fin_no_cam_coll", False)
-        obj["fin_no_cam_coll"] = not current_state
-        self.report({'INFO'}, f"No Camera Collision property {'enabled' if not current_state else 'disabled'} for {obj.name}.")
+        if obj and "is_instance" in obj and obj["is_instance"]:
+            current_state = obj.get("fin_no_cam_coll", False)
+            obj["fin_no_cam_coll"] = not current_state
+            self.report({'INFO'}, f"No Camera Collision property {'enabled' if not current_state else 'disabled'} for {obj.name}.")
+        else:
+            self.report({'WARNING'}, "'is_instance' property not found or not true.")
         return {'FINISHED'}
     
 class ToggleNoObjectCollision(bpy.types.Operator):
@@ -947,9 +1037,12 @@ class ToggleNoObjectCollision(bpy.types.Operator):
 
     def execute(self, context):
         obj = context.object
-        current_state = obj.get("fin_no_obj_coll", False)
-        obj["fin_no_obj_coll"] = not current_state
-        self.report({'INFO'}, f"No Object Collision property {'enabled' if not current_state else 'disabled'} for {obj.name}.")
+        if obj and "is_instance" in obj and obj["is_instance"]:
+            current_state = obj.get("fin_no_obj_coll", False)
+            obj["fin_no_obj_coll"] = not current_state
+            self.report({'INFO'}, f"No Object Collision property {'enabled' if not current_state else 'disabled'} for {obj.name}.")
+        else:
+            self.report({'WARNING'}, "'is_instance' property not found or not true.")
         return {'FINISHED'}
    
 class ToggleMirrorPlane(bpy.types.Operator):

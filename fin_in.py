@@ -85,15 +85,15 @@ def import_instance(filepath, scene, instance):
     instance_obj.fin_col = [(128 + c) / 255 for c in instance.color]
     envcol = (*instance.env_color.color, 255 - instance.env_color.alpha)
     instance_obj.fin_envcol = [c / 255 for c in envcol]
-    instance_obj.revolt.fin_priority = instance.priority
+    instance_obj.fin_priority = instance.priority
 
     flag = instance.flag
-    instance_obj.revolt.fin_model_rgb = bool(flag & FIN_SET_MODEL_RGB)
+    instance_obj.fin_model_rgb = bool(flag & FIN_SET_MODEL_RGB)
     instance_obj.fin_env = bool(flag & FIN_ENV)
-    instance_obj.revolt.fin_hide = bool(flag & FIN_HIDE)
-    instance_obj.revolt.fin_no_mirror = bool(flag & FIN_NO_MIRROR)
-    instance_obj.revolt.fin_no_lights = bool(flag & FIN_NO_LIGHTS)
-    instance_obj.revolt.fin_no_cam_coll = bool(flag & FIN_NO_OBJECT_COLLISION)
-    instance_obj.revolt.fin_no_obj_coll = bool(flag & FIN_NO_CAMERA_COLLISION)
+    instance_obj.fin_hide = bool(flag & FIN_HIDE)
+    instance_obj.fin_no_mirror = bool(flag & FIN_NO_MIRROR)
+    instance_obj.fin_no_lights = bool(flag & FIN_NO_LIGHTS)
+    instance_obj.fin_no_cam_coll = bool(flag & FIN_NO_OBJECT_COLLISION)
+    instance_obj.fin_no_obj_coll = bool(flag & FIN_NO_CAMERA_COLLISION)
 
 

@@ -78,7 +78,6 @@ def export_mesh(me, obj, scene, filepath, world=None):
     If an rvstruct world object is provided, this will return an rvstruct.mesh
     instead of an rvstruct.PRM.
     """
-    props = scene.revolt
     # Creates a bmesh from the supplied mesh
     bm = bmesh.new()
     bm.from_mesh(me)
@@ -92,7 +91,7 @@ def export_mesh(me, obj, scene, filepath, world=None):
                 verts=bm.verts
             )
         # Applies the object rotation if enabled
-        if props.apply_rotation:
+        if scene.apply_rotation:
             bmesh.ops.rotate(
                 bm,
                 cent=obj.location,

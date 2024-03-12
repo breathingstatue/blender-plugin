@@ -136,15 +136,15 @@ from .operators import ButtonSelectNCPMaterial, ButtonVertexColorSet, VertexColo
 from .operators import ButtonVertexColorCreateLayer, ButtonVertexAlphaLayer
 from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, UseTextureNumber
 from .operators import SetInstanceProperty, RemoveInstanceProperty, BatchBake, LaunchRV, TexturesSave
-from .operators import TexturesRename, CarParametersExport, IgnoreNCP, ButtonZoneHide, AddTrackZone
+from .operators import TexturesRename, CarParametersExport, ButtonZoneHide, AddTrackZone
 from .operators import ToggleTriangulateNgons, ExportWithoutTexture, ToggleApplyScale, ToggleApplyRotation
-from .operators import ButtonBakeShadow, ToggleEnvironmentMap, ToggleNoMirror
-from .operators import SetEnvironmentMapColor, ToggleNoLights, ToggleNoCameraCollision
-from .operators import ToggleNoObjectCollision, ToggleMirrorPlane, InstanceColor
+from .operators import ButtonBakeShadow, ToggleEnvironmentMap, ToggleNoMirror, ToggleModelRGB, ToggleFinHide
+from .operators import SetEnvironmentMapColor, ToggleNoLights, ToggleNoCameraCollision, ToggleFinPriority
+from .operators import ToggleNoObjectCollision, ToggleMirrorPlane, InstanceColor, ResetFinLoDBias
 from .operators import SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere, RVIO_OT_ToggleWParentMeshes
 from .operators import RVIO_OT_ToggleWImportBoundBoxes, RVIO_OT_ToggleWImportCubes, RVIO_OT_ToggleWImportBigCubes
-from .operators import RVIO_OT_ToggleNCPExportSelected, RVIO_OT_ToggleNCPExportCollgrid
-from .operators import RVIO_OT_SetNCPGridSize
+from .operators import RVIO_OT_NCPExportSelected, RVIO_OT_NCPExportCollgrid, ToggleApplyTranslation
+from .operators import RVIO_OT_NCPGridSize
 from .rvstruct import World, PRM, Mesh, BoundingBox, Vector, Matrix, Polygon, Vertex, UV, BigCube, TexAnimation
 from .rvstruct import Frame, Color, Instances, Instance, PosNodes, PosNode, NCP, Polyhedron, Plane, LookupGrid
 from .rvstruct import LookupList, Hull, ConvexHull, Edge, Interior, Sphere, RIM, MirrorPlane, TrackZones, Zone
@@ -241,6 +241,37 @@ def register():
         size=4
     )
     
+    bpy.types.Object.fin_model_rgb = bpy.props.BoolProperty(
+        name="Use Model Color",
+        description="Toggle to use the model's color",
+        default=False
+    )
+    
+    bpy.types.Object.fin_hide = bpy.props.BoolProperty(
+        name="Hide",
+        description="Toggle to hide the object in a specific context",
+        default=False
+    )
+    
+    bpy.types.Object.fin_priority = bpy.props.IntProperty(
+        name="Priority",
+        description="Priority for instance. Instance will always be shown if set to 1, hidden if 0.",
+        default=1,
+        min=0,
+        max=1
+    )
+    
+    bpy.types.Object.fin_lod_bias = bpy.props.IntProperty(
+        name="LoD Bias",
+        description="Level of Detail Bias",
+        default=1024,
+        min=1,
+        max=8192,
+        soft_min=1,  # Recommended range start for the slider
+        soft_max=8192,  # Recommended range end for the slider
+        subtype='UNSIGNED'
+    )
+    
     bpy.types.Scene.texture_animations = bpy.props.StringProperty(
         name="Texture Animations",
         default="[]",
@@ -328,7 +359,7 @@ def register():
         description="Apply object scale during export"
     )
     
-    bpy.types.Scene.apply_rotation_on_export = bpy.props.BoolProperty(
+    bpy.types.Scene.apply_rotation = bpy.props.BoolProperty(
         name="Apply Rotation on Export",
         default=True,
         description="Apply object rotation during export"
@@ -375,6 +406,30 @@ def register():
         subtype='FILE_PATH'
     )
     
+    bpy.types.Object.is_bcube = bpy.props.BoolProperty(
+        name="Object is a BigCube",
+        description="Makes BigCube properties visible for this object",
+        default=False
+    )
+
+    bpy.types.Object.is_cube = bpy.props.BoolProperty(
+        name="Object is a Cube",
+        description="Makes Cube properties visible for this object",
+        default=False
+    )
+
+    bpy.types.Object.is_bbox = bpy.props.BoolProperty(
+        name="Object is a Boundary Box",
+        description="Makes BoundBox properties visible for this object",
+        default=False
+    )
+    
+    bpy.types.Object.ignore_ncp = bpy.props.BoolProperty(
+        name="Ignore Collision (.ncp)",
+        description="Ignores the object when exporting to NCP",
+        default=False
+    )
+    
     #Register Operators
     bpy.utils.register_class(DialogOperator)
     bpy.utils.register_class(ImportRV)
@@ -410,7 +465,6 @@ def register():
     bpy.utils.register_class(TexAnimGrid)
     bpy.utils.register_class(ButtonZoneHide)
     bpy.utils.register_class(AddTrackZone)
-    bpy.utils.register_class(IgnoreNCP)
     bpy.utils.register_class(ToggleTriangulateNgons)
     bpy.utils.register_class(ExportWithoutTexture)
     bpy.utils.register_class(ToggleApplyScale)
@@ -418,21 +472,26 @@ def register():
     bpy.utils.register_class(SetBCubeMeshIndices)
     bpy.utils.register_class(ToggleEnvironmentMap)
     bpy.utils.register_class(SetEnvironmentMapColor)
+    bpy.utils.register_class(ToggleModelRGB)
+    bpy.utils.register_class(ToggleFinHide)
+    bpy.utils.register_class(ToggleFinPriority)
     bpy.utils.register_class(ToggleNoMirror)
     bpy.utils.register_class(ToggleNoLights)
     bpy.utils.register_class(ToggleNoCameraCollision)
     bpy.utils.register_class(ToggleNoObjectCollision)
     bpy.utils.register_class(ToggleMirrorPlane)
     bpy.utils.register_class(InstanceColor)
+    bpy.utils.register_class(ResetFinLoDBias)
     bpy.utils.register_class(VertexColorRemove)
     bpy.utils.register_class(RVIO_OT_SelectRevoltDirectory)
     bpy.utils.register_class(RVIO_OT_ToggleWParentMeshes)
     bpy.utils.register_class(RVIO_OT_ToggleWImportBoundBoxes)
     bpy.utils.register_class(RVIO_OT_ToggleWImportCubes)
     bpy.utils.register_class(RVIO_OT_ToggleWImportBigCubes)
-    bpy.utils.register_class(RVIO_OT_ToggleNCPExportSelected)
-    bpy.utils.register_class(RVIO_OT_ToggleNCPExportCollgrid)
-    bpy.utils.register_class(RVIO_OT_SetNCPGridSize)
+    bpy.utils.register_class(RVIO_OT_NCPExportSelected)
+    bpy.utils.register_class(RVIO_OT_NCPExportCollgrid)
+    bpy.utils.register_class(ToggleApplyTranslation)
+    bpy.utils.register_class(RVIO_OT_NCPGridSize)
     
     # Register UI
     bpy.utils.register_class(RVIO_PT_RevoltFacePropertiesPanel)
@@ -474,21 +533,26 @@ def unregister():
     bpy.utils.unregister_class(RVIO_PT_RevoltFacePropertiesPanel)
     
     # Unregister Operators
-    bpy.utils.unregister_class(RVIO_OT_SetNCPGridSize)
-    bpy.utils.unregister_class(RVIO_OT_ToggleWParentMeshes)
-    bpy.utils.unregister_class(RVIO_OT_ToggleWImportBoundBoxes)
-    bpy.utils.unregister_class(RVIO_OT_ToggleWImportCubes)
+    bpy.utils.unregister_class(RVIO_OT_NCPGridSize)
+    bpy.utils.unregister_class(ToggleApplyTranslation)
+    bpy.utils.unregister_class(RVIO_OT_NCPExportCollgrid)
+    bpy.utils.unregister_class(RVIO_OT_NCPExportSelected)
     bpy.utils.unregister_class(RVIO_OT_ToggleWImportBigCubes)
-    bpy.utils.unregister_class(RVIO_OT_ToggleNCPExportSelected)
-    bpy.utils.unregister_class(RVIO_OT_ToggleNCPExportCollgrid)
+    bpy.utils.unregister_class(RVIO_OT_ToggleWImportCubes)
+    bpy.utils.unregister_class(RVIO_OT_ToggleWImportBoundBoxes)
+    bpy.utils.unregister_class(RVIO_OT_ToggleWParentMeshes)
     bpy.utils.unregister_class(RVIO_OT_SelectRevoltDirectory)
     bpy.utils.unregister_class(VertexColorRemove)
+    bpy.utils.unregister_class(ResetFinLoDBias)
     bpy.utils.unregister_class(InstanceColor)
     bpy.utils.unregister_class(ToggleMirrorPlane)
     bpy.utils.unregister_class(ToggleNoObjectCollision)
     bpy.utils.unregister_class(ToggleNoCameraCollision)
     bpy.utils.unregister_class(ToggleNoLights)
     bpy.utils.unregister_class(ToggleNoMirror)
+    bpy.utils.unregister_class(ToggleFinPriority)
+    bpy.utils.unregister_class(ToggleFinHide)
+    bpy.utils.unregister_class(ToggleModelRGB)
     bpy.utils.unregister_class(SetEnvironmentMapColor)
     bpy.utils.unregister_class(ToggleEnvironmentMap)
     bpy.utils.unregister_class(SetBCubeMeshIndices)
@@ -496,7 +560,6 @@ def unregister():
     bpy.utils.unregister_class(ToggleApplyScale)
     bpy.utils.unregister_class(ExportWithoutTexture)
     bpy.utils.unregister_class(ToggleTriangulateNgons)
-    bpy.utils.unregister_class(IgnoreNCP)
     bpy.utils.unregister_class(AddTrackZone)
     bpy.utils.unregister_class(ButtonZoneHide)
     bpy.utils.unregister_class(TexAnimGrid)
@@ -532,6 +595,10 @@ def unregister():
     bpy.utils.unregister_class(ImportRV)
     bpy.utils.unregister_class(DialogOperator)
     
+    del bpy.types.Object.ignore_ncp
+    del bpy.types.Object.is_bbox
+    del bpy.types.Object.is_cube
+    del bpy.types.Object.is_bcube
     del bpy.types.Scene.last_exported_filepath    
     del bpy.types.Scene.ncp_export_selected
     del bpy.types.Scene.ncp_export_collgrid
@@ -555,6 +622,10 @@ def unregister():
     del bpy.types.Scene.update_ta_current_slot
     del bpy.types.Scene.ta_max_slots
     del bpy.types.Scene.texture_animations
+    del bpy.types.Object.fin_lod_bias
+    del bpy.types.Object.fin_priority
+    del bpy.types.Object.fin_hide
+    del bpy.types.Object.fin_model_rgb
     del bpy.types.Object.fin_envcol
     del bpy.types.Object.fin_col
     

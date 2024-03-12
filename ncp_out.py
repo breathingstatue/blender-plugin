@@ -64,7 +64,7 @@ def export_file(filepath, scene):
 
     # Creates a mesh for all objects
     transform = len(objs) != 1 or scene.apply_translation
-    # bm = objects_to_bmesh(objs, transform) this breaks custom props
+    # bm = objects_to_bmesh(objs, transform)
 
     ncp = NCP()
 

@@ -51,9 +51,9 @@ def export_file(filepath, scene):
             alpha=True
         )
         instance.env_color.alpha = int((1-obj.fin_envcol[3]) * 255)
-        instance.priority = props.fin_priority
+        instance.priority = obj.fin_priority
 
-        instance.lod_bias = props.fin_lod_bias
+        instance.lod_bias = obj.fin_lod_bias
 
         instance.position = Vector(data=to_revolt_coord(obj.location))
 
@@ -65,22 +65,22 @@ def export_file(filepath, scene):
         if obj.fin_env:
             instance.flag |= FIN_ENV
 
-        if props.fin_model_rgb:
+        if obj.fin_model_rgb:
             instance.flag |= FIN_SET_MODEL_RGB
 
-        if props.fin_hide:
+        if obj.fin_hide:
             instance.flag |= FIN_HIDE
 
-        if props.fin_no_mirror:
+        if obj.fin_no_mirror:
             instance.flag |= FIN_NO_MIRROR
 
-        if props.fin_no_lights:
+        if obj.fin_no_lights:
             instance.flag |= FIN_NO_LIGHTS
 
-        if props.fin_no_cam_coll:
+        if obj.fin_no_cam_coll:
             instance.flag |= FIN_NO_CAMERA_COLLISION
 
-        if props.fin_no_obj_coll:
+        if obj.fin_no_obj_coll:
             instance.flag |= FIN_NO_OBJECT_COLLISION
 
 
@@ -93,13 +93,13 @@ def export_file(filepath, scene):
         if not prm_fname in os.listdir(folder):
             scene.objects.active = obj
             prev_apply_scale = scene.apply_scale
-            prev_apply_rotation = scene.revolt.apply_rotation
+            prev_apply_rotation = scene.apply_rotation
 
-            scene.revolt.apply_rotation = False
+            scene.apply_rotation = False
             scene.apply_scale = False
             prm_out.export_file(os.path.join(folder, prm_fname), scene)
 
-            scene.revolt.apply_rotation = prev_apply_scale
+            scene.apply_rotation = prev_apply_scale
             scene.apply_scale = prev_apply_rotation
 
 
