@@ -43,6 +43,7 @@ class RVIO_PT_RevoltSettingsPanel(bpy.types.Panel):
         layout.operator("export.without_texture", text="Export w/o Texture")
         layout.operator("export.apply_scale", text="Apply Scale")
         layout.operator("export.apply_rotation", text= "Apply Rotation")
+        layout.operator("export.apply_translation", text= "Apply Translation")
         layout.separator()
 
         # PRM Export settings
@@ -59,7 +60,7 @@ class RVIO_PT_RevoltSettingsPanel(bpy.types.Panel):
 
         # NCP Export settings
         layout.label(text="Export Collision (.ncp):")
-        layout.operator("rvio.toggle_ncp_export_selected", text="ncp_export_selected")
-        layout.operator("rvio.toggle_ncp_export_collgrid", text="ncp_export_collgrid")
-        layout.operator("rvio.set_ncp_grid_size", text="ncp_collgrid_size")
+        layout.operator("rvio.ncp_export_selected", text="ncp_export_selected")
+        layout.operator("rvio.ncp_export_collgrid", text="ncp_export_collgrid")
+        layout.operator("rvio.ncp_grid_size", text="ncp_collgrid_size")
 
