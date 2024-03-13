@@ -17,6 +17,7 @@ if "bpy" in locals():
 import os
 import bpy
 import bmesh
+import json
 from mathutils import Color, Vector
 from . import (
     common,
@@ -68,7 +69,7 @@ def export_file(filepath, scene):
     world.generate_bigcubes()
 
     # Exports the texture animation
-    animations = eval(scene.texture_animations)
+    animations = json.loads(scene.texture_animations)
     for animdict in animations:
         anim = rvstruct.TexAnimation()
         anim.from_dict(animdict)

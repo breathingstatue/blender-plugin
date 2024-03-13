@@ -23,7 +23,6 @@ if "common" in locals():
 # Example: from .common import specific_function, SpecificClass
 
 def import_file(filepath, scene):
-    props = scene.revolt
 
     f = open(filepath, "r")
     lines = f.readlines()
@@ -37,7 +36,7 @@ def import_file(filepath, scene):
     lines = lines[1:]
 
     # Resets the texture animations
-    props.texture_animations = "[]"
+    scene.texture_animations = "[]"
 
     animations = {}
 
@@ -67,6 +66,6 @@ def import_file(filepath, scene):
 
         animations[slot_num].frame_count = len(animations[slot_num].frames)
 
-    props.texture_animations = str([a.as_dict() for a in animations.values()])
+    scene.texture_animations = str([a.as_dict() for a in animations.values()])
 
-    props.ta_max_slots = len(animations)
+    scene.ta_max_slots = len(animations)

@@ -129,7 +129,7 @@ if "rim_out" in locals():
 from .props.props_mesh import RVMeshProperties
 from .props.props_obj import RVObjectProperties
 from .props.props_scene import RVSceneProperties
-from .common import DialogOperator, TEX_ANIM_MAX
+from .common import DialogOperator, TEX_ANIM_MAX, TEX_PAGES_MAX
 from .operators import ImportRV, ExportRV, RVIO_OT_ReadCarParameters, RVIO_OT_SelectRevoltDirectory
 from .operators import ButtonReExport, ButtonSelectFaceProp, ButtonSelectNCPFaceProp
 from .operators import ButtonSelectNCPMaterial, ButtonVertexColorSet, VertexColorRemove
@@ -143,13 +143,13 @@ from .operators import SetEnvironmentMapColor, ToggleNoLights, ToggleNoCameraCol
 from .operators import ToggleNoObjectCollision, ToggleMirrorPlane, InstanceColor, ResetFinLoDBias
 from .operators import SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere, RVIO_OT_ToggleWParentMeshes
 from .operators import RVIO_OT_ToggleWImportBoundBoxes, RVIO_OT_ToggleWImportCubes, RVIO_OT_ToggleWImportBigCubes
-from .operators import RVIO_OT_NCPExportSelected, RVIO_OT_NCPExportCollgrid, ToggleApplyTranslation
-from .operators import RVIO_OT_NCPGridSize
+from .operators import RVIO_OT_NCPExportSelected, RVIO_OT_NCPExportCollgrid, ToggleApplyTranslation, RVIO_OT_NCPGridSize
+from .operators import ButtonCopyUvToFrame, ButtonCopyFrameToUv, RVIO_OT_TexAnimTransform, TexAnimGrid, OBJECT_OT_add_texanim_uv
 from .rvstruct import World, PRM, Mesh, BoundingBox, Vector, Matrix, Polygon, Vertex, UV, BigCube, TexAnimation
 from .rvstruct import Frame, Color, Instances, Instance, PosNodes, PosNode, NCP, Polyhedron, Plane, LookupGrid
 from .rvstruct import LookupList, Hull, ConvexHull, Edge, Interior, Sphere, RIM, MirrorPlane, TrackZones, Zone
-from .texanim import ButtonCopyUvToFrame, ButtonCopyFrameToUv, PreviewNextFrame, PreviewPrevFrame, TexAnimTransform, TexAnimGrid
-from .texanim import update_ta_max_slots, update_ta_current_slot, update_ta_current_frame
+from .texanim import update_ta_max_frames, update_ta_current_slot, update_ta_current_frame
+from .texanim import update_ta_current_frame_delay, update_ta_current_frame_tex
 from .ui.faceprops import RVIO_PT_RevoltFacePropertiesPanel
 from .ui.headers import RVIO_PT_RevoltIOToolPanel
 from .ui.helpers import RVIO_PT_RevoltHelpersPanelMesh
@@ -200,17 +200,17 @@ def edit_object_change_handler(scene):
         # If the object is not in edit mode, clear the dictionary
         bmesh_dic.clear()
 
-def menu_func_import(self, context):
-    """Import function for the user interface."""
-    self.layout.operator("import_scene.revolt", text="Re-Volt")
-
-
-def menu_func_export(self, context):
-    """Export function for the user interface."""
-    self.layout.operator("export_scene.revolt", text="Re-Volt")
-    
 def load_handler(dummy):
     initialize_custom_properties()
+    
+def update_frame_duration(self, context):
+    if self.ta_max_frames > 0:
+        self.frame_duration = self.ta_max_slots / self.ta_max_frames
+    else:
+        self.frame_duration = 0.0
+    
+def update_slots_or_frames(self, context):
+    update_frame_duration(context.scene, context)
 
 
 def register():
@@ -222,6 +222,13 @@ def register():
     props_obj.register()
     props_mesh.register()
     
+    bpy.types.Scene.envidx = bpy.props.IntProperty(
+        name="envidx",
+        default=0,
+        min=0,
+        description="Current env color index for importing. Internal only"
+    )
+
     bpy.types.Object.fin_col = bpy.props.FloatVectorProperty(
         name="Model Color",
         subtype='COLOR',
@@ -278,13 +285,29 @@ def register():
         description="Storage for Texture animations. Should not be changed by hand"
     )
     
+    bpy.types.Scene.ta_max_frames = bpy.props.IntProperty(
+        name = "Frames",
+        min = 2,
+        max = 512,
+        default = 2,
+        update=update_slots_or_frames,
+        description = "Total number of frames of the current slot. "
+                      "All higher frames will be ignored on export"
+    )
+    
     bpy.types.Scene.ta_max_slots = bpy.props.IntProperty(
-        name="Slots",
+        name="Textures' Amount",
         min=0,
         max=TEX_ANIM_MAX,
         default=0,
-        update=update_ta_max_slots,
+        update=update_slots_or_frames,
         description="Total number of texture animation slots. All higher slots will be ignored on export"
+    )
+    
+    bpy.types.Scene.frame_duration = bpy.props.FloatProperty(
+        name="Frame Duration",
+        description="Duration of every frame calculated.",
+        default=0.0
     )
     
     bpy.types.Scene.ta_current_slot = bpy.props.IntProperty(
@@ -296,12 +319,57 @@ def register():
         description = "Texture animation slot"
     )
     
-    bpy.types.Scene.ta_current_frame = bpy.props.IntProperty(
-        name = "Frame",
+    bpy.types.Scene.ta_current_frame_tex = bpy.props.IntProperty(
+        name = "Texture",
         default = 0,
+        min = -1,
+        max = TEX_PAGES_MAX-1,
+        update = update_ta_current_frame_tex,
+        description = "Texture of the current frame"
+    )
+    
+    bpy.types.Scene.ta_current_frame_delay = bpy.props.FloatProperty(
+        name = "Duration",
+        default = 0.01,
         min = 0,
-        update = update_ta_current_frame,
-        description = "Current frame"
+        update = update_ta_current_frame_delay,
+        description = "Duration of the current frame"
+    )
+    
+    bpy.types.Scene.ta_current_frame_uv0 = bpy.props.FloatVectorProperty(
+        name = "UV 0",
+        size = 2,
+        default = (0, 0),
+        min = 0.0,
+        max = 1.0,
+        description = "UV coordinate of the first vertex"
+    )
+    
+    bpy.types.Scene.ta_current_frame_uv1 = bpy.props.FloatVectorProperty(
+        name = "UV 1",
+        size = 2,
+        default = (0, 0),
+        min = 0.0,
+        max = 1.0,
+        description = "UV coordinate of the second vertex"
+    )
+    
+    bpy.types.Scene.ta_current_frame_uv2 = bpy.props.FloatVectorProperty(
+        name = "UV 2",
+        size = 2,
+        default = (0, 0),
+        min = 0.0,
+        max = 1.0,
+        description = "UV coordinate of the third vertex"
+    )
+    
+    bpy.types.Scene.ta_current_frame_uv3 = bpy.props.FloatVectorProperty(
+        name = "UV 3",
+        size = 2,
+        default = (0, 0),
+        min = 0.0,
+        max = 1.0,
+        description = "UV coordinate of the fourth vertex"
     )
     
     bpy.types.Object.is_bbox = bpy.props.BoolProperty(
@@ -459,10 +527,9 @@ def register():
     bpy.utils.register_class(ButtonHullSphere)
     bpy.utils.register_class(ButtonCopyUvToFrame)
     bpy.utils.register_class(ButtonCopyFrameToUv)
-    bpy.utils.register_class(PreviewNextFrame)
-    bpy.utils.register_class(PreviewPrevFrame)
-    bpy.utils.register_class(TexAnimTransform)
+    bpy.utils.register_class(RVIO_OT_TexAnimTransform)
     bpy.utils.register_class(TexAnimGrid)
+    bpy.utils.register_class(OBJECT_OT_add_texanim_uv)
     bpy.utils.register_class(ButtonZoneHide)
     bpy.utils.register_class(AddTrackZone)
     bpy.utils.register_class(ToggleTriangulateNgons)
@@ -562,10 +629,9 @@ def unregister():
     bpy.utils.unregister_class(ToggleTriangulateNgons)
     bpy.utils.unregister_class(AddTrackZone)
     bpy.utils.unregister_class(ButtonZoneHide)
+    bpy.utils.unregister_class(OBJECT_OT_add_texanim_uv)
     bpy.utils.unregister_class(TexAnimGrid)
-    bpy.utils.unregister_class(TexAnimTransform)
-    bpy.utils.unregister_class(PreviewPrevFrame)
-    bpy.utils.unregister_class(PreviewNextFrame)
+    bpy.utils.unregister_class(RVIO_OT_TexAnimTransform)
     bpy.utils.unregister_class(ButtonCopyFrameToUv)
     bpy.utils.unregister_class(ButtonCopyUvToFrame)
     bpy.utils.unregister_class(ButtonHullSphere)
@@ -595,6 +661,8 @@ def unregister():
     bpy.utils.unregister_class(ImportRV)
     bpy.utils.unregister_class(DialogOperator)
     
+    # Unregister Custom Properties
+    
     del bpy.types.Object.ignore_ncp
     del bpy.types.Object.is_bbox
     del bpy.types.Object.is_cube
@@ -618,8 +686,16 @@ def unregister():
     
     del bpy.types.Object.is_bbox
     
-    del bpy.types.Scene.update_ta_current_frame
-    del bpy.types.Scene.update_ta_current_slot
+    del bpy.types.Scene.ta_current_frame_uv3
+    del bpy.types.Scene.ta_current_frame_uv2
+    del bpy.types.Scene.ta_current_frame_uv1
+    del bpy.types.Scene.ta_current_frame_uv0
+    del bpy.types.Scene.ta_current_frame_delay
+    del bpy.types.Scene.ta_current_frame_tex
+    del bpy.types.Scene.ta_current_frame
+    del bpy.types.Scene.frame_duration
+    del bpy.types.Scene.ta_current_slot
+    del bpy.types.Scene.ta_max_frames
     del bpy.types.Scene.ta_max_slots
     del bpy.types.Scene.texture_animations
     del bpy.types.Object.fin_lod_bias
@@ -629,7 +705,8 @@ def unregister():
     del bpy.types.Object.fin_envcol
     del bpy.types.Object.fin_col
     
-    # Unregister Custom Properties
+    del bpy.types.Scene.envidx
+    
     props_mesh.unregister()
     props_obj.unregister()
     props_scene.unregister()

@@ -115,11 +115,11 @@ def get_or_create_material(texture_path):
 
     return mat
 
-def add_rvmesh_to_bmesh(prm, bm, me, filepath, scene, envlist=None):
+def add_rvmesh_to_bmesh(prm, bm, me, filepath, context, scene, envlist=None):
     """
     Adds PRM data to an existing bmesh. Returns the resulting bmesh.
     """
-    props = bpy.context.scene.revolt
+    scene = bpy.context.scene
     uv_layer = bm.loops.layers.uv.new("UVMap")
     vc_layer = bm.loops.layers.color.new("Col")
     env_layer = bm.loops.layers.color.new("Env")
@@ -177,7 +177,7 @@ def add_rvmesh_to_bmesh(prm, bm, me, filepath, scene, envlist=None):
             alpha = 1-(float(colors[l].alpha) / 255)
             color = [float(c) / 255 for c in colors[l].color]
             if envlist and (poly.type & FACE_ENV):
-                env_col = [float(c) / 255 for c in envlist[props.envidx].color]
+                env_col = [float(c) / 255 for c in envlist[scene.envidx].color]
                 loop[env_layer][0] = env_col[0]
                 loop[env_layer][1] = env_col[1]
                 loop[env_layer][2] = env_col[2]
@@ -193,7 +193,7 @@ def add_rvmesh_to_bmesh(prm, bm, me, filepath, scene, envlist=None):
         # Enables smooth shading for that face
         face.smooth = True
         if envlist and (poly.type & FACE_ENV):
-            props.envidx += 1
+            scene.envidx += 1
     
         # Assign the material to the face
     for face, poly in zip(created_faces, prm.polygons):
@@ -211,7 +211,7 @@ def add_rvmesh_to_bmesh(prm, bm, me, filepath, scene, envlist=None):
 
         # Assigns env alpha to face. Colors are on a vcol layer
         if envlist and (poly.type & FACE_ENV):
-            env_col_alpha = envlist[props.envidx].alpha
+            env_col_alpha = envlist[scene.envidx].alpha
             face[env_alpha_layer] = float(env_col_alpha) / 255
 
     # UV/loop count mismatch may be safely ignored since PRM import UV mapping is correct

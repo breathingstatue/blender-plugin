@@ -9,6 +9,7 @@ file to another, as well as edit them in an external spread sheet program.
 
 """
 import bmesh
+import json
 import importlib
 from . import common
 
@@ -20,29 +21,23 @@ if "common" in locals():
 # Example: from .common import specific_function, SpecificClass
 
 def export_file(filepath, scene):
-
-    ta = eval(scene.revolt.texture_animations)
     lines = [TA_CSV_HEADER]
 
-    for a in range(scene.revolt.ta_max_slots):
-        for f in range(ta[a]["frame_count"]):
-            line = "{},{},{},{},{},{},{},{},{},{},{},{}".format(
-                a,
-                f,
-                ta[a]["frames"][f]["texture"],
-                ta[a]["frames"][f]["delay"],
-                ta[a]["frames"][f]["uv"][0]["u"],
-                ta[a]["frames"][f]["uv"][0]["v"],
-                ta[a]["frames"][f]["uv"][1]["u"],
-                ta[a]["frames"][f]["uv"][1]["v"],
-                ta[a]["frames"][f]["uv"][2]["u"],
-                ta[a]["frames"][f]["uv"][2]["v"],
-                ta[a]["frames"][f]["uv"][3]["u"],
-                ta[a]["frames"][f]["uv"][3]["v"],
-            )
-            lines.append(line)
-        lines.append("")
+    for a in range(1, scene.ta_max_slots + 1):  # Starting from 1 to match "texan001", "texan002", etc.
+        image_name = f"texan{a:03}"  # Generating the image name based on the current index
+        image = bpy.data.images.get(image_name)  # Attempting to fetch the image by name
 
-    file = open(filepath, "w")
-    file.write("\n".join(lines))
-    file.close()
+        if image:
+            # If the image exists, retrieve its file path
+            uv_image_path = image.filepath
+
+        # Composing the line with the image name and its path or a placeholder text
+        line = f"{image_name},{uv_image_path}"
+        lines.append(line)
+
+    # Adding a final line break for the CSV format
+    lines.append("")
+
+    # Writing the composed lines to the specified file path
+    with open(filepath, "w") as file:
+        file.write("\n".join(lines))
