@@ -1390,35 +1390,23 @@ class Sphere:
         return dic
 
 class RIM:
-    """ Mirror planes """
-    _instance = None  # Singleton instance
-
-    def __new__(cls, *args, **kwargs):
-        if not cls._instance:
-            cls._instance = super(RIM, cls).__new__(cls)
-        return cls._instance
-
+    """Mirror planes"""
     def __init__(self, file=None):
-        # Initialize only if not already initialized
-        if not hasattr(self, 'initialized'):
-            self.num_mirror_planes = 0
-            self.mirror_planes = []
-            self.initialized = True
-
-            if file:
-                self.read(file)
+        self.num_mirror_planes = 0
+        self.mirror_planes = []
+        if file:
+            self.read(file)
 
     def read(self, file):
+        # Read the number of mirror planes and initialize them
         self.num_mirror_planes = struct.unpack("<h", file.read(2))[0]
-        self.mirror_planes = [MirrorPlane(file) for x in range(self.num_mirror_planes)]
+        self.mirror_planes = [MirrorPlane(file) for _ in range(self.num_mirror_planes)]
 
     def write(self, file):
+        # Write the number of mirror planes and then each mirror plane's data
         file.write(struct.pack("<h", self.num_mirror_planes))
-        for x in range(self.num_mirror_planes):
-            self.mirror_planes[x].write(file)
-
-# Creating the singleton instance of RIM
-rim_instance = RIM()
+        for mirror_plane in self.mirror_planes:
+            mirror_plane.write(file)
 
 class MirrorPlane:
     """ Mirror plane """

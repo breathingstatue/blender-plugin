@@ -11,6 +11,8 @@ import bmesh
 import importlib
 from . import common
 from . import rvstruct
+from .common import apply_trs, to_revolt_axis, to_revolt_coord, rvbbox_from_verts
+from .rvstruct import RIM, MirrorPlane
 
 # Check if 'common' is already in locals to determine if this is a reload scenario
 if "common" in locals():
@@ -21,9 +23,8 @@ if "common" in locals():
 # Example: from .common import specific_function, SpecificClass
 
 def export_file(filepath, scene):
-    props = scene.revolt
 
-    objs = [obj for obj in scene.objects if obj.revolt.is_mirror_plane]
+    objs = [obj for obj in scene.objects if obj.is_mirror_plane]
 
     rim = rvstruct.RIM()
 
@@ -57,7 +58,7 @@ def export_file(filepath, scene):
             rim.mirror_planes.append(mirror_plane)
             rim.num_mirror_planes += 1
 
-    dprint("Mirror planes:", rim.num_mirror_planes)
+    print("Mirror planes:", rim.num_mirror_planes)
 
     f = open(filepath, "wb")
 

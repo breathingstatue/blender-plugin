@@ -400,13 +400,6 @@ def register():
         default=False
     )
 
-    bpy.types.Scene.vertex_alpha_value = bpy.props.FloatProperty(
-        name="Vertex Alpha Value",
-        description="Alpha value for vertex colors",
-        default=1.0,  # Default to fully opaque
-        min=0.0, max=1.0
-        )
-    
     bpy.types.Scene.triangulate_ngons = bpy.props.BoolProperty(
         name="Triangulate Ngons",
         description="Enable or disable ngon triangulation",
@@ -437,6 +430,12 @@ def register():
         name = "Apply Translation",
         default = False,
         description = "Applies the object location on export. Should be disabled for single/instance ncp files"
+    )
+    
+    bpy.types.Object.is_mirror_plane = bpy.props.BoolProperty(
+        name = "Is Mirror Plane",
+        default = False,
+        description = "Object is a mirror plane (.rim)"
     )
     
     bpy.types.Scene.rvgl_dir = bpy.props.StringProperty(
@@ -672,12 +671,11 @@ def unregister():
     del bpy.types.Scene.ncp_export_collgrid
     del bpy.types.Scene.ncp_collgrid_size
     del bpy.types.Scene.rvgl_dir
+    del bpy.types.Object.is_mirror_plane
     del bpy.types.Scene.apply_rotation_on_export
     del bpy.types.Scene.apply_scale
     del bpy.types.Scene.export_without_texture
     del bpy.types.Scene.triangulate_ngons
-
-    del bpy.types.Scene.vertex_alpha_value
     
     del bpy.types.Scene.w_import_cubes
     del bpy.types.Scene.w_import_big_cubes

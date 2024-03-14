@@ -711,20 +711,22 @@ class TexturesRename(bpy.types.Operator):
     )
 
     def execute(self, context):
+        active_object = context.active_object
+        if not active_object:
+            self.report({'WARNING'}, "No active object selected")
+            return {'CANCELLED'}
+
         textures = self.get_textures(context)
 
         if not textures:
             self.report({'WARNING'}, "No textures found in selected objects")
             return {'CANCELLED'}
 
-        if len(textures) == 1:
-            # If only one texture, use the full base name
-            textures[0].name = self.base_name[:8]
-        else:
-            # If multiple textures, limit base name to 7 characters and add a suffix
-            for i, texture in enumerate(textures):
-                suffix = self.number_to_letter(i)
-                texture.name = self.base_name[:7] + suffix
+        base_name = active_object.name[:7]  # Limit base name to 7 characters to leave room for the suffix
+
+        for i, texture in enumerate(textures):
+            suffix = self.number_to_letter(i)
+            texture.name = f"{base_name}{suffix}"
 
         return {'FINISHED'}
 
@@ -750,14 +752,11 @@ class UseTextureNumber(bpy.types.Operator):
     bl_description = "Toggle the use of texture number for the active object"
 
     def execute(self, context):
-        scene = context.scene
-        if context.selected_objects:  # This ensures it affects all selected objects, not just the active one
-            for obj in context.selected_objects:
-                obj.use_tex_num = scene.use_tex_num
+        context.scene.use_tex_num = not context.scene.use_tex_num
+        if context.scene.use_tex_num:
+            self.report({'INFO'}, "Uses Texture number")
         else:
-            self.report({'INFO'}, "No object selected")
-            return {'CANCELLED'}
-
+            self.report({'INFO'}, "Doesn't Use Texture Number")
         return {'FINISHED'}
 
 class CarParametersExport(bpy.types.Operator):

@@ -7,38 +7,33 @@ Mirror planes are used to determine reflective surfaces.
 
 """
 
-import bmesh
-import importlib
+import bpy
+
+if "common" in locals():
+    import imp
+    imp.reload(common)
+    imp.reload(rvstruct)
+
 from . import common
 from . import rvstruct
-
-# Check if 'common' is already in locals to determine if this is a reload scenario
-if "common" in locals():
-    importlib.reload(common)
-    importlib.reload(rvstruct)
-
-# Add specific imports from common as needed
-# Example: from .common import specific_function, SpecificClass
+from .rvstruct import RIM, MirrorPlane
+from .common import *
 
 def import_file(filepath, scene):
-    props = scene.revolt
-
     with open(filepath, "rb") as f:
         rim = rvstruct.RIM(f)
 
-    print("Mirror planes:", rim.num_mirror_planes)
+    dprint("Mirror planes:", rim.num_mirror_planes)
 
-    filename = filepath.rsplit(os.sep, 1)[1]
+    base_filename = filepath.rsplit(os.sep, 1)[1].rsplit('.', 1)[0]  # Get the base filename without extension
 
     if rim.num_mirror_planes == 0 or rim.mirror_planes == []:
-        queue_error(
-            "importing mirror file", 
-            "File contains 0 mirror planes"
-        )
+        queue_error("importing mirror file", "File contains 0 mirror planes")
         return
 
-    for mirror_plane in rim.mirror_planes:
-        me = bpy.data.meshes.new(filename)
+    for index, mirror_plane in enumerate(rim.mirror_planes):
+        unique_name = f"{base_filename}_{index:03}"  # Generate a unique name for each object
+        me = bpy.data.meshes.new(unique_name)
         bm = bmesh.new()
 
         verts = []
@@ -46,16 +41,11 @@ def import_file(filepath, scene):
             verts.append(bm.verts.new(to_blender_coord(v)))
             bm.verts.ensure_lookup_table()
 
-        # Creates a face from the reversed list of vertices
         bm.faces.new(verts)
 
         bm.to_mesh(me)
         bm.free()
 
-        ob = bpy.data.objects.new(filename, me)
-        ob.revolt.is_mirror_plane = True
-        scene.collection.link(ob)
-
-    # flag, plane and BBox information will be ignored
-
-    context.view_layer.objects.active = ob
+        ob = bpy.data.objects.new(unique_name, me)  # Use the unique name here
+        ob["is_mirror_plane"] = True
+        scene.collection.objects.link(ob)
