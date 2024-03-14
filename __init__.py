@@ -222,6 +222,37 @@ def register():
     props_obj.register()
     props_mesh.register()
     
+    bpy.types.Object.is_instance = bpy.props.BoolProperty(
+        name = "Is Instance",
+        default = False,
+        description = "Object is an instanced mesh"
+    )
+    
+    bpy.types.Object.fin_env = bpy.props.BoolProperty(
+        name="Use Environment Map",
+        default=True
+    )
+    
+    bpy.types.Object.fin_no_mirror = bpy.props.BoolProperty(
+        name="Don't show in Mirror Mode",
+        default=False
+    )
+    
+    bpy.types.Object.fin_no_lights = bpy.props.BoolProperty(
+        name="Is affected by Light",
+        default=False
+    )
+    
+    bpy.types.Object.fin_no_cam_coll = bpy.props.BoolProperty(
+        name="No Camera Collision",
+        default=False
+    )
+    
+    bpy.types.Object.fin_no_obj_coll = bpy.props.BoolProperty(
+        name="No Object Collision",
+        default=False
+    )
+
     bpy.types.Scene.envidx = bpy.props.IntProperty(
         name="envidx",
         default=0,
@@ -432,6 +463,18 @@ def register():
         description = "Applies the object location on export. Should be disabled for single/instance ncp files"
     )
     
+    bpy.types.Object.is_hull_sphere = bpy.props.BoolProperty(
+        name = "Is Interior Sphere",
+        default = False,
+        description = ""
+    )
+    
+    bpy.types.Object.is_hull_convex = bpy.props.BoolProperty(
+        name = "Is Convex Hull",
+        default = False,
+        description = ""
+    )
+    
     bpy.types.Object.is_mirror_plane = bpy.props.BoolProperty(
         name = "Is Mirror Plane",
         default = False,
@@ -495,6 +538,12 @@ def register():
         name="Ignore Collision (.ncp)",
         description="Ignores the object when exporting to NCP",
         default=False
+    )
+    
+    bpy.types.Scene.prm_check_parameters = bpy.props.BoolProperty(
+        name = "Check Parameters for texture",
+        default = True,
+        description = "Checks car parameters.txt for the texture"
     )
     
     #Register Operators
@@ -662,6 +711,7 @@ def unregister():
     
     # Unregister Custom Properties
     
+    del bpy.types.Scene.prm_check_parameters
     del bpy.types.Object.ignore_ncp
     del bpy.types.Object.is_bbox
     del bpy.types.Object.is_cube
@@ -672,6 +722,8 @@ def unregister():
     del bpy.types.Scene.ncp_collgrid_size
     del bpy.types.Scene.rvgl_dir
     del bpy.types.Object.is_mirror_plane
+    del bpy.types.Object.is_hull_convex
+    del bpy.types.Object.is_hull_sphere
     del bpy.types.Scene.apply_rotation_on_export
     del bpy.types.Scene.apply_scale
     del bpy.types.Scene.export_without_texture
@@ -702,8 +754,13 @@ def unregister():
     del bpy.types.Object.fin_model_rgb
     del bpy.types.Object.fin_envcol
     del bpy.types.Object.fin_col
-    
     del bpy.types.Scene.envidx
+    del bpy.types.Object.is_instance
+    del bpy.types.Object.fin_no_obj_coll
+    del bpy.types.Object.fin_no_cam_coll
+    del bpy.types.Object.fin_no_lights
+    del bpy.types.Object.fin_no_mirror
+    del bpy.types.Object.fin_env
     
     props_mesh.unregister()
     props_obj.unregister()

@@ -72,7 +72,6 @@ def import_file(filepath, scene):
 
 
 def import_mesh(prm, scene, filepath, envlist=None):
-    props = scene.revolt
     filename = os.path.basename(filepath)
     
     # Create a new mesh
@@ -164,7 +163,7 @@ def add_rvmesh_to_bmesh(prm, bm, me, filepath, context, scene, envlist=None):
             face = bm.faces.new(verts)
             created_faces.append(face)
         except ValueError as e:
-            # print(e)
+            print(f"Could not create face: {e}")
             continue
         
         bm.verts.ensure_lookup_table()
@@ -214,7 +213,3 @@ def add_rvmesh_to_bmesh(prm, bm, me, filepath, context, scene, envlist=None):
             env_col_alpha = envlist[scene.envidx].alpha
             face[env_alpha_layer] = float(env_col_alpha) / 255
 
-    # UV/loop count mismatch may be safely ignored since PRM import UV mapping is correct
-    if len(face.loops) != len(uvs):
-        # print(f"UV/loop count mismatch for face. Expected {len(face.loops)}, got {len(uvs)}")
-        pass  # Commented out to suppress the warning

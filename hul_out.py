@@ -38,7 +38,7 @@ def export_hull(filepath, scene):
     hull = rvstruct.Hull()
 
     # Export Convex Hulls
-    chull_objs = [obj for obj in scene.objects if obj.name.startswith("is_hull_convex")]
+    chull_objs = [obj for obj in scene.objects if "is_hull_convex" in obj and obj["is_hull_convex"]]
     hull.chull_count = len(chull_objs)
 
     for obj in chull_objs:
@@ -79,7 +79,7 @@ def create_plane_from_face(face):
 def process_sphere_hulls(scene):
     interior = rvstruct.Interior()
     # Filter to include only mesh objects marked as sphere hulls
-    sphere_objs = [obj for obj in scene.objects if obj.name.startswith("is_hull_sphere")]
+    sphere_objs = [obj for obj in scene.objects if "is_hull_sphere" in obj and obj["is_hull_sphere"]]
     interior.sphere_count = len(sphere_objs)
 
     for obj in sphere_objs:

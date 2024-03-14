@@ -114,7 +114,6 @@ class ImportRV(bpy.types.Operator):
 
     def execute(self, context):
         scene = context.scene
-        props = scene.revolt
         frmt = get_format(self.filepath)
 
         start_time = time.time()
@@ -133,10 +132,10 @@ class ImportRV(bpy.types.Operator):
 
         elif frmt == FORMAT_CAR:
             from . import parameters_in
-            old_check = props.prm_check_parameters
-            props.prm_check_parameters = True
+            old_check = scene.prm_check_parameters
+            scene.prm_check_parameters = True
             parameters_in.import_file(self.filepath, scene)
-            props.prm_check_parameters = old_check
+            scene.prm_check_parameters = old_check
 
         elif frmt == FORMAT_NCP:
             from . import ncp_in
@@ -177,7 +176,6 @@ class ImportRV(bpy.types.Operator):
         return {"FINISHED"}
 
     def draw(self, context):
-        props = context.scene.revolt
         layout = self.layout
         space = context.space_data
 
@@ -209,7 +207,6 @@ class ExportRV(bpy.types.Operator):
     
 def exec_export(filepath, context):
     scene = context.scene
-    props = context.scene.revolt
 
     start_time = time.time()
     context.window.cursor_set("WAIT")
@@ -238,7 +235,7 @@ def exec_export(filepath, context):
     elif frmt == FORMAT_FIN:
         from . import fin_out
         print("Exporting to .fin...")
-        fin_out.export_file(filepath, scene)
+        fin_out.export_file(filepath, context)
 
     elif frmt == FORMAT_NCP:
         from . import ncp_out
@@ -1023,7 +1020,7 @@ class ToggleNoCameraCollision(bpy.types.Operator):
     def execute(self, context):
         obj = context.object
         if obj and "is_instance" in obj and obj["is_instance"]:
-            current_state = obj.get("fin_no_cam_coll", False)
+            current_state = obj.get("", False)
             obj["fin_no_cam_coll"] = not current_state
             self.report({'INFO'}, f"No Camera Collision property {'enabled' if not current_state else 'disabled'} for {obj.name}.")
         else:
@@ -1079,7 +1076,7 @@ class ButtonHullGenerate(bpy.types.Operator):
         hull_object = generate_chull(context)
         if hull_object:
             hull_object.name = f"is_hull_convex"
-            hull_object.revolt.is_hull_convex = True  # Marking the object as a convex hull
+            hull_object.is_hull_convex = True  # Marking the object as a convex hull
             self.report({'INFO'}, "Convex hull generated successfully.")
         else:
             self.report({'ERROR'}, "Convex hull generation failed.")

@@ -27,9 +27,6 @@ from .common import COL_SPHERE, COL_HULL, to_blender_coord, to_blender_scale, cr
 from .rvstruct import Hull
 from mathutils import Color, Vector
 
-# Add specific imports from common as needed
-# Example: from .common import specific_function, SpecificClass
-
 
 def get_plane(x, y, z):
     vector1 = [x[1] - x[0], y[1] - y[0], z[1] - z[0]]
@@ -121,7 +118,7 @@ def import_hull(filepath, scene):
         ob = bpy.data.objects.new(filename, me)
         ob.show_transparent = True
         ob.show_wire = True
-        ob.revolt.is_hull_convex = True
+        ob.is_hull_convex = True
         bpy.context.collection.objects.link(ob)
 
     for sphere in hull.interior.spheres:
@@ -129,7 +126,7 @@ def import_hull(filepath, scene):
 
 
 def import_chull(chull, scene, filename):
-    # Note: unused
+    #unused
     print("Importing convex hull...")
 
     me = bpy.data.meshes.new(filename)
@@ -195,12 +192,12 @@ def create_sphere(scene, center, radius, filename):
         me = bpy.data.meshes[mname]
 
     # Links the object and sets position and scale
-    ob = bpy.data.objects.new(f"is_hull_sphere", me)
+    ob = bpy.data.objects.new(f"hull_sphere", me)
     bpy.context.collection.objects.link(ob)
     ob.location = center
     ob.scale = (radius, radius, radius)
     ob.display_type = "SOLID"  # Updated for Blender 2.8+
-    ob.revolt.is_hull_sphere = True
+    ob.is_hull_sphere = True
     return ob
 
 def import_file(filepath, scene):

@@ -7,11 +7,6 @@ Imports Instance files.
 
 """
 
-if "bpy" in locals():
-    import imp
-    imp.reload(common)
-    imp.reload(rvstruct)
-
 import bpy
 import bmesh
 import mathutils
@@ -23,67 +18,79 @@ from . import prm_out
 from .rvstruct import Instances, Instance, Vector, Color
 from .common import *
 
+if "bpy" in locals():
+    import imp
+    imp.reload(common)
+    imp.reload(rvstruct)
 
-def export_file(filepath, scene):
+
+def export_file(filepath, context):
+    scene = context.scene
     fin = Instances()
 
     # Gathers list of instance objects
-    objs = [obj for obj in scene.objects if obj.is_instance]
-
+    objs = [obj for obj in scene.objects if obj.get("is_instance", False)]
 
     for obj in objs:
         instance = Instance()
 
         instance.name = obj.name.split(".prm")[0][:8].upper()
-        fin_col = getattr(obj, "fin_col", [0.5, 0.5, 0.5])  # Default to mid-gray if not set
+    
+        # Access custom properties with a fallback default
+        fin_col = obj.get("fin_col", [0.5, 0.5, 0.5])
         instance.color = (
             int(fin_col[0] * 255) - 128,
             int(fin_col[1] * 255) - 128,
             int(fin_col[2] * 255) - 128,
         )
         print(instance.color)
+
+        # Assuming fin_envcol is an RGBA value stored as a custom property
+        fin_envcol = obj.get("fin_envcol", [0.5, 0.5, 0.5, 1.0])  # Default: mid-gray + opaque alpha
         instance.env_color = rvstruct.Color(
-            color= (
-                int(obj.fin_envcol[0] * 255),
-                int(obj.fin_envcol[1] * 255),
-                int(obj.fin_envcol[2] * 255),
-            ), 
+            color=(
+                int(fin_envcol[0] * 255),
+                int(fin_envcol[1] * 255),
+                int(fin_envcol[2] * 255),
+            ),
             alpha=True
         )
-        instance.env_color.alpha = int((1-obj.fin_envcol[3]) * 255)
-        instance.priority = obj.fin_priority
-
-        instance.lod_bias = obj.fin_lod_bias
-
+        instance.env_color.alpha = int((1 - fin_envcol[3]) * 255)
+    
+        # Access other custom properties similarly
+        instance.priority = obj.get("fin_priority", 0)
+        instance.lod_bias = obj.get("fin_lod_bias", 0)
+    
+        # Position and orientation
         instance.position = Vector(data=to_revolt_coord(obj.location))
-
         instance.or_matrix = rvstruct.Matrix()
         instance.or_matrix.data = to_or_matrix(obj.matrix_world)
-
-        instance.flag = FIN_SET_MODEL_RGB
-
-        if obj.fin_env:
+    
+        # Flags
+        instance.flag = obj.get("FIN_SET_MODEL_RGB", 0)
+    
+        if obj.get("fin_env", False):
             instance.flag |= FIN_ENV
-
-        if obj.fin_model_rgb:
+    
+        if obj.get("fin_model_rgb", False):
             instance.flag |= FIN_SET_MODEL_RGB
-
-        if obj.fin_hide:
+    
+        if obj.get("fin_hide", False):
             instance.flag |= FIN_HIDE
-
-        if obj.fin_no_mirror:
+    
+        if obj.get("fin_no_mirror", False):
             instance.flag |= FIN_NO_MIRROR
-
-        if obj.fin_no_lights:
+    
+        if obj.get("fin_no_lights", False):
             instance.flag |= FIN_NO_LIGHTS
-
-        if obj.fin_no_cam_coll:
+    
+        if obj.get("fin_no_cam_coll", False):
             instance.flag |= FIN_NO_CAMERA_COLLISION
-
-        if obj.fin_no_obj_coll:
+    
+        if obj.get("fin_no_obj_coll", False):
             instance.flag |= FIN_NO_OBJECT_COLLISION
-
-
+    
+    
         folder = os.sep.join(filepath.split(os.sep)[:-1])
 
         prm_fname = "{}.prm".format(instance.name).lower()
@@ -91,13 +98,13 @@ def export_file(filepath, scene):
 
         # Searches for files that are longer than 8 chars
         if not prm_fname in os.listdir(folder):
-            scene.objects.active = obj
+            bpy.context.view_layer.objects.active = obj
             prev_apply_scale = scene.apply_scale
             prev_apply_rotation = scene.apply_rotation
 
             scene.apply_rotation = False
             scene.apply_scale = False
-            prm_out.export_file(os.path.join(folder, prm_fname), scene)
+            prm_out.export_file(os.path.join(folder, prm_fname), scene, context)
 
             scene.apply_rotation = prev_apply_scale
             scene.apply_scale = prev_apply_rotation

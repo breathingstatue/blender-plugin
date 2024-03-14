@@ -711,7 +711,6 @@ def get_texture_path(filepath, tex_num, scene):
     from .carinfo import read_parameters
 
     path, fname = filepath.rsplit(os.sep, 1)
-    props = scene.revolt
 
     # Checks if the loaded model is located in the custom folder
     folder = path.rsplit(os.sep, 1)[1]
@@ -723,7 +722,7 @@ def get_texture_path(filepath, tex_num, scene):
         return None
 
     # The file is part of a car
-    if props.prm_check_parameters and "parameters.txt" in os.listdir(path):
+    if scene.prm_check_parameters and "parameters.txt" in os.listdir(path):
         filepath = os.path.join(path, "parameters.txt")
         if not filepath in PARAMETERS:
             PARAMETERS[filepath] = read_parameters(filepath)

@@ -46,7 +46,6 @@ def intersect(d1, n1, d2, n2, d3, n3):
 
 
 def import_file(filepath, scene):
-    props = scene.revolt
 
     with open(filepath, 'rb') as file:
         filename = os.path.basename(filepath)

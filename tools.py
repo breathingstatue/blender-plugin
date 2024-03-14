@@ -22,8 +22,6 @@ from bpy.props import (
     StringProperty,
 )
 
-from .props.props_scene import RVSceneProperties
-
 # Reloading the 'common' module if it's already in locals
 if "common" in locals():
     importlib.reload(common)
@@ -37,12 +35,11 @@ def bake_shadow(self, context):
 
     shade_obj = context.object
     scene = bpy.context.scene
-    props = scene.revolt
 
-    resolution = props.shadow_resolution
-    quality = props.shadow_quality
-    method = props.shadow_method
-    softness = props.shadow_softness
+    resolution = scene.shadow_resolution
+    quality = scene.shadow_quality
+    method = scene.shadow_method
+    softness = scene.shadow_softness
 
     # Create a hemi light (positive)
     lamp_data_pos = bpy.data.lights.new(name="ShadePositive", type="HEMI")
@@ -130,23 +127,20 @@ def bake_shadow(self, context):
     shtable = ";)SHADOWTABLE {:.4f} {:.4f} {:.4f} {:.4f} {:.4f}".format(
         sleft, sright, sfront, sback, sheight
     )
-    props.shadow_table = shtable
+    scene.shadow_table = shtable
 
 
 def rename_all_objects(self, context):
-    props = context.scene.revolt
-
-    for obj in context.selected_objects:
-        obj.name = props.rename_all_name
+    for obj in context.scene.selected_objects:
+        obj.name = scene.rename_all_name
 
     return len(context.selected_objects)
 
 
 def select_by_name(self, context):
-    props = context.scene.revolt
     sce = context.scene
 
-    objs = [obj for obj in sce.objects if props.rename_all_name in obj.name]
+    objs = [obj for obj in sce.objects if scene.rename_all_name in obj.name]
 
     for obj in objs:
         obj.select = True
@@ -167,12 +161,11 @@ def select_by_data(self, context):
 
 def set_property_to_selected(self, context, prop, value):
     for obj in context.selected_objects:
-        setattr(obj.revolt, prop, value)
+        setattr(obj, prop, value)
     return len(context.selected_objects)
 
 
 def batch_bake(self, context):
-    props = context.scene.revolt
 
     rd = context.scene.render
 
@@ -191,7 +184,7 @@ def batch_bake(self, context):
         if not hasattr(obj.data, "vertex_colors"):
             continue
 
-        dprint("Baking at {}...".format(obj.name))
+        print("Baking at {}...".format(obj.name))
         context.scene.objects.active = obj
 
         # Gets currently selected layers
@@ -203,8 +196,8 @@ def batch_bake(self, context):
             if vclayer.active:
                 old_active = vclayer.name
 
-        dprint("Currently active layer:", old_active)
-        dprint("Currently active layer (render):", old_active_render_layer)
+        print("Currently active layer:", old_active)
+        print("Currently active layer (render):", old_active_render_layer)
         
         # Creates a temporary layer for baking a full render to
         if not "temp" in obj.data.vertex_colors:
@@ -212,15 +205,15 @@ def batch_bake(self, context):
         tmp_layer = obj.data.vertex_colors.get("temp")
         tmp_layer.active = True
         tmp_layer.active_render = True
-        dprint("TMP layer:", tmp_layer.name)
-        dprint("TMP is active render:", tmp_layer.active_render)
+        print("TMP layer:", tmp_layer.name)
+        print("TMP is active render:", tmp_layer.active_render)
         
         # Bakes the image onto that layer
-        dprint("Baking...")
+        print("Baking...")
         bpy.ops.object.bake_image()
-        dprint("done.")
+        print("done.")
 
-        dprint("Calculating mean color...")
+        print("Calculating mean color...")
         
         bm = bmesh.new()
         bm.from_mesh(obj.data)
@@ -242,22 +235,22 @@ def batch_bake(self, context):
         bm.free()
 
         for c in range(3):
-            if props.batch_bake_model_rgb:
+            if context.scene.batch_bake_model_rgb:
                 obj.revolt.fin_col[c] = inf_col[c]
-            if props.batch_bake_model_env:
-                obj.revolt.fin_envcol[c] = inf_col[c]
-        obj.revolt.fin_model_rgb = True
+            if context.scene.batch_bake_model_env:
+                obj.fin_envcol[c] = inf_col[c]
+        obj.fin_model_rgb = True
 
         # Removes the temporary render layer
         obj.data.vertex_colors.remove(tmp_layer)
 
-        dprint("Restoring selection...")
+        print("Restoring selection...")
         # Restores active layers
         if old_active_render_layer is not None:
             obj.data.vertex_colors[old_active_render_layer].active_render = True
         if old_active is not None:
             obj.data.vertex_colors[old_active].active = True
-        dprint("done.")
+        print("done.")
 
 
     # Restores baking settings
@@ -266,7 +259,6 @@ def batch_bake(self, context):
     return len(context.selected_objects)
 
 def generate_chull(context):
-    props = context.scene.revolt
     hull_name = f"is_hull_convex"  # Prefix for naming the hull object
 
     scene = context.scene
@@ -300,7 +292,7 @@ def generate_chull(context):
         hull_ob = bpy.data.objects.new(hull_name, me)
 
         # Set custom property
-        hull_ob.revolt.is_hull_convex = True
+        hull_ob.is_hull_convex = True
 
         # Setup materials and other properties
         hull_ob.show_transparent = True
