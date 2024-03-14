@@ -17,7 +17,7 @@ class RVIO_PT_VertexPanel(bpy.types.Panel):
     bl_options = {"HIDE_HEADER"}
 
     def draw_header(self, context):
-        self.layout.label(text="Vertex Colors")
+        pass
         
     def draw(self, context):
         pass
