@@ -30,5 +30,5 @@ class RVIO_PT_AnimModesPanel(bpy.types.Panel):
         row.prop(scene, "texture", icon="TEXTURE")
 
 
-        layout.operator("texanim.transform", text="TexAnim based on UV coordinates")
-        layout.operator("texanim.grid", text="Grid TexAnim")
+        layout.operator("texanim.transform", text="Transform Animation")
+        layout.operator("texanim.grid", text="Grid Animation")
