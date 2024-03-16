@@ -1,6 +1,6 @@
 import bpy
 import bmesh
-from ..operators import OBJECT_OT_add_texanim_uv, RVIO_OT_TexAnimTransform
+from ..operators import OBJECT_OT_add_texanim_uv, TexAnimTransform
 
 class RVIO_PT_AnimModesPanel(bpy.types.Panel):
     bl_idname = "RVIO_PT_AnimModesPanel"
@@ -12,9 +12,23 @@ class RVIO_PT_AnimModesPanel(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         scene = context.scene
-
-        layout.prop(scene, 'ta_max_frames', slider=True)
+        
         layout.prop(scene, 'ta_max_slots', slider=True)
-        layout.prop(scene, 'frame_duration', slider=True)
+        layout.prop(scene, 'ta_max_frames', slider=True)
+        layout.prop(scene, "ta_current_slot", icon="ANIM")
+        layout.prop(scene, "ta_current_frame", text="Current Frame")
         layout.operator("object.add_texanim_uv", text="Add Animation UV Layer")
-        layout.operator("rvio.texanim_transform", text="Send UV AnimLayers for Export")
+
+
+        box = layout.box()
+        row = box.row(align=True)
+        row.prop(scene, "rvio_frame_start")
+        row.prop(scene, "rvio_frame_end")
+
+        row = box.row()
+        row.prop(scene, "delay", icon="PREVIEW_RANGE")
+        row.prop(scene, "texture", icon="TEXTURE")
+
+
+        layout.operator("texanim.transform", text="TexAnim based on UV coordinates")
+        layout.operator("texanim.grid", text="Grid TexAnim")
