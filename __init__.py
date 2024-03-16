@@ -317,7 +317,7 @@ def register():
     )
     
     bpy.types.Scene.ta_max_slots = bpy.props.IntProperty(
-        name="Max Textures",
+        name="Max Used Slots",
         min=1,
         max=TEX_PAGES_MAX,
         default=1,
@@ -355,7 +355,7 @@ def register():
     )
     
     bpy.types.Scene.ta_current_slot = bpy.props.IntProperty(
-        name = "Current Texture",
+        name = "Texture Slot",
         default = 0,
         min = 0,
         max = TEX_ANIM_MAX-1,
