@@ -144,12 +144,12 @@ from .operators import ToggleNoObjectCollision, ToggleMirrorPlane, InstanceColor
 from .operators import SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere, RVIO_OT_ToggleWParentMeshes
 from .operators import RVIO_OT_ToggleWImportBoundBoxes, RVIO_OT_ToggleWImportCubes, RVIO_OT_ToggleWImportBigCubes
 from .operators import RVIO_OT_NCPExportSelected, RVIO_OT_NCPExportCollgrid, ToggleApplyTranslation, RVIO_OT_NCPGridSize
-from .operators import ButtonCopyUvToFrame, ButtonCopyFrameToUv, RVIO_OT_TexAnimTransform, TexAnimGrid, OBJECT_OT_add_texanim_uv
+from .operators import ButtonCopyUvToFrame, ButtonCopyFrameToUv, TexAnimTransform, TexAnimGrid, OBJECT_OT_add_texanim_uv
 from .rvstruct import World, PRM, Mesh, BoundingBox, Vector, Matrix, Polygon, Vertex, UV, BigCube, TexAnimation
 from .rvstruct import Frame, Color, Instances, Instance, PosNodes, PosNode, NCP, Polyhedron, Plane, LookupGrid
 from .rvstruct import LookupList, Hull, ConvexHull, Edge, Interior, Sphere, RIM, MirrorPlane, TrackZones, Zone
-from .texanim import update_ta_max_frames, update_ta_current_slot, update_ta_current_frame
-from .texanim import update_ta_current_frame_delay, update_ta_current_frame_tex
+from .texanim import update_ta_max_frames, update_ta_current_slot, update_ta_current_frame, update_ta_current_frame_uv
+from .texanim import update_ta_current_frame_delay, update_ta_current_frame_tex, get_texture_items, update_ta_max_slots
 from .ui.faceprops import RVIO_PT_RevoltFacePropertiesPanel
 from .ui.headers import RVIO_PT_RevoltIOToolPanel
 from .ui.helpers import RVIO_PT_RevoltHelpersPanelMesh
@@ -203,15 +203,6 @@ def edit_object_change_handler(scene):
 def load_handler(dummy):
     initialize_custom_properties()
     
-def update_frame_duration(self, context):
-    if self.ta_max_frames > 0:
-        self.frame_duration = self.ta_max_slots / self.ta_max_frames
-    else:
-        self.frame_duration = 0.0
-    
-def update_slots_or_frames(self, context):
-    update_frame_duration(context.scene, context)
-
 
 def register():
     
@@ -317,32 +308,54 @@ def register():
     )
     
     bpy.types.Scene.ta_max_frames = bpy.props.IntProperty(
-        name = "Frames",
-        min = 2,
-        max = 512,
+        name = "Max Frames",
+        min = 1,
+        max = TEX_PAGES_MAX,
         default = 2,
-        update=update_slots_or_frames,
         description = "Total number of frames of the current slot. "
                       "All higher frames will be ignored on export"
     )
     
     bpy.types.Scene.ta_max_slots = bpy.props.IntProperty(
-        name="Textures' Amount",
-        min=0,
-        max=TEX_ANIM_MAX,
-        default=0,
-        update=update_slots_or_frames,
+        name="Max Textures",
+        min=1,
+        max=TEX_PAGES_MAX,
+        default=1,
         description="Total number of texture animation slots. All higher slots will be ignored on export"
     )
     
-    bpy.types.Scene.frame_duration = bpy.props.FloatProperty(
+    bpy.types.Scene.rvio_frame_start = bpy.props.IntProperty(
+        name="Start Frame",
+        description="Start frame of the animation",
+        default=1,
+        min=1,
+        max=TEX_PAGES_MAX-1
+    )
+
+    bpy.types.Scene.rvio_frame_end = bpy.props.IntProperty(
+        name="End Frame",
+        description="End frame of the animation",
+        default=2,
+        min=1,
+        max=TEX_PAGES_MAX-1
+    )
+
+    bpy.types.Scene.delay = bpy.props.FloatProperty(
         name="Frame Duration",
-        description="Duration of every frame calculated.",
-        default=0.0
+        description="Duration of every frame",
+        default=0.02,
+        min=0.0,
+        max=0.04
+    )
+
+    bpy.types.Scene.texture = bpy.props.EnumProperty(
+        name="Create Texture",
+        description="Choose a texture",
+        items=get_texture_items
     )
     
     bpy.types.Scene.ta_current_slot = bpy.props.IntProperty(
-        name = "Animation",
+        name = "Current Texture",
         default = 0,
         min = 0,
         max = TEX_ANIM_MAX-1,
@@ -361,12 +374,20 @@ def register():
     
     bpy.types.Scene.ta_current_frame_delay = bpy.props.FloatProperty(
         name = "Duration",
-        default = 0.01,
+        default = 0.02,
         min = 0,
         update = update_ta_current_frame_delay,
         description = "Duration of the current frame"
     )
     
+    bpy.types.Scene.ta_current_frame = bpy.props.IntProperty(
+        name = "Frame",
+        default = 0,
+        min = 0,
+        update = update_ta_current_frame,
+        description = "Current frame"
+    )
+        
     bpy.types.Scene.ta_current_frame_uv0 = bpy.props.FloatVectorProperty(
         name = "UV 0",
         size = 2,
@@ -575,7 +596,7 @@ def register():
     bpy.utils.register_class(ButtonHullSphere)
     bpy.utils.register_class(ButtonCopyUvToFrame)
     bpy.utils.register_class(ButtonCopyFrameToUv)
-    bpy.utils.register_class(RVIO_OT_TexAnimTransform)
+    bpy.utils.register_class(TexAnimTransform)
     bpy.utils.register_class(TexAnimGrid)
     bpy.utils.register_class(OBJECT_OT_add_texanim_uv)
     bpy.utils.register_class(ButtonZoneHide)
@@ -679,7 +700,7 @@ def unregister():
     bpy.utils.unregister_class(ButtonZoneHide)
     bpy.utils.unregister_class(OBJECT_OT_add_texanim_uv)
     bpy.utils.unregister_class(TexAnimGrid)
-    bpy.utils.unregister_class(RVIO_OT_TexAnimTransform)
+    bpy.utils.unregister_class(TexAnimTransform)
     bpy.utils.unregister_class(ButtonCopyFrameToUv)
     bpy.utils.unregister_class(ButtonCopyUvToFrame)
     bpy.utils.unregister_class(ButtonHullSphere)
@@ -740,11 +761,14 @@ def unregister():
     del bpy.types.Scene.ta_current_frame_uv2
     del bpy.types.Scene.ta_current_frame_uv1
     del bpy.types.Scene.ta_current_frame_uv0
+    del bpy.types.Scene.ta_current_frame
     del bpy.types.Scene.ta_current_frame_delay
     del bpy.types.Scene.ta_current_frame_tex
-    del bpy.types.Scene.ta_current_frame
-    del bpy.types.Scene.frame_duration
     del bpy.types.Scene.ta_current_slot
+    del bpy.types.Scene.texture    
+    del bpy.types.Scene.delay
+    del bpy.types.Scene.frame_end
+    del bpy.types.Scene.frame_start
     del bpy.types.Scene.ta_max_frames
     del bpy.types.Scene.ta_max_slots
     del bpy.types.Scene.texture_animations

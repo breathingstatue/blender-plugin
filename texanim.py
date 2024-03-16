@@ -17,36 +17,48 @@ if "bpy" in locals():
     import importlib
     importlib.reload(common)
     
-from .common import TEX_PAGES_MAX, get_edit_bmesh, get_active_face, msg_box
+from .common import TEX_PAGES_MAX, get_edit_bmesh, get_active_face, msg_box, TEX_ANIM_MAX
+from .rvstruct import TexAnimation, Frame
+
+def get_texture_items(self, context):
+    items = []
+    obj = context.active_object
+
+    if not obj or not obj.material_slots:
+        return items
+
+    for mat_slot in obj.material_slots:
+        mat = mat_slot.material
+        if mat and mat.use_nodes:
+            for node in mat.node_tree.nodes:
+                if node.type == 'TEX_IMAGE':
+                    tex_name = node.image.name if node.image else "Unnamed"
+                    item = (tex_name, tex_name, f"Use texture: {tex_name}")
+                    if item not in items:
+                        items.append(item)
+    return items
 
 def update_ta_max_slots(self, context):
     scene = context.scene
     slot = scene.ta_current_slot
-    frame = scene.frame_current
+    frame = scene.ta_current_frame
 
     if scene.ta_max_slots > 0:
         print("TexAnim: Updating max slots..")
 
-        # Converts the texture animations from string to dict
         ta = json.loads(scene.texture_animations)
 
-        # Creates a new texture animation if there is none in the slot
         while len(ta) < scene.ta_max_slots:
             print("TexAnim: Creating new animation slot... ({}/{})".format(
                 len(ta) + 1, scene.ta_max_slots)
             )
             ta.append(rvstruct.TexAnimation().as_dict())
 
-        # Saves the texture animation
-        scene.texture_animations = str(ta)
-
-        # Updates the rest of the UI
-        # update_ta_current_slot(self, context)
+        scene.texture_animations = json.dumps(ta)
 
 def update_ta_max_frames(self, context):
     scene = context.scene
     slot = scene.ta_current_slot
-    # frame = scene.frame_current
 
     print("TexAnim: Updating max frames..")
     ta = json.loads(scene.texture_animations)
@@ -60,91 +72,121 @@ def update_ta_max_frames(self, context):
         new_frame = rvstruct.Frame().as_dict()
         ta[slot]["frames"].append(new_frame)
 
-    scene.texture_animations = str(ta)
+    scene.texture_animations = json.dumps(ta)
 
 def update_ta_current_slot(self, context):
     scene = context.scene
-    slot = scene.ta_current_slot
+    # Adjust for 0-based index only when accessing lists, ensuring it's never negative
+    slot = max(scene.ta_current_slot - 1, 0)
 
-    print("TexAnim: Updating current slot..")
+    if scene.texture_animations:
+        ta = json.loads(scene.texture_animations)
 
-    # Converts the texture animations from string to dict using json
-    ta = json.loads(scene.texture_animations)
+        if slot >= len(ta) or slot < 0:
+            print("Invalid slot index.")
+            return
 
-    # Check if the slot is within the range. Adjust if necessary.
-    if slot >= len(ta) or slot < 0:
-        print("Slot is out of range, adjusting...")
-        scene.ta_current_slot = max(min(slot, len(ta) - 1), 0)  # Clamp the slot value within valid range
-        slot = scene.ta_current_slot  # Update the slot after clamping
-
-    if slot < len(ta):
-        # Update the maximum frames based on the new slot
-        scene.ta_max_frames = len(ta[slot]['frames']) if 'frames' in ta[slot] else 0
-
-        # Call update on the current frame to refresh related data
-        update_ta_current_frame(self, context)
+        # Now you can use the adjusted 'slot' to access elements in 'ta'
+        # Example: accessing 'frames' in the adjusted slot
+        if 'frames' in ta[slot]:
+            # Perform actions with the frames
+            pass
+        else:
+            print(f"No frames available in slot {slot + 1}.")
     else:
-        print("Invalid slot: No data available.")
-
-    # No need to serialize back to string if no changes were made to 'ta'
+        print("No texture animation data available.")
 
 # Texture Animation
 def update_ta_current_frame(self, context):
     scene = context.scene
-    slot = scene.ta_current_slot
-    frame = scene.frame_current
+    slot = scene.ta_current_slot - 1
+    frame = scene.ta_current_frame
+    maxframes = scene.ta_max_frames
 
     print("TexAnim: Updating current frame..")
 
-    # Converts the texture animations from string to dict
+    # Load the texture animations data
     ta = json.loads(scene.texture_animations)
 
-    # Resets the number if it's out of bounds
-    if frame > scene.ta_max_frames - 1:
-        scene.frame_current = scene.ta_max_frames - 1
+    # Check if the slot is valid
+    if slot < 0 or slot >= len(ta):
+        print(f"Invalid slot index: {slot}.")
         return
 
-    scene.ta_current_frame_tex = ta[slot]["frames"][frame]["texture"]
-    scene.ta_current_frame_delay = ta[slot]["frames"][frame]["delay"]
-    uv = ta[slot]["frames"][frame]["uv"]
-    scene.ta_current_frame_uv0 = (uv[3]["u"], 1 - uv[3]["v"])
-    scene.ta_current_frame_uv1 = (uv[2]["u"], 1 - uv[2]["v"])
-    scene.ta_current_frame_uv2 = (uv[1]["u"], 1 - uv[1]["v"])
-    scene.ta_current_frame_uv3 = (uv[0]["u"], 1 - uv[0]["v"])
+    if frame >= 0 and (frame < maxframes or frame == maxframes):
+        scene.ta_current_frame_tex = slot
+        scene.ta_current_frame_delay = ta[slot]['frames'][frame]['delay']
+        uv = ta[slot]['frames'][frame]['uv']
+        # Assuming you want to update all UVs; adjust based on your needs
+        scene.ta_current_frame_uv0 = (uv[0]['u'], uv[0]['v'])
+        scene.ta_current_frame_uv1 = (uv[1]['u'], uv[1]['v'])
+        scene.ta_current_frame_uv2 = (uv[2]['u'], uv[2]['v'])
+        scene.ta_current_frame_uv3 = (uv[3]['u'], uv[3]['v'])
+    else:
+        print(f"Invalid frame index: {frame} for slot {slot}.")
+    
+    scene.texture_animations = json.dumps(ta)
 
 def update_ta_current_frame_tex(self, context):
     scene = context.scene
-    slot = scene.ta_current_slot
-    frame = scene.frame_current
+    slot = scene.ta_current_slot - 1
+    frame = scene.ta_current_frame - 1
 
     print("TexAnim: Updating current frame texture..")
 
-    # Converts the texture animations from string to dict
+    # Load texture animations data
     ta = json.loads(scene.texture_animations)
-    # Sets the frame's texture
+
+    # Validate slot index
+    if not 0 <= slot < len(ta):
+        print(f"Invalid slot index: {slot + 1}. Aborting update.")
+        return
+
+    # Validate frame index
+    if 'frames' in ta[slot] and not 0 <= frame < len(ta[slot]["frames"]):
+        print(f"Invalid frame index: {frame + 1} for slot {slot + 1}. Aborting update.")
+        return
+
+    # Update the frame's texture index
     ta[slot]["frames"][frame]["texture"] = scene.ta_current_frame_tex
-    # Saves the string again
-    scene.texture_animations = str(ta)
+
+    # Save the updated texture animations data
+    scene.texture_animations = json.dumps(ta)
+    
 
 def update_ta_current_frame_delay(self, context):
     scene = context.scene
-    slot = scene.ta_current_slot
-    frame = scene.frame_current
+    # Adjust for zero-based indexing if necessary
+    slot = scene.ta_current_slot - 1
+    frame = scene.ta_current_frame - 1
 
     print("TexAnim: Updating current frame delay..")
 
-    # Converts the texture animations from string to dict
+    # Load texture animations data
     ta = json.loads(scene.texture_animations)
-    # Sets the frame's delay/duration
+
+    # Validate slot index
+    if not 0 <= slot < len(ta):
+        print(f"Invalid slot index: {slot + 1}.")
+        return
+
+    # Validate frame index
+    if not 0 <= frame < len(ta[slot]["frames"]):
+        print(f"Invalid frame index: {frame + 1} for slot {slot + 1}.")
+        return
+
+    # Update the frame's delay/duration
     ta[slot]["frames"][frame]["delay"] = scene.ta_current_frame_delay
-    # Saves the string again
-    scene.texture_animations = str(ta)
+
+    # Save the updated texture animations data
+    scene.texture_animations = json.dumps(ta)
+    
 
 def update_ta_current_frame_uv(context, num):
     scene = context.scene
     prop_str = "ta_current_frame_uv{}".format(num)
     slot = scene.ta_current_slot
-    frame = scene.frame_current
+    frame = scene.ta_current_frame
 
     # Reverses the accessor since they're saved in reverse order
     num = [0, 1, 2, 3][::-1][num]
@@ -154,7 +196,7 @@ def update_ta_current_frame_uv(context, num):
     ta = json.loads(scene.texture_animations)
     ta[slot]["frames"][frame]["uv"][num]["u"] = getattr(scene, prop_str)[0]
     ta[slot]["frames"][frame]["uv"][num]["v"] = 1 - getattr(scene, prop_str)[1]
-    scene.texture_animations = str(ta)
+    scene.texture_animations = json.dumps(ta)
 
 def copy_uv_to_frame(context):
     scene = context.scene

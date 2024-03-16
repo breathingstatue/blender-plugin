@@ -14,10 +14,6 @@ def load_image(filepath, img_num):
     # Guesses texture name and path
     texture_name = str(img_num) + ".bmp"
 
-    # Gets image if it already exists
-    # image = bpy.data.images.get(texture_name)
-    # Loads image if it doesn't exit yet
-    # if not image:
     if os.path.exists(filepath):
         image = bpy.data.images.load(filepath)
         # Sets a fake user because it doesn't get automatically set

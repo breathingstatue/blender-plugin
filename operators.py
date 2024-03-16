@@ -1090,57 +1090,84 @@ class OBJECT_OT_add_texanim_uv(bpy.types.Operator):
     """Add a new texanim UV layer with an associated image"""
     bl_idname = "object.add_texanim_uv"
     bl_label = "Add Texanim UV Layer and Image"
-    bl_options = {'REGISTER', 'UNDO'}
+    bl_options = {'REGISTER'}
 
     def execute(self, context):
         obj = context.active_object
+        scene = context.scene
 
         if not obj or not obj.type == 'MESH':
             self.report({'ERROR'}, "Active object is not a mesh")
             return {'CANCELLED'}
 
-        uv_layers = obj.data.uv_layers
+        if not scene.texture_animations:
+            scene.texture_animations = json.dumps([])
+        ta = json.loads(scene.texture_animations)
 
-        # Find the highest existing texan index
-        highest_index = 0
+        tex_animations = json.loads(scene.texture_animations)
+        base_name_root = obj.name[:7]
+        next_letter = self.find_next_letter(uv_layers=obj.data.uv_layers, base_name_root=base_name_root)
+
+        base_name = f"{base_name_root}{next_letter}"
+        new_uv_layer = obj.data.uv_layers.new(name=base_name)
+        new_image = bpy.data.images.new(name=base_name, width=512, height=512)
+
+        # Initialize new material and set up nodes
+        new_mat = self.initialize_material(obj=obj, base_name=base_name, new_image=new_image)
+
+        # Create and append new animation entry
+        new_animation_entry = self.initialize_animation_entry(scene, base_name, new_image, new_uv_layer)
+        tex_animations.append(new_animation_entry)
+        scene.texture_animations = json.dumps(tex_animations)
+
+        self.report({'INFO'}, f"Created new UV layer and image: {base_name}")
+        return {'FINISHED'}
+
+    def find_next_letter(self, uv_layers, base_name_root):
+        next_letter = 'a'
         for uv_layer in uv_layers:
-            if uv_layer.name.startswith("texan"):
-                try:
-                    # Assuming the format "texan001", the index starts from character 5 to the end
-                    index = int(uv_layer.name[5:])
-                    highest_index = max(highest_index, index)
-                except ValueError:
-                    self.report({'WARNING'}, f"Found improperly formatted layer name: {uv_layer.name}")
+            if uv_layer.name.startswith(base_name_root):
+                current_letter = uv_layer.name[-1]
+                if current_letter.isalpha() and current_letter >= next_letter:
+                    next_letter = chr(ord(current_letter) + 1)
+        return next_letter
 
-        # Create new UV layer
-        new_index = highest_index + 1
-        base_name = f"texan{new_index:03}"
-        new_uv_layer = uv_layers.new(name=base_name)
-
-        # Create a new image
-        new_image = bpy.data.images.new(name=base_name, width=1024, height=1024)
-
-        # Ensure there is at least one material on the object
+    def initialize_material(self, obj, base_name, new_image):
         if not obj.material_slots:
             new_mat = bpy.data.materials.new(name="Material_" + base_name)
             obj.data.materials.append(new_mat)
         else:
             new_mat = obj.material_slots[0].material
 
-        # Assign the image to the material's texture slot
         if new_mat.use_nodes:
             bsdf = new_mat.node_tree.nodes.get('Principled BSDF')
             if bsdf:
                 tex_image = new_mat.node_tree.nodes.new('ShaderNodeTexImage')
                 tex_image.image = new_image
                 new_mat.node_tree.links.new(bsdf.inputs['Base Color'], tex_image.outputs['Color'])
-        else:
-            tex_slot = new_mat.texture_slots.add()
-            tex_slot.texture = bpy.data.textures.new(base_name, 'IMAGE')
-            tex_slot.texture.image = new_image
+        return new_mat
 
-        self.report({'INFO'}, f"Created new UV layer and image: {base_name}")
-        return {'FINISHED'}
+    def initialize_animation_entry(self, scene, base_name, new_image, new_uv_layer):
+        if scene.ta_max_frames > 0:
+            frame_delay = scene.ta_max_slots / scene.ta_max_frames
+        else:
+            frame_delay = 0
+
+        texture_index = scene.ta_current_slot
+
+        new_animation_entry = {
+            "name": base_name,
+            "image": new_image.name,
+            "uv_layer": new_uv_layer.name,
+            "frames": [
+                {
+                    "texture": texture_index,
+                    "delay": frame_delay,
+                    "uv": [{"u": 0, "v": 0}, {"u": 1, "v": 0}, {"u": 1, "v": 1}, {"u": 0, "v": 1}]
+                } for _ in range(scene.ta_max_frames)
+            ],
+        }
+        return new_animation_entry
     
 class ButtonCopyUvToFrame(bpy.types.Operator):
     bl_idname = "texanim.copy_uv_to_frame"
@@ -1170,63 +1197,85 @@ class ButtonCopyFrameToUv(bpy.types.Operator):
 
         return {'FINISHED'}
 
-class RVIO_OT_TexAnimTransform(bpy.types.Operator):
-    bl_idname = "rvio.texanim_transform"
+class TexAnimTransform(bpy.types.Operator):
+    bl_idname = "texanim.transform"
     bl_label = "Transform Animation"
-    bl_description = "Assigns a linearly ordered texture sequence to animation frames"
+    bl_description = "Creates a linear animation from one frame to another"
 
     def execute(self, context):
         scene = context.scene
 
-        # Deserialize the JSON string to a Python object
-        ta = json.loads(scene.texture_animations)
+        try:
+            ta = json.loads(scene.texture_animations)
+        except json.decoder.JSONDecodeError as e:
+            print(f"Error decoding JSON: {e}")
+            # Handle the error, perhaps by reinitializing the texture_animations to a valid empty state
+            ta = []
+            scene.texture_animations = json.dumps(ta)  # Resetting to a valid empty JSON array
+        slot = scene.ta_current_slot - 1
+        max_frames = scene.ta_max_frames
+        frame_start = scene.rvio_frame_start
+        frame_end = scene.rvio_frame_end - 1
+        texture_name = scene.texture
+        
+        uv_start = (
+            (ta[slot]["frames"][frame_start]["uv"][0]["u"],
+             ta[slot]["frames"][frame_start]["uv"][0]["v"]),
+            (ta[slot]["frames"][frame_start]["uv"][1]["u"],
+             ta[slot]["frames"][frame_start]["uv"][1]["v"]),
+            (ta[slot]["frames"][frame_start]["uv"][2]["u"],
+             ta[slot]["frames"][frame_start]["uv"][2]["v"]),
+            (ta[slot]["frames"][frame_start]["uv"][3]["u"],
+             ta[slot]["frames"][frame_start]["uv"][3]["v"])
+        )
 
-        # Ensure 'ta' structure is properly initialized
-        while len(ta) < scene.ta_max_slots + 1:  # +1 since we're using 1-based indexing
-            ta.append({"frames": [{} for _ in range(scene.ta_max_frames)]})
+        uv_end = (
+            (ta[slot]["frames"][frame_end]["uv"][0]["u"],
+             ta[slot]["frames"][frame_end]["uv"][0]["v"]),
+            (ta[slot]["frames"][frame_end]["uv"][1]["u"],
+             ta[slot]["frames"][frame_end]["uv"][1]["v"]),
+            (ta[slot]["frames"][frame_end]["uv"][2]["u"],
+             ta[slot]["frames"][frame_end]["uv"][2]["v"]),
+            (ta[slot]["frames"][frame_end]["uv"][3]["u"],
+             ta[slot]["frames"][frame_end]["uv"][3]["v"])
+        )
 
-        frame_start = scene.frame_start
-        frame_end = scene.frame_end
-        total_frames = frame_end - frame_start + 1
+        nframes = abs(frame_end - frame_start) + 1
+        current_frame = scene.ta_current_frame
 
-        # Calculate delay based on the total animation time and number of frames
-        delay = scene.frame_duration / total_frames
+        for i in range(0, nframes):
+            current_frame = frame_start + i
+            prog = i / (frame_end - frame_start)
 
-        for frame_number in range(frame_start, frame_end + 1):
-            # Find the corresponding image based on the frame number
-            image_index = (frame_number - 1) % scene.ta_max_slots + 1  # Looping through images
-            image_name = f"texan{image_index:03}"
-            image = bpy.data.images.get(image_name)
+            ta[slot]["frames"][frame_start + i]["delay"] = scene.delay
+            ta[slot]["frames"][frame_start + i]["texture"] = texture_name
 
-            if image:
-                slot_index = image_index  # Slot index directly from image name
-                frame_index = frame_number - frame_start
+            for j in range(0, 4):
+                new_u = uv_start[j][0] * (1 - prog) + uv_end[j][0] * prog
+                new_v = uv_start[j][1] * (1 - prog) + uv_end[j][1] * prog
 
-                if slot_index < len(ta) and frame_index < len(ta[slot_index]["frames"]):
-                    ta[slot_index]["frames"][frame_index]["duration"] = delay
-                    ta[slot_index]["frames"][frame_index]["texture"] = image.name
-                else:
-                    self.report({'WARNING'}, f"Indexing error: slot {slot_index} or frame {frame_index} is out of range.")
-            else:
-                self.report({'WARNING'}, f"No image found for {image_name}")
+                ta[slot]["frames"][frame_start + i]["uv"][j]["u"] = new_u
+                ta[slot]["frames"][frame_start + i]["uv"][j]["v"] = new_v
 
-        # Serialize and save the updated animation data
         scene.texture_animations = json.dumps(ta)
+        update_ta_current_frame(self, context)
 
-        self.report({'INFO'}, "Textures assigned to animation frames.")
+        msg_box("Animation from frame {} to {} completed.".format(
+            frame_start, frame_end),
+            icon = "FILE_TICK"
+        )
+
         return {'FINISHED'}
 
+    def invoke(self, context, event):
+        wm = context.window_manager
+        return wm.invoke_props_dialog(self)
 
 class TexAnimGrid(bpy.types.Operator):
     bl_idname = "texanim.grid"
     bl_label = "Grid Animation"
     bl_description = "Creates an animation based on a grid texture."
 
-    frame_start = bpy.props.IntProperty(
-        name = "Start Frame",
-        min = 0,
-        description = "Start frame of the animation"
-    )
     grid_x = bpy.props.IntProperty(
         name = "X Resolution",
         min = 1,
@@ -1239,28 +1288,15 @@ class TexAnimGrid(bpy.types.Operator):
         default = 2,
         description = "Amount of frames along the Y axis"
     )
-    delay = bpy.props.FloatProperty(
-        name = "Frame duration",
-        description = "Duration of every frame",
-        min = 0.0,
-        default = 0.02,
-    )
-    texture = bpy.props.IntProperty(
-        name = "Texture",
-        default = 0,
-        min = -1,
-        max = TEX_PAGES_MAX-1,
-        description = "Texture for every frame"
-    )
 
     def execute(self, context):
         scene = context.scene
 
-        ta = json(scene.texture_animations)
+        ta = json.loads(scene.texture_animations)
         slot = scene.ta_current_slot
         max_frames = scene.ta_max_frames
 
-        frame_start = self.frame_start
+        frame_start = scene.rvio_frame_start
         grid_x = self.grid_x
         grid_y = self.grid_y
         nframes = grid_x * grid_y
@@ -1314,15 +1350,8 @@ class TexAnimGrid(bpy.types.Operator):
         layout = self.layout
 
         row = layout.row(align=True)
-        row.prop(self, "frame_start")
-
-        row = layout.row(align=True)
         row.prop(self, "grid_x")
         row.prop(self, "grid_y")
-
-        row = layout.row()
-        row.prop(self, "delay", icon="PREVIEW_RANGE")
-        row.prop(self, "texture", icon="TEXTURE")
 
 """
 TRACK ZONES & HULL SPHERE -------------------------------------------------------
