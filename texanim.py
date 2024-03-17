@@ -40,7 +40,7 @@ def get_texture_items(self, context):
 
 def update_ta_max_slots(self, context):
     scene = context.scene
-    slot = scene.ta_current_slot
+    slot = scene.ta_current_slot - 1
     frame = scene.ta_current_frame
 
     if scene.ta_max_slots > 0:
@@ -58,7 +58,7 @@ def update_ta_max_slots(self, context):
 
 def update_ta_max_frames(self, context):
     scene = context.scene
-    slot = scene.ta_current_slot
+    slot = scene.ta_current_slot - 1
 
     print("TexAnim: Updating max frames..")
     ta = json.loads(scene.texture_animations)
@@ -130,7 +130,7 @@ def update_ta_current_frame(self, context):
 def update_ta_current_frame_tex(self, context):
     scene = context.scene
     slot = scene.ta_current_slot - 1
-    frame = scene.ta_current_frame - 1
+    frame = scene.ta_current_frame
 
     print("TexAnim: Updating current frame texture..")
 
@@ -158,7 +158,7 @@ def update_ta_current_frame_delay(self, context):
     scene = context.scene
     # Adjust for zero-based indexing if necessary
     slot = scene.ta_current_slot - 1
-    frame = scene.ta_current_frame - 1
+    frame = scene.ta_current_frame
 
     print("TexAnim: Updating current frame delay..")
 
@@ -184,18 +184,26 @@ def update_ta_current_frame_delay(self, context):
 
 def update_ta_current_frame_uv(context, num):
     scene = context.scene
-    prop_str = "ta_current_frame_uv{}".format(num)
-    slot = scene.ta_current_slot
+    prop_str = f"ta_current_frame_uv{num}"
+    slot = scene.ta_current_slot - 1
     frame = scene.ta_current_frame
 
-    # Reverses the accessor since they're saved in reverse order
-    num = [0, 1, 2, 3][::-1][num]
-
-    print("TexAnim: Updating current frame UV for {}..".format(num))
-
     ta = json.loads(scene.texture_animations)
-    ta[slot]["frames"][frame]["uv"][num]["u"] = getattr(scene, prop_str)[0]
-    ta[slot]["frames"][frame]["uv"][num]["v"] = 1 - getattr(scene, prop_str)[1]
+
+    # Validate slot and frame data
+    if slot >= len(ta) or slot < 0 or "frames" not in ta[slot] or len(ta[slot]["frames"]) <= frame or frame < 0:
+        print(f"Error: Slot {slot} or frame {frame} data is missing or incomplete.")
+        return
+
+    uv_data = getattr(scene, prop_str, None)
+    if not uv_data or len(uv_data) < 2:
+        print(f"Error: UV data for property {prop_str} is missing or incomplete.")
+        return
+
+    # Safe to update UV data
+    num = 3 - num  # Reverse num if necessary
+    ta[slot]["frames"][frame]["uv"][num]["u"] = uv_data[0]
+    ta[slot]["frames"][frame]["uv"][num]["v"] = 1 - uv_data[1]
     scene.texture_animations = json.dumps(ta)
 
 def copy_uv_to_frame(context):

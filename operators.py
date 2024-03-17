@@ -1104,10 +1104,8 @@ class OBJECT_OT_add_texanim_uv(bpy.types.Operator):
             scene.texture_animations = json.dumps([])
         ta = json.loads(scene.texture_animations)
 
-        tex_animations = json.loads(scene.texture_animations)
         base_name_root = obj.name[:7]
         next_letter = self.find_next_letter(uv_layers=obj.data.uv_layers, base_name_root=base_name_root)
-
         base_name = f"{base_name_root}{next_letter}"
         new_uv_layer = obj.data.uv_layers.new(name=base_name)
         new_image = bpy.data.images.new(name=base_name, width=512, height=512)
@@ -1115,12 +1113,13 @@ class OBJECT_OT_add_texanim_uv(bpy.types.Operator):
         # Initialize new material and set up nodes
         new_mat = self.initialize_material(obj=obj, base_name=base_name, new_image=new_image)
 
-        # Create and append new animation entry
-        new_animation_entry = self.initialize_animation_entry(scene, base_name, new_image, new_uv_layer)
-        tex_animations.append(new_animation_entry)
-        scene.texture_animations = json.dumps(tex_animations)
+        slot = scene.ta_current_slot
+        frame_start = scene.rvio_frame_start
+        frame_end = scene.rvio_frame_end
+        frame_delay = scene.delay
 
-        self.report({'INFO'}, f"Created new UV layer and image: {base_name}")
+        new_animation_entry = self.create_animation_entry(context)
+    
         return {'FINISHED'}
 
     def find_next_letter(self, uv_layers, base_name_root):
@@ -1147,26 +1146,35 @@ class OBJECT_OT_add_texanim_uv(bpy.types.Operator):
                 new_mat.node_tree.links.new(bsdf.inputs['Base Color'], tex_image.outputs['Color'])
         return new_mat
 
-    def initialize_animation_entry(self, scene, base_name, new_image, new_uv_layer):
-        if scene.ta_max_frames > 0:
-            frame_delay = scene.ta_max_slots / scene.ta_max_frames
-        else:
-            frame_delay = 0
+    def create_animation_entry(self, context):
+        scene = context.scene
+        slot = scene.ta_current_slot - 1
+        frame_start = scene.rvio_frame_start
+        frame_end = scene.rvio_frame_end - 1
+        uv_data = [scene.ta_current_frame_uv0, scene.ta_current_frame_uv1, scene.ta_current_frame_uv2, scene.ta_current_frame_uv3]
 
-        texture_index = scene.ta_current_slot
-
+        # Construct frame data
+        frames = [{"uv": [{"u": 0, "v": 0} for _ in range(4)]} for _ in range(frame_start, frame_end + 1)]
+        
         new_animation_entry = {
-            "name": base_name,
-            "image": new_image.name,
-            "uv_layer": new_uv_layer.name,
-            "frames": [
-                {
-                    "texture": texture_index,
-                    "delay": frame_delay,
-                    "uv": [{"u": 0, "v": 0}, {"u": 1, "v": 0}, {"u": 1, "v": 1}, {"u": 0, "v": 1}]
-                } for _ in range(scene.ta_max_frames)
-            ],
+            "slot": slot,
+            "frame_start": frame_start,
+            "frame_end": frame_end,
+            "frame_count": len(frames),
+            "frames": frames,
         }
+
+        # Initialize slots if necessary
+        ta = json.loads(scene.texture_animations)
+        while len(ta) <= slot:
+            ta.append({"frames": [], "slot": len(ta), "texture": "", "delay": 0})
+
+        # Update the specific slot
+        ta[slot] = new_animation_entry
+
+        # Save back to the scene
+        scene.texture_animations = json.dumps(ta)
+
         return new_animation_entry
     
 class ButtonCopyUvToFrame(bpy.types.Operator):
@@ -1204,19 +1212,11 @@ class TexAnimTransform(bpy.types.Operator):
 
     def execute(self, context):
         scene = context.scene
-
-        try:
-            ta = json.loads(scene.texture_animations)
-        except json.decoder.JSONDecodeError as e:
-            print(f"Error decoding JSON: {e}")
-            # Handle the error, perhaps by reinitializing the texture_animations to a valid empty state
-            ta = []
-            scene.texture_animations = json.dumps(ta)  # Resetting to a valid empty JSON array
         slot = scene.ta_current_slot - 1
-        max_frames = scene.ta_max_frames
         frame_start = scene.rvio_frame_start
         frame_end = scene.rvio_frame_end - 1
-        texture_name = scene.texture
+
+        ta = json.loads(scene.texture_animations)
         
         uv_start = (
             (ta[slot]["frames"][frame_start]["uv"][0]["u"],
@@ -1229,6 +1229,11 @@ class TexAnimTransform(bpy.types.Operator):
              ta[slot]["frames"][frame_start]["uv"][3]["v"])
         )
 
+
+        if frame_end >= len(ta[slot]["frames"]) or frame_end < 0:
+            self.report({'ERROR'}, "Frame end index is out of range\nSet Frame End value 1 < to Max Frames.")
+            return {'CANCELLED'}
+        
         uv_end = (
             (ta[slot]["frames"][frame_end]["uv"][0]["u"],
              ta[slot]["frames"][frame_end]["uv"][0]["v"]),
@@ -1243,12 +1248,11 @@ class TexAnimTransform(bpy.types.Operator):
         nframes = abs(frame_end - frame_start) + 1
         current_frame = scene.ta_current_frame
 
-        for i in range(0, nframes):
-            current_frame = frame_start + i
+        for i in range(nframes):
             prog = i / (frame_end - frame_start)
 
             ta[slot]["frames"][frame_start + i]["delay"] = scene.delay
-            ta[slot]["frames"][frame_start + i]["texture"] = texture_name
+            ta[slot]["frames"][frame_start + i]["texture"] = scene.texture
 
             for j in range(0, 4):
                 new_u = uv_start[j][0] * (1 - prog) + uv_end[j][0] * prog
@@ -1261,44 +1265,26 @@ class TexAnimTransform(bpy.types.Operator):
         update_ta_current_frame(self, context)
 
         msg_box("Animation from frame {} to {} completed.".format(
-            frame_start, frame_end),
-            icon = "FILE_TICK"
-        )
+            frame_start, frame_end), icon="FILE_TICK")
 
         return {'FINISHED'}
-
-    def invoke(self, context, event):
-        wm = context.window_manager
-        return wm.invoke_props_dialog(self)
 
 class TexAnimGrid(bpy.types.Operator):
     bl_idname = "texanim.grid"
     bl_label = "Grid Animation"
     bl_description = "Creates an animation based on a grid texture."
 
-    grid_x = bpy.props.IntProperty(
-        name = "X Resolution",
-        min = 1,
-        default = 2,
-        description = "Amount of frames along the X axis"
-    )
-    grid_y = bpy.props.IntProperty(
-        name = "Y Resolution",
-        min = 1,
-        default = 2,
-        description = "Amount of frames along the Y axis"
-    )
-
     def execute(self, context):
         scene = context.scene
 
         ta = json.loads(scene.texture_animations)
-        slot = scene.ta_current_slot
+        slot = scene.ta_current_slot - 1
         max_frames = scene.ta_max_frames
-
-        frame_start = scene.rvio_frame_start
-        grid_x = self.grid_x
-        grid_y = self.grid_y
+        texture_name = scene.texture
+        frame_start = scene.rvio_frame_start - 1
+        frame_end = scene.rvio_frame_end
+        grid_x = context.scene.grid_x
+        grid_y = context.scene.grid_y
         nframes = grid_x * grid_y
 
         if nframes > max_frames:
@@ -1311,15 +1297,16 @@ class TexAnimGrid(bpy.types.Operator):
             return {'FINISHED'}
 
         i = 0
-        for y in range(grid_x):
-            for x in range(grid_y):
-                uv0 = (x/grid_x, y/grid_y)
-                uv1 = ((x+1)/grid_x, y/grid_y)
-                uv2 = ((x+1)/grid_x, (y+1)/grid_y)
-                uv3 = (x/grid_x, (y+1)/grid_y)
+        for y in range(grid_y):
+            for x in range(grid_x):
+                uv0 = (x / grid_x, y / grid_y)
+                uv1 = ((x + 1) / grid_x, y / grid_y)
+                uv2 = ((x + 1) / grid_x, (y + 1) / grid_y)
+                uv3 = (x / grid_x, (y + 1) / grid_y)
 
-                ta[slot]["frames"][frame_start + i]["delay"] = self.delay
-                ta[slot]["frames"][frame_start + i]["texture"] = self.texture
+
+                ta[slot]["frames"][frame_start + i]["delay"] = scene.delay
+                ta[slot]["frames"][frame_start + i]["texture"] = texture_name
 
                 ta[slot]["frames"][frame_start + i]["uv"][0]["u"] = uv0[0]
                 ta[slot]["frames"][frame_start + i]["uv"][0]["v"] = uv0[1]
@@ -1332,26 +1319,16 @@ class TexAnimGrid(bpy.types.Operator):
 
                 i += 1
 
-        scene.texture_animations = str(ta)
+        scene.texture_animations = json.dumps(ta)
         update_ta_current_frame(self, context)
-
+                
         msg_box("Animation of {} frames completed.".format(
             nframes),
             icon = "FILE_TICK"
         )
 
-        return {'FINISHED'}
+        return {'FINISHED'}        
 
-    def invoke(self, context, event):
-        wm = context.window_manager
-        return wm.invoke_props_dialog(self)
-
-    def draw(self, context):
-        layout = self.layout
-
-        row = layout.row(align=True)
-        row.prop(self, "grid_x")
-        row.prop(self, "grid_y")
 
 """
 TRACK ZONES & HULL SPHERE -------------------------------------------------------

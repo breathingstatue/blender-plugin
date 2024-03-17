@@ -328,7 +328,7 @@ def register():
         name="Start Frame",
         description="Start frame of the animation",
         default=1,
-        min=1,
+        min=0,
         max=TEX_PAGES_MAX-1
     )
 
@@ -336,7 +336,7 @@ def register():
         name="End Frame",
         description="End frame of the animation",
         default=2,
-        min=1,
+        min=0,
         max=TEX_PAGES_MAX-1
     )
 
@@ -345,18 +345,18 @@ def register():
         description="Duration of every frame",
         default=0.02,
         min=0.0,
-        max=0.04
+        max=2.0
     )
 
     bpy.types.Scene.texture = bpy.props.EnumProperty(
-        name="Create Texture",
+        name="",
         description="Choose a texture",
         items=get_texture_items
     )
     
     bpy.types.Scene.ta_current_slot = bpy.props.IntProperty(
         name = "Texture Slot",
-        default = 0,
+        default = 1,
         min = 0,
         max = TEX_ANIM_MAX-1,
         update = update_ta_current_slot,
@@ -382,7 +382,7 @@ def register():
     
     bpy.types.Scene.ta_current_frame = bpy.props.IntProperty(
         name = "Frame",
-        default = 0,
+        default = 1,
         min = 0,
         update = update_ta_current_frame,
         description = "Current frame"
@@ -392,8 +392,7 @@ def register():
         name = "UV 0",
         size = 2,
         default = (0, 0),
-        min = 0.0,
-        max = 1.0,
+        update = lambda self, context: update_ta_current_frame_uv(context, 0),
         description = "UV coordinate of the first vertex"
     )
     
@@ -401,8 +400,7 @@ def register():
         name = "UV 1",
         size = 2,
         default = (0, 0),
-        min = 0.0,
-        max = 1.0,
+        update = lambda self, context: update_ta_current_frame_uv(context, 1),
         description = "UV coordinate of the second vertex"
     )
     
@@ -410,8 +408,7 @@ def register():
         name = "UV 2",
         size = 2,
         default = (0, 0),
-        min = 0.0,
-        max = 1.0,
+        update = lambda self, context: update_ta_current_frame_uv(context, 2),
         description = "UV coordinate of the third vertex"
     )
     
@@ -419,16 +416,24 @@ def register():
         name = "UV 3",
         size = 2,
         default = (0, 0),
-        min = 0.0,
-        max = 1.0,
+        update = lambda self, context: update_ta_current_frame_uv(context, 3),
         description = "UV coordinate of the fourth vertex"
     )
     
-    bpy.types.Object.is_bbox = bpy.props.BoolProperty(
-        name="Object is a Boundary Box",
-        default=False,
-        description="Makes BoundBox properties visible for this object"
+    bpy.types.Scene.grid_x = bpy.props.IntProperty(
+        name="X Resolution",
+        min=1,
+        default=2,
+        max= 256,
+        description="Amount of frames along the X axis"
     )
+    bpy.types.Scene.grid_y = bpy.props.IntProperty(
+        name="Y Resolution",
+        min=1,
+        default=2,
+        max = 256,
+        description="Amount of frames along the Y axis"
+    )    
     
     bpy.types.Scene.w_parent_meshes = bpy.props.BoolProperty(
         name="Toggle Parent Meshes",
@@ -652,8 +657,6 @@ def unregister():
         bpy.app.handlers.load_post.remove(load_handler)
     bpy.app.handlers.depsgraph_update_pre.remove(edit_object_change_handler)
      
-    bpy.types.VIEW3D_MT_mesh_add.remove(menu_func)
-            
     # Unregister Classes
 
     # Unregister UI
@@ -755,8 +758,8 @@ def unregister():
     del bpy.types.Scene.w_import_bound_boxes
     del bpy.types.Scene.w_parent_meshes
     
-    del bpy.types.Object.is_bbox
-    
+    del bpy.types.Scene.grid_y
+    del bpy.types.Scene.grid_x
     del bpy.types.Scene.ta_current_frame_uv3
     del bpy.types.Scene.ta_current_frame_uv2
     del bpy.types.Scene.ta_current_frame_uv1
