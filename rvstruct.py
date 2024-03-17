@@ -28,6 +28,7 @@ Missing Formats:
 """
 
 import os
+import json
 import bmesh
 import struct
 from math import ceil, sqrt
@@ -604,7 +605,7 @@ class UV:
             self.read(file)
 
     def __repr__(self):
-        return str(self.as_dict())
+        return json.dumps(self.as_dict())
 
     def read(self, file):
         # Reads the uv coordinates
@@ -705,14 +706,15 @@ class TexAnimation:
             frame.write(file)
 
     def as_dict(self):
-        dic = { "frame_count": self.frame_count,
-                "frames": self.frames
+        return {
+            "frame_count": self.frame_count,
+            "frames": [frame.as_dict() for frame in self.frames]
         }
-        return dic
 
     def from_dict(self, dic):
-        self.frame_count = dic["frame_count"]
-        for framedic in dic["frames"]:
+        self.frame_count = dic.get("frame_count", 0)
+        self.frames = []
+        for framedic in dic.get("frames", []):
             frame = Frame()
             frame.from_dict(framedic)
             self.frames.append(frame)
@@ -722,57 +724,56 @@ class Frame:
     """
     Reads and stores exactly one texture animation frame
     """
-    def __init__(self, file=None):
+    def __init__(self, file=None, json_data=None):
         self.texture = 0                    # texture id of the animated tex
         self.delay = 0                      # delay in milliseconds
         self.uv = [UV(), UV(), UV(), UV()]  # list of 4 UV coordinates
 
         if file:
             self.read(file)
+        
+        if json_data:
+            self.update_from_json(json_data)
 
-    def __repr__(self):
-        return str(self.as_dict())
+    def update_from_json(self, json_data):
+        data = json.loads(json_data)
+        self.from_dict(data)  # Reuse the from_dict method for setting attributes.
 
-    def __str__(self):
-        return str(self.as_dict())
+    def from_dict(self, dic):
+        self.texture = (dic.get("texture", 0))
+        self.delay = dic.get("delay", 0)
+        uvs = []
+        for uv_data in dic.get("uv", []):
+            uv = UV()  # Ensure a new UV instance is created.
+            uv.from_dict(uv_data)  # Assume this properly populates the UV object without overwriting it with None.
+            uvs.append(uv)
+        self.uv = uvs
 
     def read(self, file):
-        # Reads the texture id
         self.texture = struct.unpack("<l", file.read(4))[0]
-        # Reads the delay
         self.delay = struct.unpack("<f", file.read(4))[0]
-
-        # Reads the UV coordinates for this frame
         for uv in range(4):
             self.uv[uv] = UV(file)
 
     def write(self, file):
-        # Writes the texture id
         file.write(struct.pack("<l", self.texture))
-        # Writes the delay
         file.write(struct.pack("<f", self.delay))
-
-        # Writes the UV coordinates for this frame
-        for uv in self.uv[:4]:
-            uv.write(file)
+        for uv in self.uv:
+            if uv is not None:  # Check if uv is not None before trying to access its write method.
+                uv.write(file)
 
     def as_dict(self):
-        dic = { "texture": self.texture,
-                "delay": self.delay,
-                "uv": [uv.as_dict() for uv in self.uv]
+        return {
+            "texture": self.texture,
+            "delay": self.delay,
+            "uv": [uv_obj.as_dict() for uv_obj in self.uv]
         }
-        return dic
 
-    def from_dict(self, dic):
-        self.texture = dic["texture"]
-        self.delay = dic["delay"]
-        uvs = []
-        for x in range(0, 4):
-            uvdict = dic["uv"][x]
-            uv = UV()
-            uv.from_dict(uvdict)
-            uvs.append(uv)
-        self.uv = uvs
+    def __repr__(self):
+        return json.dumps(self.as_dict(), indent=4)
+
+    def __str__(self):
+        return json.dumps(self.as_dict())
 
 
 class Color:

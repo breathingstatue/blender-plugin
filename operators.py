@@ -225,7 +225,7 @@ def exec_export(filepath, context):
     
     # Handle different formats
     if frmt == FORMAT_UNK:
-        self.report({'ERROR'}, "Unsupported format.")
+        print({'ERROR'}, "Unsupported format.")
         return {'CANCELLED'}
 
     if frmt == FORMAT_PRM:
@@ -1113,11 +1113,6 @@ class OBJECT_OT_add_texanim_uv(bpy.types.Operator):
         # Initialize new material and set up nodes
         new_mat = self.initialize_material(obj=obj, base_name=base_name, new_image=new_image)
 
-        slot = scene.ta_current_slot
-        frame_start = scene.rvio_frame_start
-        frame_end = scene.rvio_frame_end
-        frame_delay = scene.delay
-
         new_animation_entry = self.create_animation_entry(context)
     
         return {'FINISHED'}
@@ -1150,8 +1145,10 @@ class OBJECT_OT_add_texanim_uv(bpy.types.Operator):
         scene = context.scene
         slot = scene.ta_current_slot - 1
         frame_start = scene.rvio_frame_start
-        frame_end = scene.rvio_frame_end - 1
+        frame_end = scene.rvio_frame_end
         uv_data = [scene.ta_current_frame_uv0, scene.ta_current_frame_uv1, scene.ta_current_frame_uv2, scene.ta_current_frame_uv3]
+        texture = scene.ta_current_frame_tex
+        delay = scene.delay
 
         # Construct frame data
         frames = [{"uv": [{"u": 0, "v": 0} for _ in range(4)]} for _ in range(frame_start, frame_end + 1)]
@@ -1162,12 +1159,14 @@ class OBJECT_OT_add_texanim_uv(bpy.types.Operator):
             "frame_end": frame_end,
             "frame_count": len(frames),
             "frames": frames,
+            "texture": texture,
+            "delay": delay,
         }
 
         # Initialize slots if necessary
         ta = json.loads(scene.texture_animations)
         while len(ta) <= slot:
-            ta.append({"frames": [], "slot": len(ta), "texture": "", "delay": 0})
+            ta.append({"frames": [], "slot": len(ta)})
 
         # Update the specific slot
         ta[slot] = new_animation_entry
@@ -1229,9 +1228,8 @@ class TexAnimTransform(bpy.types.Operator):
              ta[slot]["frames"][frame_start]["uv"][3]["v"])
         )
 
-
         if frame_end >= len(ta[slot]["frames"]) or frame_end < 0:
-            self.report({'ERROR'}, "Frame end index is out of range\nSet Frame End value 1 < to Max Frames.")
+            self.report({'ERROR'}, "Frame end index is out of range.")
             return {'CANCELLED'}
         
         uv_end = (
@@ -1252,7 +1250,7 @@ class TexAnimTransform(bpy.types.Operator):
             prog = i / (frame_end - frame_start)
 
             ta[slot]["frames"][frame_start + i]["delay"] = scene.delay
-            ta[slot]["frames"][frame_start + i]["texture"] = scene.texture
+            ta[slot]["frames"][frame_start + i]["texture"] = scene.ta_current_frame_tex
 
             for j in range(0, 4):
                 new_u = uv_start[j][0] * (1 - prog) + uv_end[j][0] * prog

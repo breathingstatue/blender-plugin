@@ -10,6 +10,7 @@ World files contain meshes, optimization data and texture animations.
 import os
 import bpy
 import bmesh
+import json
 from mathutils import Vector
 from . import common, rvstruct, img_in, prm_in
 from .rvstruct import World
@@ -69,7 +70,7 @@ def import_file(filepath, scene):
                 bcube.parent = main_w
             bcube["is_bcube"] = True
 
-    scene.texture_animations = str([a.as_dict() for a in world.animations])
+    scene.texture_animations = json.dumps([a.as_dict() for a in world.animations])
     scene.ta_max_slots = world.animation_count
 
     # Clears the used texture paths
