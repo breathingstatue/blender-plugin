@@ -25,10 +25,7 @@ class RVIO_PT_AnimModesPanel(bpy.types.Panel):
         layout.operator("object.add_texanim_uv", text="Add Animation UV Layer")
         layout.prop(scene, "texture", icon="TEXTURE")
         
-        box = layout.box()
-        col = box.column(align=True)
-
-        
+        layout.operator("uv.texanim_direction", text="Animation Direction")
         layout.operator("texanim.transform", icon="UV", text="Transform Animation")
         
         box = layout.box()
