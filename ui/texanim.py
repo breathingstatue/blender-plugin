@@ -13,22 +13,28 @@ class RVIO_PT_AnimModesPanel(bpy.types.Panel):
         layout = self.layout
         scene = context.scene
         
-        layout.prop(scene, 'ta_max_slots', slider=True)
-        layout.prop(scene, 'ta_max_frames', slider=True)
-        layout.prop(scene, "ta_current_slot", icon="ANIM")
-        layout.prop(scene, "ta_current_frame", text="Current Frame")
-        layout.operator("object.add_texanim_uv", text="Add Animation UV Layer")
-
-
         box = layout.box()
-        row = box.row(align=True)
-        row.prop(scene, "rvio_frame_start")
-        row.prop(scene, "rvio_frame_end")
+        col = box.column(align=True)
+        col.prop(scene, "ta_current_slot")
+        col.prop(scene, "ta_max_frames", slider=True)
+        col.prop(scene, "delay")
+        col.prop(scene, "rvio_frame_start")
+        col.prop(scene, "rvio_frame_end")
+        col.prop(scene, "ta_current_frame", text="Current Frame")
+        
+        layout.operator("object.add_texanim_uv", text="Add Animation UV Layer")
+        layout.prop(scene, "texture", icon="TEXTURE")
+        
+        box = layout.box()
+        col = box.column(align=True)
 
-        row = box.row()
-        row.prop(scene, "delay", icon="PREVIEW_RANGE")
-        row.prop(scene, "texture", icon="TEXTURE")
-
-
-        layout.operator("texanim.transform", text="Transform Animation")
-        layout.operator("texanim.grid", text="Grid Animation")
+        
+        layout.operator("texanim.transform", icon="UV", text="Transform Animation")
+        
+        box = layout.box()
+        col = box.column(align=True)
+        col.prop(scene, "grid_x", slider=True)
+        col.prop(scene, "grid_y", slider=True)
+        col.operator("texanim.grid", icon="GRID", text="Grid Animation")
+        
+        layout.prop(scene, "ta_max_slots", slider=True)
