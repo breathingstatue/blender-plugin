@@ -1,4 +1,4 @@
-"""
+﻿"""
 Name:    operators
 Purpose: Provides operators for importing and exporting and other buttons.
 
@@ -1086,6 +1086,66 @@ class ButtonHullGenerate(bpy.types.Operator):
 TEXTURE ANIMATIONS -------------------------------------------------------
 """
 
+class TexAnimDirection(bpy.types.Operator):
+    bl_idname = "uv.texanim_direction"
+    bl_label = "UV Animation Direction"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    direction: bpy.props.EnumProperty(
+        name="Direction",
+        description="Choose the direction of the UV animation",
+        items=[
+            ('RIGHT', "Right", "Move right"),
+            ('LEFT', "Left", "Move left"),
+            ('UP', "Up", "Move up"),
+            ('DOWN', "Down", "Move down"),
+            ('CUSTOM', "Custom", "Specify custom direction")
+        ],
+        default='RIGHT'
+    )
+
+    delta_u: bpy.props.FloatProperty(
+        name="Delta U",
+        description="U coordinate increment per frame",
+        default=0.01,
+        min=-1.0,
+        max=1.0
+    )
+
+    delta_v: bpy.props.FloatProperty(
+        name="Delta V",
+        description="V coordinate increment per frame",
+        default=0.0,
+        min=-1.0,
+        max=1.0
+    )
+
+    def execute(self, context):
+        direction = self.direction
+        delta_u = self.delta_u
+        delta_v = self.delta_v
+
+        if direction == 'RIGHT':
+            delta_u, delta_v = 0.01, 0.0
+        elif direction == 'LEFT':
+            delta_u, delta_v = -0.01, 0.0
+        elif direction == 'UP':
+            delta_u, delta_v = 0.0, -0.01
+        elif direction == 'DOWN':
+            delta_u, delta_v = 0.0, 0.01
+        # Custom direction uses the user-provided delta_u and delta_v
+
+        # Store the deltas in scene properties for later use
+        scene = context.scene
+        scene.texanim_delta_u = delta_u
+        scene.texanim_delta_v = delta_v
+
+        self.report({'INFO'}, f"UV Animation Direction set: {direction} (ΔU={delta_u}, ΔV={delta_v})")
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+
 class OBJECT_OT_add_texanim_uv(bpy.types.Operator):
     """Add a new texanim UV layer with an associated image"""
     bl_idname = "object.add_texanim_uv"
@@ -1207,7 +1267,7 @@ class ButtonCopyFrameToUv(bpy.types.Operator):
 class TexAnimTransform(bpy.types.Operator):
     bl_idname = "texanim.transform"
     bl_label = "Transform Animation"
-    bl_description = "Creates a linear animation from one frame to another"
+    bl_description = "Creates a linear animation moving UVs in a specified direction"
 
     def execute(self, context):
         scene = context.scene
@@ -1216,55 +1276,51 @@ class TexAnimTransform(bpy.types.Operator):
         frame_end = scene.rvio_frame_end - 1
 
         ta = json.loads(scene.texture_animations)
-        
-        uv_start = (
-            (ta[slot]["frames"][frame_start]["uv"][0]["u"],
-             ta[slot]["frames"][frame_start]["uv"][0]["v"]),
-            (ta[slot]["frames"][frame_start]["uv"][1]["u"],
-             ta[slot]["frames"][frame_start]["uv"][1]["v"]),
-            (ta[slot]["frames"][frame_start]["uv"][2]["u"],
-             ta[slot]["frames"][frame_start]["uv"][2]["v"]),
-            (ta[slot]["frames"][frame_start]["uv"][3]["u"],
-             ta[slot]["frames"][frame_start]["uv"][3]["v"])
-        )
 
         if frame_end >= len(ta[slot]["frames"]) or frame_end < 0:
             self.report({'ERROR'}, "Frame end index is out of range.")
             return {'CANCELLED'}
         
-        uv_end = (
-            (ta[slot]["frames"][frame_end]["uv"][0]["u"],
-             ta[slot]["frames"][frame_end]["uv"][0]["v"]),
-            (ta[slot]["frames"][frame_end]["uv"][1]["u"],
-             ta[slot]["frames"][frame_end]["uv"][1]["v"]),
-            (ta[slot]["frames"][frame_end]["uv"][2]["u"],
-             ta[slot]["frames"][frame_end]["uv"][2]["v"]),
-            (ta[slot]["frames"][frame_end]["uv"][3]["u"],
-             ta[slot]["frames"][frame_end]["uv"][3]["v"])
-        )
+        # Retrieve the direction deltas from the scene properties
+        delta_u = getattr(scene, 'texanim_delta_u', 0.01)  # Default to slight right movement
+        delta_v = getattr(scene, 'texanim_delta_v', 0.0)  # Default to no vertical movement
 
         nframes = abs(frame_end - frame_start) + 1
-        current_frame = scene.ta_current_frame
 
-        for i in range(nframes):
-            prog = i / (frame_end - frame_start)
+        for frame_idx in range(nframes):
+            frame_number = frame_start + frame_idx
+            # Calculate progression ratio based on frame index
+            prog = frame_idx / (nframes - 1) if nframes > 1 else 1
 
-            ta[slot]["frames"][frame_start + i]["delay"] = scene.delay
-            ta[slot]["frames"][frame_start + i]["texture"] = scene.ta_current_frame_tex
+            for vertex_idx in range(4):
+                # Initialize with start frame's UVs
+                if frame_idx == 0:
+                    uv_start = (
+                        ta[slot]["frames"][frame_start]["uv"][vertex_idx]["u"],
+                        ta[slot]["frames"][frame_start]["uv"][vertex_idx]["v"]
+                    )
+                # Use the last frame's UVs for subsequent frames
+                else:
+                    uv_start = (
+                        ta[slot]["frames"][frame_number - 1]["uv"][vertex_idx]["u"],
+                        ta[slot]["frames"][frame_number - 1]["uv"][vertex_idx]["v"]
+                    )
 
-            for j in range(0, 4):
-                new_u = uv_start[j][0] * (1 - prog) + uv_end[j][0] * prog
-                new_v = uv_start[j][1] * (1 - prog) + uv_end[j][1] * prog
+                # Apply the UV transformation based on direction and progression
+                new_u = (uv_start[0] + delta_u * prog) % 1.0  # Wrap around the UV map
+                new_v = (uv_start[1] + delta_v * prog) % 1.0  # Wrap around the UV map
 
-                ta[slot]["frames"][frame_start + i]["uv"][j]["u"] = new_u
-                ta[slot]["frames"][frame_start + i]["uv"][j]["v"] = new_v
+                ta[slot]["frames"][frame_number]["uv"][vertex_idx]["u"] = new_u
+                ta[slot]["frames"][frame_number]["uv"][vertex_idx]["v"] = new_v
+
+            # Update texture and delay based on the current frame settings
+            ta[slot]["frames"][frame_number]["texture"] = scene.ta_current_frame_tex
+            ta[slot]["frames"][frame_number]["delay"] = scene.delay
 
         scene.texture_animations = json.dumps(ta)
         update_ta_current_frame(self, context)
 
-        msg_box("Animation from frame {} to {} completed.".format(
-            frame_start, frame_end), icon="FILE_TICK")
-
+        self.report({'INFO'}, "Animation from frame {} to {} completed.".format(frame_start, frame_end))
         return {'FINISHED'}
 
 class TexAnimGrid(bpy.types.Operator):

@@ -133,7 +133,7 @@ from .common import DialogOperator, TEX_ANIM_MAX, TEX_PAGES_MAX
 from .operators import ImportRV, ExportRV, RVIO_OT_ReadCarParameters, RVIO_OT_SelectRevoltDirectory
 from .operators import ButtonReExport, ButtonSelectFaceProp, ButtonSelectNCPFaceProp
 from .operators import ButtonSelectNCPMaterial, ButtonVertexColorSet, VertexColorRemove
-from .operators import ButtonVertexColorCreateLayer, ButtonVertexAlphaLayer
+from .operators import ButtonVertexColorCreateLayer, ButtonVertexAlphaLayer, TexAnimDirection
 from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, UseTextureNumber
 from .operators import SetInstanceProperty, RemoveInstanceProperty, BatchBake, LaunchRV, TexturesSave
 from .operators import TexturesRename, CarParametersExport, ButtonZoneHide, AddTrackZone
@@ -572,6 +572,9 @@ def register():
         description = "Checks car parameters.txt for the texture"
     )
     
+    bpy.types.Scene.texanim_delta_u = bpy.props.FloatProperty(name="TexAnim Delta U")
+    bpy.types.Scene.texanim_delta_v = bpy.props.FloatProperty(name="TexAnim Delta V")
+    
     #Register Operators
     bpy.utils.register_class(DialogOperator)
     bpy.utils.register_class(ImportRV)
@@ -584,6 +587,7 @@ def register():
     bpy.utils.register_class(ButtonVertexColorSet)
     bpy.utils.register_class(ButtonVertexColorCreateLayer)
     bpy.utils.register_class(ButtonVertexAlphaLayer)
+    bpy.utils.register_class(TexAnimDirection)
     bpy.utils.register_class(ButtonRenameAllObjects)
     bpy.utils.register_class(SelectByName)
     bpy.utils.register_class(SelectByData)
@@ -721,6 +725,7 @@ def unregister():
     bpy.utils.unregister_class(SelectByData)
     bpy.utils.unregister_class(SelectByName)
     bpy.utils.unregister_class(ButtonRenameAllObjects)
+    bpy.utils.unregister_class(TexAnimDirection)
     bpy.utils.unregister_class(ButtonVertexAlphaLayer)
     bpy.utils.unregister_class(ButtonVertexColorCreateLayer)
     bpy.utils.unregister_class(ButtonVertexColorSet)
@@ -735,6 +740,9 @@ def unregister():
     
     # Unregister Custom Properties
     
+    del bpy.types.Scene.texanim_delta_v
+    del bpy.types.Scene.texanim_delta_u
+
     del bpy.types.Scene.prm_check_parameters
     del bpy.types.Object.ignore_ncp
     del bpy.types.Object.is_bbox
