@@ -130,10 +130,13 @@ from .props.props_mesh import RVMeshProperties
 from .props.props_obj import RVObjectProperties
 from .props.props_scene import RVSceneProperties
 from .common import DialogOperator, TEX_ANIM_MAX, TEX_PAGES_MAX, BAKE_LIGHTS, BAKE_LIGHT_ORIENTATIONS, BAKE_SHADOW_METHODS
-from .operators import ImportRV, ExportRV, RVIO_OT_ReadCarParameters, RVIO_OT_SelectRevoltDirectory
-from .operators import ButtonReExport, ButtonSelectFaceProp, ButtonSelectNCPFaceProp
-from .operators import ButtonSelectNCPMaterial, ButtonVertexColorSet, VertexColorRemove
-from .operators import ButtonVertexColorCreateLayer, ButtonVertexAlphaLayer, TexAnimDirection
+from .common import FACE_DOUBLE, FACE_TRANSLUCENT, FACE_MIRROR, FACE_TRANSL_TYPE, FACE_TEXANIM, FACE_NOENV, FACE_ENV, FACE_CLOTH, FACE_SKIP
+from .common import NCP_DOUBLE, NCP_NO_SKID, NCP_OIL, NCP_OBJECT_ONLY, NCP_CAMERA_ONLY, NCP_NOCOLL, MATERIALS
+from .layers import select_ncp_material, get_face_material, set_face_material, set_face_texture, get_face_texture
+from .layers import set_face_ncp_property, get_face_ncp_property, get_face_env, set_face_env, get_face_property, set_face_property
+from .operators import ImportRV, ExportRV, RVIO_OT_ReadCarParameters, RVIO_OT_SelectRevoltDirectory, ButtonReExport
+from .operators import SelectNCPMaterial, VertexColorRemove, SetVertexColor
+from .operators import VertexColorCreateLayer, TexAnimDirection
 from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, UseTextureNumber
 from .operators import SetInstanceProperty, RemoveInstanceProperty, LaunchRV, TexturesSave
 from .operators import TexturesRename, CarParametersExport, ButtonZoneHide, AddTrackZone
@@ -199,10 +202,6 @@ def edit_object_change_handler(scene):
     else:
         # If the object is not in edit mode, clear the dictionary
         bmesh_dic.clear()
-
-def load_handler(dummy):
-    initialize_custom_properties()
-    
 
 def register():
     
@@ -610,18 +609,194 @@ def register():
     bpy.types.Scene.texanim_delta_u = bpy.props.FloatProperty(name="TexAnim Delta U")
     bpy.types.Scene.texanim_delta_v = bpy.props.FloatProperty(name="TexAnim Delta V")
     
+    bpy.types.Mesh.select_material = bpy.props.EnumProperty(
+        name = "Select Material",
+        items = MATERIALS,
+        update = select_ncp_material,
+        description = "Selects all faces with the selected material"
+    )
+    
+    bpy.types.Mesh.face_material = bpy.props.EnumProperty(
+        name = "Material",
+        items = MATERIALS,
+        get = get_face_material,
+        set = set_face_material,
+        description = "Surface Material"
+    )
+    
+    bpy.types.Mesh.face_texture = bpy.props.IntProperty(
+        name = "Texture",
+        get = get_face_texture,
+        set = set_face_texture,
+        default = 0,
+        min = -1,
+        max = TEX_PAGES_MAX-1,
+        description = "Texture page number:\n-1 is none,\n"
+                      "0 is texture page A\n"
+                      "1 is texture page B\n"
+                      "2 is texture page C\n"
+                      "3 is texture page D\n"
+                      "4 is texture page E\n"
+                      "5 is texture page F\n"
+                      "6 is texture page G\n"
+                      "7 is texture page H\n"
+                      "8 is texture page I\n"
+                      "9 is texture page J\n"
+                      "For this number to have an effect, "
+                      "the \"Use Texture Number\" export setting needs to be "
+                      "enabled"
+    )
+    
+    bpy.types.Mesh.face_double_sided = bpy.props.BoolProperty(
+        name = "Double sided",
+        get = lambda s: bool(get_face_property(s) & FACE_DOUBLE),
+        set = lambda s, v: set_face_property(s, v, FACE_DOUBLE),
+        description = "The polygon will be visible from both sides in-game"
+    )
+    
+    bpy.types.Mesh.face_translucent = bpy.props.BoolProperty(
+        name = "Translucent",
+        get = lambda s: bool(get_face_property(s) & FACE_TRANSLUCENT),
+        set = lambda s, v: set_face_property(s, v, FACE_TRANSLUCENT),
+        description = "Renders the polyon transparent\n(takes transparency "
+                      "from the \"Alpha\" vertex color layer or the alpha "
+                      "layer of the texture"
+    )
+    
+    bpy.types.Mesh.face_mirror = bpy.props.BoolProperty(
+        name = "Mirror",
+        get = lambda s: bool(get_face_property(s) & FACE_MIRROR),
+        set = lambda s, v: set_face_property(s, v, FACE_MIRROR),
+        description = "This polygon covers a mirror area. (?)"
+    )
+    
+    bpy.types.Mesh.face_additive = bpy.props.BoolProperty(
+        name = "Additive blending",
+        get = lambda s: bool(get_face_property(s) & FACE_TRANSL_TYPE),
+        set = lambda s, v: set_face_property(s, v, FACE_TRANSL_TYPE),
+        description = "Renders the polygon with additive blending (black "
+                      "becomes transparent, bright colors are added to colors "
+                      "beneath)"
+    )
+    
+    bpy.types.Mesh.face_texture_animation = bpy.props.BoolProperty(
+        name = "Animated",
+        get = lambda s: bool(get_face_property(s) & FACE_TEXANIM),
+        set = lambda s, v: set_face_property(s, v, FACE_TEXANIM),
+        description = "Uses texture animation for this poly (only in .w files)"
+    )
+    
+    bpy.types.Mesh.face_no_envmapping = bpy.props.BoolProperty(
+        name = "No EnvMap (.prm)",
+        get = lambda s: bool(get_face_property(s) & FACE_NOENV),
+        set = lambda s, v: set_face_property(s, v, FACE_NOENV),
+        description = "Disables the environment map for this poly (.prm only)"
+    )
+    
+    bpy.types.Mesh.face_envmapping = bpy.props.BoolProperty(
+        name = "EnvMapping (.w)",
+        get = lambda s: bool(get_face_property(s) & FACE_ENV),
+        set = lambda s, v: set_face_property(s, v, FACE_ENV),
+        description = "Enables the environment map for this poly (.w only).\n\n"
+                      "If enabled on pickup.m, sparks will appear"
+                      "around the poly"
+    )
+    
+    bpy.types.Mesh.face_cloth = bpy.props.BoolProperty(
+        name = "Cloth effect (.prm)",
+        get = lambda s: bool(get_face_property(s) & FACE_CLOTH),
+        set = lambda s, v: set_face_property(s, v, FACE_CLOTH),
+        description = "Enables the cloth effect used on the Mystery car"
+    )
+    
+    bpy.types.Mesh.face_skip = bpy.props.BoolProperty(
+        name = "Do not export",
+        get = lambda s: bool(get_face_property(s) & FACE_SKIP),
+        set = lambda s, v: set_face_property(s, v, FACE_SKIP),
+        description = "Skips the polygon when exporting (not Re-Volt related)"
+    )
+    
+    bpy.types.Mesh.face_env = bpy.props.FloatVectorProperty(
+        name = "Environment Color",
+        subtype = "COLOR",
+        size = 4,
+        min = 0.0,
+        max = 1.0,
+        soft_min = 0.0,
+        soft_max = 1.0,
+        get = get_face_env,
+        set = set_face_env,
+        description = "Color of the environment map for World meshes"
+    )
+    
+    bpy.types.Mesh.face_ncp_double = bpy.props.BoolProperty(
+        name = "Double-sided",
+        get=lambda s: bool(get_face_ncp_property(s) & NCP_DOUBLE),
+        set=lambda s, v: set_face_ncp_property(s, v, NCP_DOUBLE),
+        description="Enables double-sided collision"
+    )
+    
+    bpy.types.Mesh.face_ncp_object_only = bpy.props.BoolProperty(
+        name = "Object Only",
+        get=lambda s: bool(get_face_ncp_property(s) & NCP_OBJECT_ONLY),
+        set=lambda s, v: set_face_ncp_property(s, v, NCP_OBJECT_ONLY),
+        description="Enable collision for objects only (ignores camera)"
+    )
+    
+    bpy.types.Mesh.face_ncp_camera_only = bpy.props.BoolProperty(
+        name = "Camera Only",
+        get=lambda s: bool(get_face_ncp_property(s) & NCP_CAMERA_ONLY),
+        set=lambda s, v: set_face_ncp_property(s, v, NCP_CAMERA_ONLY),
+        description="Enable collision for camera only"
+    )
+    
+    bpy.types.Mesh.face_ncp_non_planar = bpy.props.BoolProperty(
+        name = "Non-planar",
+        get=lambda s: bool(get_face_ncp_property(s) & NCP_NON_PLANAR),
+        set=lambda s, v: set_face_ncp_property(s, v, NCP_NON_PLANAR),
+        description="Face is non-planar"
+    )
+    
+    bpy.types.Mesh.face_ncp_no_skid = bpy.props.BoolProperty(
+        name = "No Skid Marks",
+        get=lambda s: bool(get_face_ncp_property(s) & NCP_NO_SKID),
+        set=lambda s, v: set_face_ncp_property(s, v, NCP_NO_SKID),
+        description="Disable skid marks"
+    )
+    
+    bpy.types.Mesh.face_ncp_oil = bpy.props.BoolProperty(
+        name = "Oil",
+        get=lambda s: bool(get_face_ncp_property(s) & NCP_OIL),
+        set=lambda s, v: set_face_ncp_property(s, v, NCP_OIL),
+        description="Ground is oil"
+    )
+    
+    bpy.types.Mesh.face_ncp_nocoll = bpy.props.BoolProperty(
+        name = "No Collision",
+        get=lambda s: bool(get_face_ncp_property(s) & NCP_NOCOLL),
+        set=lambda s, v: set_face_ncp_property(s, v, NCP_NOCOLL),
+        description="Face will be ignored when exporting"
+    )    
+    
+    bpy.types.Scene.vertex_color_picker = bpy.props.FloatVectorProperty(
+        name = "Object Color",
+        subtype = 'COLOR',
+        default = (0, 0, 1.0),
+        min = 0.0, max=1.0,
+        description = "Color picker for painting custom vertex colors"
+    )
+
+    
     #Register Operators
     bpy.utils.register_class(DialogOperator)
     bpy.utils.register_class(ImportRV)
     bpy.utils.register_class(ExportRV)
     bpy.utils.register_class(RVIO_OT_ReadCarParameters)
     bpy.utils.register_class(ButtonReExport)
-    bpy.utils.register_class(ButtonSelectFaceProp)
-    bpy.utils.register_class(ButtonSelectNCPFaceProp)
-    bpy.utils.register_class(ButtonSelectNCPMaterial)
-    bpy.utils.register_class(ButtonVertexColorSet)
-    bpy.utils.register_class(ButtonVertexColorCreateLayer)
-    bpy.utils.register_class(ButtonVertexAlphaLayer)
+    bpy.utils.register_class(SelectNCPMaterial)
+    bpy.utils.register_class(VertexColorCreateLayer)
+    bpy.utils.register_class(VertexColorRemove)
+    bpy.utils.register_class(SetVertexColor)
     bpy.utils.register_class(TexAnimDirection)
     bpy.utils.register_class(ButtonRenameAllObjects)
     bpy.utils.register_class(SelectByName)
@@ -660,7 +835,6 @@ def register():
     bpy.utils.register_class(ToggleMirrorPlane)
     bpy.utils.register_class(InstanceColor)
     bpy.utils.register_class(ResetFinLoDBias)
-    bpy.utils.register_class(VertexColorRemove)
     bpy.utils.register_class(RVIO_OT_SelectRevoltDirectory)
     bpy.utils.register_class(RVIO_OT_ToggleWParentMeshes)
     bpy.utils.register_class(RVIO_OT_ToggleWImportBoundBoxes)
@@ -685,13 +859,10 @@ def register():
     
     # UI and Handlers Registration
     bpy.app.handlers.depsgraph_update_pre.append(edit_object_change_handler)
-    bpy.app.handlers.load_post.append(load_handler)
 
 def unregister():
     
     # UI and Handlers Unregistration
-    if load_handler in bpy.app.handlers.load_post:
-        bpy.app.handlers.load_post.remove(load_handler)
     bpy.app.handlers.depsgraph_update_pre.remove(edit_object_change_handler)
      
     # Unregister Classes
@@ -718,7 +889,6 @@ def unregister():
     bpy.utils.unregister_class(RVIO_OT_ToggleWImportBoundBoxes)
     bpy.utils.unregister_class(RVIO_OT_ToggleWParentMeshes)
     bpy.utils.unregister_class(RVIO_OT_SelectRevoltDirectory)
-    bpy.utils.unregister_class(VertexColorRemove)
     bpy.utils.unregister_class(ResetFinLoDBias)
     bpy.utils.unregister_class(InstanceColor)
     bpy.utils.unregister_class(ToggleMirrorPlane)
@@ -757,12 +927,10 @@ def unregister():
     bpy.utils.unregister_class(SelectByName)
     bpy.utils.unregister_class(ButtonRenameAllObjects)
     bpy.utils.unregister_class(TexAnimDirection)
-    bpy.utils.unregister_class(ButtonVertexAlphaLayer)
-    bpy.utils.unregister_class(ButtonVertexColorCreateLayer)
-    bpy.utils.unregister_class(ButtonVertexColorSet)
-    bpy.utils.unregister_class(ButtonSelectNCPMaterial)
-    bpy.utils.unregister_class(ButtonSelectNCPFaceProp)
-    bpy.utils.unregister_class(ButtonSelectFaceProp)
+    bpy.utils.unregister_class(VertexColorRemove)
+    bpy.utils.unregister_class(SetVertexColor)
+    bpy.utils.unregister_class(VertexColorCreateLayer)
+    bpy.utils.unregister_class(SelectNCPMaterial)
     bpy.utils.unregister_class(ButtonReExport)
     bpy.utils.unregister_class(RVIO_OT_ReadCarParameters)
     bpy.utils.unregister_class(ExportRV)
@@ -771,6 +939,27 @@ def unregister():
     
     # Unregister Custom Properties
     
+    del bpy.types.Scene.vertex_color_picker
+    del bpy.types.Mesh.face_ncp_nocoll
+    del bpy.types.Mesh.face_ncp_oil
+    del bpy.types.Mesh.face_ncp_no_skid
+    del bpy.types.Mesh.face_ncp_non_planar
+    del bpy.types.Mesh.face_ncp_camera_only
+    del bpy.types.Mesh.face_ncp_object_only
+    del bpy.types.Mesh.face_ncp_double
+    del bpy.types.Mesh.face_env
+    del bpy.types.Mesh.face_skip
+    del bpy.types.Mesh.face_cloth
+    del bpy.types.Mesh.face_envmapping
+    del bpy.types.Mesh.face_no_envmapping
+    del bpy.types.Mesh.face_texture_animation
+    del bpy.types.Mesh.face_additive
+    del bpy.types.Mesh.face_mirror
+    del bpy.types.Mesh.face_translucent
+    del bpy.types.Mesh.face_double_sided
+    del bpy.types.Mesh.face_texture
+    del bpy.types.Mesh.face_material
+    del bpy.types.Mesh.select_material
     del bpy.types.Scene.texanim_delta_v
     del bpy.types.Scene.texanim_delta_u
     del bpy.types.Scene.shadow_table

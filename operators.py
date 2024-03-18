@@ -58,39 +58,6 @@ class RVIO_OT_SelectRevoltDirectory(bpy.types.Operator):
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
-class ButtonSelectFaceProp(bpy.types.Operator):
-    bl_idname = "faceprops.select"
-    bl_label = "sel"
-    bl_description = "Select or delesect all polygons with this property"
-    prop = bpy.props.IntProperty()
-
-    def execute(self, context):
-        select_faces(context, self.prop)
-        return{"FINISHED"}
-
-
-class ButtonSelectNCPFaceProp(bpy.types.Operator):
-    bl_idname = "ncpfaceprops.select"
-    bl_label = "sel"
-    bl_description = "Select or delesect all polygons with this property"
-    prop = bpy.props.IntProperty()
-
-    def execute(self, context):
-        select_ncp_faces(context, self.prop)
-        return{"FINISHED"}
-
-
-class ButtonSelectNCPMaterial(bpy.types.Operator):
-    bl_idname = "ncpmaterial.select"
-    bl_label = "sel"
-    bl_description = "Select all faces of the same material"
-
-    def execute(self, context):
-        props = context.scene.revolt
-        meshprops = context.object.data.revolt
-        props.select_material = meshprops.face_material
-        return{"FINISHED"}
-    
 
 """
 IMPORT AND EXPORT -------------------------------------------------------------
@@ -1062,6 +1029,38 @@ class ButtonHullGenerate(bpy.types.Operator):
             self.report({'ERROR'}, "Convex hull generation failed.")
         return {'FINISHED'}
     
+class SelectNCPMaterial(bpy.types.Operator):
+    bl_idname = "ncpmaterial.select"
+    bl_label = "Select Material Faces"
+    bl_description = "Select all faces with the currently selected material"
+
+    def execute(self, context):
+        obj = context.object
+        
+        # Ensure the operation is being performed on a mesh
+        if not obj or obj.type != 'MESH':
+            self.report({'ERROR'}, "Active object is not a mesh")
+            return {'CANCELLED'}
+        
+        mesh = obj.data
+        
+        # Assuming 'select_material' is an index or identifier for the material
+        target_material_index = context.scene.select_material
+        
+        # Deselect all faces first
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.select_all(action='DESELECT')
+        bpy.ops.object.mode_set(mode='OBJECT')
+        
+        # Select faces that use the target material
+        for polygon in mesh.polygons:
+            if polygon.material_index == target_material_index:
+                polygon.select = True
+        
+        # Update the view
+        bpy.ops.object.mode_set(mode='EDIT')
+        return {'FINISHED'}
+    
 """
 SHADOW -----------------------------------------------------------------------
 """
@@ -1594,10 +1593,10 @@ class ButtonHullSphere(bpy.types.Operator):
 VERTEX COLORS -----------------------------------------------------------------
 """
 
-class ButtonVertexColorCreateLayer(bpy.types.Operator):
+class VertexColorCreateLayer(bpy.types.Operator):
     bl_idname = "vertexcolor.create_layer"
     bl_label = "Create Vertex Color Layer"
-    bl_description = "Creates a new vertex color layer"
+    bl_description = "Creates a new vertex color layer and initializes its colors based on the selection"
 
     def execute(self, context):
         obj = context.object
@@ -1609,62 +1608,38 @@ class ButtonVertexColorCreateLayer(bpy.types.Operator):
         bm = bmesh.from_edit_mesh(mesh)
 
         # Check if the color layer already exists
-        if bm.loops.layers.color.active is not None:
+        color_layer_name = "VertexColor"
+        if bm.loops.layers.color.get(color_layer_name) is not None:
             self.report({'INFO'}, "Vertex color layer already exists.")
             return {'CANCELLED'}
 
         # Create a new vertex color layer
-        bm.loops.layers.color.new("VertexColor")
+        new_layer = bm.loops.layers.color.new(color_layer_name)
+        
+        # Determine the initial color based on selected vertices or faces
+        sel_verts = [v for v in bm.verts if v.select]
+        sel_faces = [f for f in bm.faces if f.select]
+
+        if sel_verts:
+            initial_color = get_average_vcol0(sel_verts, new_layer)
+        elif sel_faces:
+            initial_color = get_average_vcol2(sel_faces, new_layer)
+        else:
+            initial_color = (1.0, 1.0, 1.0)  # Default color
+
+        # Initialize the new layer with the determined color
+        for face in bm.faces:
+            for loop in face.loops:
+                loop[new_layer] = initial_color + (1.0,)  # Adding alpha value
+
         bmesh.update_edit_mesh(mesh)
-        self.report({'INFO'}, "New vertex color layer created.")
+        self.report({'INFO'}, "New vertex color layer created and initialized.")
         return {'FINISHED'}
 
-class ButtonVertexAlphaLayer(bpy.types.Operator):
-    bl_idname = "vertexcolor.set_alpha"
-    bl_label = "Set Vertex Alpha"
-    bl_description = "Set alpha value for the vertex color layer"
-    alpha: bpy.props.FloatProperty()  # Add an alpha property
-
-    def set_vertex_alpha(self, context, alpha_value):
-        obj = context.object
-        if obj.type != 'MESH' or obj.mode != 'EDIT':
-            self.report({'WARNING'}, "Operation requires an active mesh object in edit mode.")
-            return False
-
-        mesh = obj.data
-        bm = bmesh.from_edit_mesh(mesh)
-        color_layer = bm.loops.layers.color.active
-
-        if color_layer is None:
-            self.report({'WARNING'}, "No active vertex color layer found.")
-            return False
-
-        # Apply the alpha value to the vertex colors
-        for face in bm.faces:
-            for loop in face.loops:
-                loop[color_layer][3] = alpha_value  # Set alpha for each vertex color
-
-        bmesh.update_edit_mesh(mesh)
-        return True
-
-    def execute(self, context):
-        success = self.set_vertex_alpha(context, self.alpha)
-        if success:
-            context.scene.vertex_alpha_value = self.alpha  # Store alpha value
-            self.report({'INFO'}, "Alpha value set for vertex colors.")
-        else:
-            self.report({'WARNING'}, "Failed to set alpha value.")
-        return {'FINISHED' if success else 'CANCELLED'}
-    
-class ButtonVertexColorSet(bpy.types.Operator):
-    bl_idname = "vertexcolor.set"
-    bl_label = "Set Color and Alpha"
-    bl_description = "Apply color and alpha to selected faces"
-   
 class VertexColorRemove(bpy.types.Operator):
-    bl_idname = "vertexcolor.remove"
-    bl_label = "Remove Vertex Color"
-    bl_description = "Remove the vertex colors from selected vertices"
+    bl_idname = "vertexcolor.remove_layer"
+    bl_label = "Remove Vertex Color Layer"
+    bl_description = "Removes the active vertex color layer from the mesh"
 
     def execute(self, context):
         obj = context.object
@@ -1681,10 +1656,40 @@ class VertexColorRemove(bpy.types.Operator):
             self.report({'WARNING'}, "No active vertex color layer found.")
             return {'CANCELLED'}
 
+        # Remove the active color layer
+        bm.loops.layers.color.remove(color_layer)
+
+        bmesh.update_edit_mesh(mesh, destructive=True)
+        self.report({'INFO'}, "Active vertex color layer removed.")
+        return {'FINISHED'}
+
+class SetVertexColor(bpy.types.Operator):
+    bl_idname = "vertexcolor.set_color"
+    bl_label = "Set Vertex Color"
+    bl_description = "Sets the vertex colors on the active vertex color layer using a scene-wide color picker"
+
+    @classmethod
+    def poll(cls, context):
+        return context.active_object is not None and context.active_object.type == 'MESH' and context.active_object.mode == 'EDIT'
+
+    def execute(self, context):
+        eo = context.edit_object
+        bm = bmesh.from_edit_mesh(eo.data)
+
+        v_layer = bm.loops.layers.color.active
+        if not v_layer:
+            self.report({'WARNING'}, "No active vertex color layer found.")
+            return {'CANCELLED'}
+
+        selmode = context.tool_settings.mesh_select_mode
+        color = context.scene.vertex_color_picker  # Refer to the scene property here
+
+        # Apply the color and alpha based on the selection mode
         for face in bm.faces:
             for loop in face.loops:
-                loop[color_layer] = (1.0, 1.0, 1.0, 1.0)  # Setting color to white
+                if selmode[0] and loop.vert.select or selmode[1] and (loop.edge.select or loop.link_loop_prev.edge.select) or selmode[2] and face.select:
+                    loop[v_layer] = (color[0], color[1], color[2], 1.0)  # Assuming full alpha
 
-        bmesh.update_edit_mesh(mesh)
-        self.report({'INFO'}, "Vertex color removed.")
+        bmesh.update_edit_mesh(eo.data, destructive=False)
+        self.report({'INFO'}, "Vertex color set.")
         return {'FINISHED'}

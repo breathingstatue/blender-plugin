@@ -19,8 +19,7 @@ if "common" in locals():
     importlib.reload(common)
     importlib.reload(rvstruct)
 
-# Add specific imports from common as needed
-# Example: from .common import specific_function, SpecificClass
+from .common import TA_CSV_HEADER
 
 def import_file(filepath, scene):
 

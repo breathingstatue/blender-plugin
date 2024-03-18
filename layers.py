@@ -13,29 +13,37 @@ behavior.
 import bpy
 import bmesh
 import mathutils
-from .common import get_edit_bmesh
-from .common import NCP_PROP_MASK
-from .common import FACE_PROP_MASK
-from .common import objects_to_bmesh
+from .common import NCP_PROP_MASK, FACE_PROP_MASK, objects_to_bmesh, get_edit_bmesh, msg_box
 from .prm_in import add_rvmesh_to_bmesh
 
 def color_from_face(context):
     obj = context.object
-    bm = get_edit_bmesh(obj)
-    selmode = bpy.context.tool_settings.mesh_select_mode
+    if not obj or obj.type != 'MESH':
+        print("No mesh object selected.")
+        return
 
-    # vertex select mode
-    if selmode[0]:
+    bm = get_edit_bmesh(obj)
+    if not bm:
+        print("BMesh could not be obtained.")
+        return
+
+    selmode = context.tool_settings.mesh_select_mode
+
+    if selmode[0]:  # Vertex select mode
         verts = [v for v in bm.verts if v.select]
         if verts:
-            col = get_average_vcol0(verts, bm.loops.layers.color.get("Col"))
-            context.scene.revolt.vertex_color_picker = col
-    # face select mode
-    elif selmode[2]:
+            layer = bm.loops.layers.color.get("Col")
+            if layer:
+                col = get_average_vcol0(verts, layer)
+                context.scene.vertex_color_picker = col
+
+    elif selmode[2]:  # Face select mode
         faces = [f for f in bm.faces if f.select]
         if faces:
-            col = get_average_vcol2(faces, bm.loops.layers.color.get("Col"))
-            context.scene.revolt.vertex_color_picker = col
+            layer = bm.loops.layers.color.get("Col")
+            if layer:
+                col = get_average_vcol2(faces, layer)
+                context.scene.vertex_color_picker = col
 
 def get_average_vcol0(verts, layer):
     """ Gets the average vertex color of loops all given VERTS """
@@ -77,50 +85,51 @@ def set_vcol(faces, layer, color):
 
 
 def set_vertex_color(context, number):
-    eo = bpy.context.edit_object
-    bm = dic.setdefault(eo.name, bmesh.from_edit_mesh(eo.data))
-    mesh = context.object.data
-    selmode = bpy.context.tool_settings.mesh_select_mode
-    v_layer = bm.loops.layers.color.active
-    if number == -1:
-        cpick = context.scene.revolt.vertex_color_picker
-        color = mathutils.Color((cpick[0], cpick[1], cpick[2]))
-    else:
-        color = mathutils.Color((number/100, number/100, number/100))
+    eo = context.edit_object
+    if not eo or eo.type != 'MESH':
+        print("No mesh object in edit mode.")
+        return
 
-    # vertex select mode
-    if selmode[0]:
-        for face in bm.faces:
+    bm = dic.setdefault(eo.name, bmesh.from_edit_mesh(eo.data))
+    if not bm:
+        print("Failed to get or create BMesh for the object.")
+        return
+
+    mesh = eo.data
+    selmode = context.tool_settings.mesh_select_mode
+
+    v_layer = bm.loops.layers.color.active
+    if not v_layer:
+        print("Active vertex color layer not found.")
+        return
+
+    # Define the color to set
+    if number == -1:
+        cpick = context.scene.vertex_color_picker
+        color = mathutils.Color(cpick)
+    else:
+        color = mathutils.Color((number / 100, number / 100, number / 100))
+
+    # Apply the color based on the selection mode
+    for face in bm.faces:
+        if face.select or any(vert.select for loop in face.loops for vert in [loop.vert]):
             for loop in face.loops:
-                if loop.vert.select:
-                    loop[v_layer][0] = color[0]
-                    loop[v_layer][1] = color[1]
-                    loop[v_layer][2] = color[2]
-                    continue # since multiple select modes can be set
-    # edge select mode
-    elif selmode[1]:
-        for face in bm.faces:
-            for i, loop in enumerate(face.loops):
-                if loop.edge.select or face.loops[i-1].edge.select:
-                    loop[v_layer][0] = color[0]
-                    loop[v_layer][1] = color[1]
-                    loop[v_layer][2] = color[2]
-                    continue
-    # face select mode
-    elif selmode[2]:
-        for face in bm.faces:
-            if face.select:
-                for loop in face.loops:
-                    loop[v_layer][0] = color[0]
-                    loop[v_layer][1] = color[1]
-                    loop[v_layer][2] = color[2]
+                if selmode[0] and loop.vert.select or selmode[1] and (loop.edge.select or face.loops[loop.index - 1].edge.select) or selmode[2]:
+                    loop[v_layer] = color
 
     bmesh.update_edit_mesh(mesh, tessface=False, destructive=False)
 
 
-def get_face_material():
+def get_face_material(self):
     eo = bpy.context.edit_object
     bm = get_edit_bmesh(eo)
+    
+    if eo is None or eo.type != 'MESH' or not eo.mode == 'EDIT':
+        return 0
+    
+    if not bm or not hasattr(bm, 'faces'):
+        return 0
+    
     layer = (bm.faces.layers.int.get("Material") or
              bm.faces.layers.int.new("Material"))
 
@@ -135,7 +144,7 @@ def get_face_material():
         return selected_faces[0][layer]
 
 
-def set_face_material(value):
+def set_face_material(self, value):
     eo = bpy.context.edit_object
     bm = get_edit_bmesh(eo)
     mesh = eo.data
@@ -152,12 +161,15 @@ def set_face_material(value):
                 loop[vc_layer][1] = COLORS[value][1]
                 loop[vc_layer][2] = COLORS[value][2]
     bmesh.update_edit_mesh(mesh, tessface=False, destructive=False)
-    redraw_3d()
+ 
 
-
-def get_face_texture():
+def get_face_texture(self):
     eo = bpy.context.edit_object
     bm = get_edit_bmesh(eo)
+    
+    if eo is None or eo.type != 'MESH' or not eo.mode == 'EDIT':
+        return 0
+
     layer = (bm.faces.layers.int.get("Texture Number") or
              bm.faces.layers.int.new("Texture Number"))
 
@@ -173,7 +185,7 @@ def get_face_texture():
         return selected_faces[0][layer]
 
 
-def set_face_texture(value):
+def set_face_texture(self, value):
     eo = bpy.context.edit_object
     bm = get_edit_bmesh(eo)
     layer = (bm.faces.layers.int.get("Texture Number") or
@@ -183,7 +195,7 @@ def set_face_texture(value):
             face[layer] = value
 
 
-def set_face_env(value):
+def set_face_env(self, value):
     eo = bpy.context.edit_object
     bm = get_edit_bmesh(eo)
     env_layer = (bm.loops.layers.color.get("Env") or
@@ -197,16 +209,18 @@ def set_face_env(value):
                 loop[env_layer][1] = value[:3][1]
                 loop[env_layer][2] = value[:3][2]
             face[env_alpha_layer] = value[-1]
-    redraw_3d()
 
 
-def get_face_env():
+def get_face_env(self):
     eo = bpy.context.edit_object
     bm = get_edit_bmesh(eo)
     env_layer = (bm.loops.layers.color.get("Env")
                  or bm.loops.layers.color.new("Env"))
     env_alpha_layer = (bm.faces.layers.float.get("EnvAlpha")
                        or bm.faces.layers.float.new("EnvAlpha"))
+    
+    if eo is None or eo.type != 'MESH' or not eo.mode == 'EDIT':
+        return 0
 
     # Gets the average color for all selected faces
     selected_faces = [face for face in bm.faces if face.select]
@@ -215,16 +229,26 @@ def get_face_env():
     return [*col, selected_faces[0][env_alpha_layer]]
 
 
-def get_face_property():
+def get_face_property(self):
     eo = bpy.context.edit_object
+    
+    if eo is None or eo.type != 'MESH' or not eo.mode == 'EDIT':
+        return 0
+
     bm = get_edit_bmesh(eo)
+
+    if not bm or not hasattr(bm, 'faces'):
+        return 0
+
     layer = bm.faces.layers.int.get("Type") or bm.faces.layers.int.new("Type")
     selected_faces = [face for face in bm.faces if face.select]
-    if len(selected_faces) == 0:
+    if not selected_faces:
         return 0
+
     prop = selected_faces[0][layer]
-    for face in selected_faces:
+    for face in selected_faces[1:]:  # Avoid checking the first face again
         prop = prop & face[layer]
+
     return prop
 
 
@@ -238,17 +262,27 @@ def set_face_property(obj, value, FACE_PROP_MASK):
             face[layer] = face[layer] | FACE_PROP_MASK if value else face[layer] & ~FACE_PROP_MASK
             
 
-def get_face_ncp_property():
+def get_face_ncp_property(self):
     eo = bpy.context.edit_object
-    bm = get_edit_bmesh(eo)
-    layer = (bm.faces.layers.int.get("NCPType") or
-             bm.faces.layers.int.new("NCPType"))
-    selected_faces = [face for face in bm.faces if face.select]
-    if len(selected_faces) == 0:
+    
+    # Ensure we have an edit object
+    if eo is None or eo.type != 'MESH':
         return 0
+
+    bm = get_edit_bmesh(eo)
+
+    if not bm or not hasattr(bm, 'faces'):
+        return 0
+
+    layer = bm.faces.layers.int.get("NCPType") or bm.faces.layers.int.new("NCPType")
+    selected_faces = [face for face in bm.faces if face.select]
+    if not selected_faces:
+        return 0
+
     prop = selected_faces[0][layer]
-    for face in selected_faces:
+    for face in selected_faces[1:]:  # Skip the first as it's already included in prop
         prop = prop & face[layer]
+
     return prop
 
 
@@ -271,7 +305,6 @@ def select_faces(context, prop):
     for face in bm.faces:
         if face[flag_layer] & prop:
             face.select = not face.select
-    redraw()
 
 
 def select_ncp_faces(context, prop):
@@ -283,10 +316,9 @@ def select_ncp_faces(context, prop):
     for face in bm.faces:
         if face[flag_layer] & prop:
             face.select = not face.select
-    redraw()
 
 
-def select_ncp_material(context):
+def select_ncp_material(self, context):
     eo = bpy.context.edit_object
     bm = get_edit_bmesh(eo)
     mat = int(self.select_material)
@@ -304,6 +336,4 @@ def select_ncp_material(context):
                 count_sel += 1
 
     if count == 0:
-        msg_box("No {} materials found.".format(MATERIALS[mat+1][1]))
-    redraw()
-    
+        msg_box("No {} materials found.".format(MATERIALS[mat+1][1]))    
