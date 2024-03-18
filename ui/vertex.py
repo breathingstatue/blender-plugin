@@ -7,17 +7,18 @@ a custom color which is chosen with a color picker.
 
 import bpy
 import bmesh
-from ..operators import *
 
 class RVIO_PT_VertexPanel(bpy.types.Panel):
     bl_label = "Vertex Colors"
     bl_space_type = "PROPERTIES"
     bl_region_type = "WINDOW"
     bl_context = "object"
-    bl_options = {"HIDE_HEADER"}
 
-    def draw_header(self, context):
-        pass
-        
     def draw(self, context):
-        pass
+        layout = self.layout
+        scene = context.scene
+        
+        layout.operator("vertexcolor.create_layer")
+        layout.prop(scene, 'vertex_color_picker', text="Choose Color")
+        layout.operator("vertexcolor.set_color")
+        layout.operator("vertexcolor.remove_layer")
