@@ -91,15 +91,6 @@ class ButtonSelectNCPMaterial(bpy.types.Operator):
         props.select_material = meshprops.face_material
         return{"FINISHED"}
     
-class ButtonBakeShadow(bpy.types.Operator):
-    bl_idname = "button.bake_shadow"
-    bl_label = "Bake Shadow"
-    bl_description = "Creates a shadow plane beneath the selected object"
-
-    def execute(self, context):
-        bake_shadow(context)
-        return {"FINISHED"}
-    
 
 """
 IMPORT AND EXPORT -------------------------------------------------------------
@@ -620,18 +611,6 @@ class SelectByData(bpy.types.Operator):
         self.report({'INFO'}, "Selected {} objects".format(selected_count))
         return {'FINISHED'}
 
-class BatchBake(bpy.types.Operator):
-    bl_idname = "helpers.batch_bake_model"
-    bl_label = "Bake all selected"
-    bl_description = (
-        "Bakes the light cast by lamps in the current scene to the Instance"
-        "model colors"
-    )
-
-    def execute(self, context):
-        n = tools.batch_bake(self, context)
-        msg_box("Baked {} objects".format(n))
-        return{"FINISHED"}
 
 class LaunchRV(bpy.types.Operator):
     bl_idname = "helpers.launch_rv"
@@ -838,6 +817,7 @@ class InstanceColor(bpy.types.Operator):
     def invoke(self, context, event):
         wm = context.window_manager
         return wm.invoke_props_dialog(self)
+
 
 """
 OBJECTS -----------------------------------------------------------------------
@@ -1081,6 +1061,169 @@ class ButtonHullGenerate(bpy.types.Operator):
         else:
             self.report({'ERROR'}, "Convex hull generation failed.")
         return {'FINISHED'}
+    
+"""
+SHADOW -----------------------------------------------------------------------
+"""
+
+class BakeShadow(bpy.types.Operator):
+    bl_idname = "lighttools.bake_shadow"
+    bl_label = "Bake Shadow"
+    bl_description = "Creates a shadow plane beneath the selected object"
+    
+    def bake_shadow(self, context):
+        original_active = context.view_layer.objects.active
+        original_location = original_active.location
+        scene = context.scene
+        original_engine = scene.render.engine
+        # Activate Cycles
+        bpy.context.scene.render.engine = 'CYCLES'
+        scene.cycles.samples = scene.shadow_quality  # Set sampling for baking quality
+        scene.cycles.max_bounces = 4  # Total maximum bounces
+        scene.cycles.diffuse_bounces = 2  # Diffuse bounces
+        scene.cycles.glossy_bounces = 2  # Glossy bounces
+        scene.cycles.transmission_bounces = 2  # Transmission bounces
+        scene.cycles.transparent_max_bounces = 2  # Transparency bounces
+        scene.cycles.volume_bounces = 1  # Volume bounces
+        shade_obj = context.object
+        resolution = scene.shadow_resolution
+
+        lamp_data_pos = bpy.data.lights.new(name="ShadePositive", type="AREA")
+        lamp_data_pos.energy = 1.0
+        lamp_data_pos.size = max(scene.shadow_softness)
+        lamp_positive = bpy.data.objects.new(name="ShadePositive", object_data=lamp_data_pos)
+
+        # Link lights to the scene
+        scene.collection.objects.link(lamp_positive)
+
+        all_objs = [ob_child for ob_child in context.scene.objects if ob_child.parent == shade_obj] + [shade_obj]
+        
+        # Get the bounds taking in account all child objects (wheels, etc.)
+        # Using the world matrix here to get positions from child objects
+        far_left = min([min([(ob.matrix_world[0][3] + ob.bound_box[i][0] * shade_obj.scale[0]) for i in range(0, 8)]) for ob in all_objs])
+        far_right = max([max([(ob.matrix_world[0][3] + ob.bound_box[i][0] * shade_obj.scale[0]) for i in range(0, 8)]) for ob in all_objs])
+        far_front = max([max([(ob.matrix_world[1][3] + ob.bound_box[i][1] * shade_obj.scale[1]) for i in range(0, 8)]) for ob in all_objs])
+        far_back = min([min([(ob.matrix_world[1][3] + ob.bound_box[i][1] * shade_obj.scale[1]) for i in range(0, 8)]) for ob in all_objs])
+        far_top = max([max([(ob.matrix_world[2][3] + ob.bound_box[i][2] * shade_obj.scale[2]) for i in range(0, 8)]) for ob in all_objs])
+        far_bottom = min([min([(ob.matrix_world[2][3] + ob.bound_box[i][2] * shade_obj.scale[2]) for i in range(0, 8)]) for ob in all_objs])
+        
+        # Get the dimensions to set the scale
+        dim_x = abs(far_left - far_right)
+        dim_y = abs(far_front - far_back)
+
+        # Location for the shadow plane
+        loc = ((far_right + far_left)/2,
+               (far_front + far_back)/2,
+                far_bottom)
+        
+        # Create and position the shadow plane
+        bpy.ops.object.select_all(action='DESELECT')
+        bpy.ops.mesh.primitive_plane_add(size=1, enter_editmode=False, align='WORLD', location=loc)
+        shadow_plane = context.active_object
+        shadow_plane.name = 'ShadowPlane'
+        
+        # Scale the shadow plane
+        scale = max(dim_x, dim_y)
+        shadow_plane.scale.x = scale / 1.5
+        shadow_plane.scale.y = scale / 1.5
+
+        # Prepare material and texture for the shadow plane
+        mat = bpy.data.materials.new(name="ShadowMaterial")
+        shadow_plane.data.materials.append(mat)
+        mat.use_nodes = True
+        nodes = mat.node_tree.nodes
+        nodes.clear()
+
+        texture_node = nodes.new('ShaderNodeTexImage')
+        shadow_tex = bpy.data.images.new("Shadow", width=context.scene.shadow_resolution, height=context.scene.shadow_resolution)
+        texture_node.image = shadow_tex
+        nodes.active = texture_node
+
+        # Bake the shadow onto the plane
+        context.view_layer.objects.active = shadow_plane
+        shadow_plane.select_set(True)
+
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.uv.unwrap(method='ANGLE_BASED', margin=0.001)
+        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.bake(type='AO')
+        
+        # Access the baked image and invert its colors
+        for pixel in range(0, len(shadow_tex.pixels), 4):  # Iterate over each pixel, skipping alpha
+            for channel in range(3):  # Only invert RGB, leave A as is
+                shadow_tex.pixels[pixel + channel] = 1.0 - shadow_tex.pixels[pixel + channel]
+
+        shadow_tex.update()  # Update the image to reflect the changes
+
+        # Prepare the material and nodes again (if the material was cleared after baking)
+        mat = bpy.data.materials.get("ShadowMaterial")
+        if not mat:
+            mat = bpy.data.materials.new(name="ShadowMaterial")
+            shadow_plane.data.materials.append(mat)
+
+        mat.use_nodes = True
+        nodes = mat.node_tree.nodes
+        links = mat.node_tree.links
+        nodes.clear()
+
+        # Re-create the texture node and assign the inverted image
+        texture_node = nodes.new('ShaderNodeTexImage')
+        texture_node.image = shadow_tex
+
+        # Create a diffuse shader node and connect the texture to it
+        diffuse_node = nodes.new('ShaderNodeBsdfDiffuse')
+        links.new(texture_node.outputs['Color'], diffuse_node.inputs['Color'])
+
+        # Create and connect the Material Output node
+        material_output_node = nodes.new('ShaderNodeOutputMaterial')
+        links.new(diffuse_node.outputs['BSDF'], material_output_node.inputs['Surface'])
+
+        if "shadow_table" not in scene.keys():
+            scene["shadow_table"] = ""
+
+        # space between the car body center and the edge of the shadow plane
+        sphor = (shadow_plane.location[0] - (shadow_plane.dimensions[0]/2))
+        spver = ((shadow_plane.dimensions[1]/2) - shadow_plane.location[1])
+
+        # Generates shadowtable
+        sleft = (sphor - shade_obj.location[0]) * 100
+        sright = (shade_obj.location[0] - sphor) * 100
+        sfront = (spver - shade_obj.location[1]) * 100
+        sback = (shade_obj.location[1] - spver) * 100
+        sheight = (far_bottom - shade_obj.location[2]) * 100
+        shtable = ";)SHADOWTABLE {:.4f} {:.4f} {:.4f} {:.4f} {:.4f}".format(
+            sleft, sright, sfront, sback, sheight
+        )
+
+        # Update the scene's shadow_table property
+        scene["shadow_table"] = shtable
+        scene.shadow_table = shtable
+        
+        scene.render.engine = original_engine
+        
+        # And finally, cleanup: deselect everything first
+        bpy.ops.object.select_all(action='DESELECT')
+        
+        # Select and delete the shadow plane specifically by name
+        shadow_plane = bpy.data.objects.get('Plane')
+        if shadow_plane:
+            shadow_plane.select_set(True)
+            context.view_layer.objects.active = shadow_plane
+            bpy.ops.object.delete()
+            
+        # Deselect all to ensure no unintended object gets deleted
+        bpy.ops.object.select_all(action='DESELECT')
+
+        # Check if the lamp object exists and then select and delete it
+        if lamp_positive:
+            bpy.ops.object.select_all(action='DESELECT')  # Ensure only the lamp object gets selected
+            lamp_positive.select_set(True)
+            context.view_layer.objects.active = lamp_positive
+            bpy.ops.object.delete()  # This will delete the selected lamp object
+
+    def execute(self, context):
+        self.bake_shadow(context)
+        return {"FINISHED"}
 
 """
 TEXTURE ANIMATIONS -------------------------------------------------------

@@ -338,20 +338,25 @@ class Vector:
     A very simple vector class
     """
     def __init__(self, file=None, data=None):
-        if data:
-            self.data = [data[0], data[1], data[2]]
-        else:
-            self.data = [0, 0, 0]
+        # Default initialization
+        self.data = [0.0, 0.0, 0.0]
 
+        # If a file is provided, read the vector data from the file
         if file:
             self.read(file)
+        # Else if data is provided, use it to set the vector
+        elif data:
+            if len(data) == 3:
+                self.data = list(data)
+            else:
+                raise ValueError("Data for Vector initialization must have three elements.")
 
     def read(self, file):
-        # Reads the coordinates
-        self.data = [c for c in struct.unpack("<3f", file.read(12))]
+        # Reads the coordinates from the file
+        self.data = list(struct.unpack("<3f", file.read(12)))
 
     def write(self, file):
-        # Writes all coordinates
+        # Writes all coordinates to a file
         file.write(struct.pack("<3f", *self.data))
 
     def get_distance_to(self, v):
@@ -443,17 +448,16 @@ class Matrix:
     """
     def __init__(self, file=None, data=None):
         self.data = [(1, 0, 0), (0, 1, 0), (0, 0, 1)]
-
+        
         if file:
             self.read(file)
         elif data:
-            self.data = data
-
-    def __repr__(self):
-        return "Matrix"
+            if isinstance(data, list) and all(isinstance(row, (list, tuple)) and len(row) == 3 for row in data):
+                self.data = data
+            else:
+                raise ValueError("Data must be a list of three lists or tuples, each with three floats.")
 
     def read(self, file):
-        # Reads the matrix line by line
         self.data[0] = struct.unpack("<3f", file.read(12))
         self.data[1] = struct.unpack("<3f", file.read(12))
         self.data[2] = struct.unpack("<3f", file.read(12))

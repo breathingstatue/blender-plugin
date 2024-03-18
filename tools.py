@@ -28,36 +28,36 @@ if "common" in locals():
 
 
 def bake_shadow(self, context):
-    # This will create a negative shadow (Re-Volt requires a neg. texture)
-    rd = context.scene.render
-    rd.use_bake_to_vertex_color = False
-    rd.use_textures = False
-
-    shade_obj = context.object
+    original_active = context.view_layer.objects.active
+    original_location = original_active.location
+    scene = context.scene
+    original_engine = scene.render.engine
+    # Activate Cycles
+    bpy.context.scene.render.engine = 'CYCLES'
+    scene.cycles.samples = 32  # Set sampling for baking quality
+    scene.cycles.max_bounces = 4  # Total maximum bounces
+    scene.cycles.diffuse_bounces = 2  # Diffuse bounces
+    scene.cycles.glossy_bounces = 2  # Glossy bounces
+    scene.cycles.transmission_bounces = 2  # Transmission bounces
+    scene.cycles.transparent_max_bounces = 2  # Transparency bounces
+    scene.cycles.volume_bounces = 1  # Volume bounces
     scene = bpy.context.scene
-
     resolution = scene.shadow_resolution
     quality = scene.shadow_quality
-    method = scene.shadow_method
     softness = scene.shadow_softness
+    method = scene.shadow_method
+    shtable = scene.shadow_table
 
     # Create a hemi light (positive)
-    lamp_data_pos = bpy.data.lights.new(name="ShadePositive", type="HEMI")
-    lamp_data_pos.energy = 1.0  # Adjust the light intensity if needed
+    lamp_data_pos = bpy.data.lights.new(name="ShadePositive", type="SUN")
+    lamp_data_pos.energy = 1.0
     lamp_positive = bpy.data.objects.new(name="ShadePositive", object_data=lamp_data_pos)
-
-    # Create a sun light (negative)
-    lamp_data_neg = bpy.data.lights.new(name="ShadeNegative", type="SUN")
-    lamp_data_neg.energy = 1.0  # Adjust the light intensity if needed
-    lamp_data_neg.use_negative = True
-    lamp_negative = bpy.data.objects.new(name="ShadeNegative", object_data=lamp_data_neg)
 
     # Link lights to the scene
     scene.collection.objects.link(lamp_positive)
-    scene.collection.objects.link(lamp_negative)
 
-    # Create a texture
-    shadow_tex = bpy.data.images.new(name="Shadow", width=resolution, height=resolution)
+    # Create a texture for the shadow
+    shadow_tex = bpy.data.images.new("Shadow", width=resolution, height=resolution)
 
     all_objs = [ob_child for ob_child in context.scene.objects if ob_child.parent == shade_obj] + [shade_obj]
 
@@ -94,7 +94,7 @@ def bake_shadow(self, context):
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.uv.unwrap(method='ANGLE_BASED', margin=0.001)
     bpy.ops.object.mode_set(mode='OBJECT')
-    bpy.ops.object.bake(type='DIFFUSE')
+    bpy.ops.object.bake(type='SHADOW')
 
     # Set the image for the shadow plane UV map
     uv_layer = shadow_plane.data.uv_layers.active
@@ -107,7 +107,6 @@ def bake_shadow(self, context):
     shade_obj.select = False
     shadow_plane.select = False
     lamp_positive.select = True
-    lamp_negative.select = True
     bpy.ops.object.delete()
 
     # select the other object again
@@ -128,6 +127,34 @@ def bake_shadow(self, context):
         sleft, sright, sfront, sback, sheight
     )
     scene.shadow_table = shtable
+    scene.render.engine = original_engine
+    
+def bake_vertex(self, context):
+    scene = context.scene
+    rd = scene.render
+    rd.use_bake_to_vertex_color = True
+    rd.use_textures = False
+
+    shade_obj = context.object
+
+    if scene.light1 != "None":
+        light_location1, light_rotation1 = self.determine_light_position(scene.light_orientation, 1)
+        lamp_object1 = self.setup_light(scene.light1, "ShadeLight1", scene.light_intensity1, light_location1, light_rotation1)
+
+    if scene.light2 != "None":
+        light_location2, light_rotation2 = self.determine_light_position(scene.light_orientation, 2)
+        lamp_object2 = self.setup_light(scene.light2, "ShadeLight2", scene.light_intensity2, light_location2, light_rotation2)
+
+    # Assuming additional steps for preparation before baking...
+    bpy.ops.object.bake_image()
+
+    # Cleanup
+    bpy.data.objects.remove(lamp_object1)
+    bpy.data.objects.remove(lamp_object2)
+
+    shade_obj.select_set(True)
+    bpy.context.view_layer.objects.active = shade_obj
+    bpy.context.view_layer.update()
 
 
 def rename_all_objects(self, context):

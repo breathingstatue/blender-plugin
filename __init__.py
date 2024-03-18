@@ -129,16 +129,16 @@ if "rim_out" in locals():
 from .props.props_mesh import RVMeshProperties
 from .props.props_obj import RVObjectProperties
 from .props.props_scene import RVSceneProperties
-from .common import DialogOperator, TEX_ANIM_MAX, TEX_PAGES_MAX
+from .common import DialogOperator, TEX_ANIM_MAX, TEX_PAGES_MAX, BAKE_LIGHTS, BAKE_LIGHT_ORIENTATIONS, BAKE_SHADOW_METHODS
 from .operators import ImportRV, ExportRV, RVIO_OT_ReadCarParameters, RVIO_OT_SelectRevoltDirectory
 from .operators import ButtonReExport, ButtonSelectFaceProp, ButtonSelectNCPFaceProp
 from .operators import ButtonSelectNCPMaterial, ButtonVertexColorSet, VertexColorRemove
 from .operators import ButtonVertexColorCreateLayer, ButtonVertexAlphaLayer, TexAnimDirection
 from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, UseTextureNumber
-from .operators import SetInstanceProperty, RemoveInstanceProperty, BatchBake, LaunchRV, TexturesSave
+from .operators import SetInstanceProperty, RemoveInstanceProperty, LaunchRV, TexturesSave
 from .operators import TexturesRename, CarParametersExport, ButtonZoneHide, AddTrackZone
 from .operators import ToggleTriangulateNgons, ExportWithoutTexture, ToggleApplyScale, ToggleApplyRotation
-from .operators import ButtonBakeShadow, ToggleEnvironmentMap, ToggleNoMirror, ToggleModelRGB, ToggleFinHide
+from .operators import BakeShadow, ToggleEnvironmentMap, ToggleNoMirror, ToggleModelRGB, ToggleFinHide
 from .operators import SetEnvironmentMapColor, ToggleNoLights, ToggleNoCameraCollision, ToggleFinPriority
 from .operators import ToggleNoObjectCollision, ToggleMirrorPlane, InstanceColor, ResetFinLoDBias
 from .operators import SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere, RVIO_OT_ToggleWParentMeshes
@@ -154,7 +154,7 @@ from .ui.faceprops import RVIO_PT_RevoltFacePropertiesPanel
 from .ui.headers import RVIO_PT_RevoltIOToolPanel
 from .ui.helpers import RVIO_PT_RevoltHelpersPanelMesh
 from .ui.instances import RVIO_PT_RevoltInstancesPanel
-from .ui.light import ButtonBakeLightToVertex, RVIO_PT_RevoltLightPanel
+from .ui.light import RVIO_PT_RevoltLightPanel
 from .ui.texanim import RVIO_PT_AnimModesPanel
 from .ui.objectpanel import RVIO_PT_RevoltObjectPanel
 from .ui.settings import RVIO_PT_RevoltSettingsPanel
@@ -572,6 +572,41 @@ def register():
         description = "Checks car parameters.txt for the texture"
     )
     
+
+    bpy.types.Scene.shadow_quality = bpy.props.IntProperty(
+        name = "Quality",
+        min = 0,
+        max = 32,
+        default = 15,
+        description = "The amount of samples the shadow is rendered with "
+                      "(number of samples taken extra)"
+    )
+    
+    bpy.types.Scene.shadow_resolution = bpy.props.IntProperty(
+        name = "Resolution",
+        min = 32,
+        max = 8192,
+        default = 128,
+        description = "Texture resolution of the shadow.\n"
+                      "Default: 128x128 pixels"
+    )
+    
+    bpy.types.Scene.shadow_softness = bpy.props.FloatProperty(
+        name = "Softness",
+        min = 0.1,
+        max = 100.0,
+        default = 1,
+        description = "Softness of the shadow "
+                      "(Light size for ray shadow sampling)"
+    )
+    
+    bpy.types.Scene.shadow_table = bpy.props.StringProperty(
+        name = "Shadowtable",
+        default = "",
+        description = "Shadow coordinates for use in parameters.txt of cars.\n"
+                      "Click to select all, then CTRL C to copy"
+    )
+    
     bpy.types.Scene.texanim_delta_u = bpy.props.FloatProperty(name="TexAnim Delta U")
     bpy.types.Scene.texanim_delta_v = bpy.props.FloatProperty(name="TexAnim Delta V")
     
@@ -593,15 +628,13 @@ def register():
     bpy.utils.register_class(SelectByData)
     bpy.utils.register_class(SetInstanceProperty)
     bpy.utils.register_class(RemoveInstanceProperty)
-    bpy.utils.register_class(BatchBake)
     bpy.utils.register_class(LaunchRV)
     bpy.utils.register_class(TexturesSave)
     bpy.utils.register_class(TexturesRename)
     bpy.utils.register_class(UseTextureNumber)
     bpy.utils.register_class(CarParametersExport)
     bpy.utils.register_class(ButtonHullGenerate)  
-    bpy.utils.register_class(ButtonBakeShadow)
-    bpy.utils.register_class(ButtonBakeLightToVertex)
+    bpy.utils.register_class(BakeShadow)
     bpy.utils.register_class(ButtonHullSphere)
     bpy.utils.register_class(ButtonCopyUvToFrame)
     bpy.utils.register_class(ButtonCopyFrameToUv)
@@ -711,15 +744,13 @@ def unregister():
     bpy.utils.unregister_class(ButtonCopyFrameToUv)
     bpy.utils.unregister_class(ButtonCopyUvToFrame)
     bpy.utils.unregister_class(ButtonHullSphere)
-    bpy.utils.unregister_class(ButtonBakeLightToVertex)
-    bpy.utils.unregister_class(ButtonBakeShadow)
+    bpy.utils.unregister_class(BakeShadow)
     bpy.utils.unregister_class(ButtonHullGenerate) 
     bpy.utils.unregister_class(CarParametersExport)
     bpy.utils.unregister_class(UseTextureNumber)
     bpy.utils.unregister_class(TexturesRename)
     bpy.utils.unregister_class(TexturesSave)
     bpy.utils.unregister_class(LaunchRV)
-    bpy.utils.unregister_class(BatchBake)
     bpy.utils.unregister_class(RemoveInstanceProperty)
     bpy.utils.unregister_class(SetInstanceProperty)
     bpy.utils.unregister_class(SelectByData)
@@ -742,7 +773,10 @@ def unregister():
     
     del bpy.types.Scene.texanim_delta_v
     del bpy.types.Scene.texanim_delta_u
-
+    del bpy.types.Scene.shadow_table
+    del bpy.types.Scene.shadow_softness
+    del bpy.types.Scene.shadow_resolution
+    del bpy.types.Scene.shadow_quality
     del bpy.types.Scene.prm_check_parameters
     del bpy.types.Object.ignore_ncp
     del bpy.types.Object.is_bbox
