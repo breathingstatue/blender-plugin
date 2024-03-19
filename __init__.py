@@ -981,7 +981,7 @@ def unregister():
     del bpy.types.Object.is_hull_sphere
     del bpy.types.Scene.apply_rotation_on_export
     del bpy.types.Scene.apply_scale
-    del bpy.types.Scene.export_without_texture
+    del bpy.types.Scene.use_tex_num
     del bpy.types.Scene.triangulate_ngons
     
     del bpy.types.Scene.w_import_cubes
