@@ -979,9 +979,7 @@ def unregister():
     del bpy.types.Object.is_mirror_plane
     del bpy.types.Object.is_hull_convex
     del bpy.types.Object.is_hull_sphere
-    del bpy.types.Scene.apply_rotation_on_export
     del bpy.types.Scene.apply_scale
-    del bpy.types.Scene.export_without_texture
     del bpy.types.Scene.triangulate_ngons
     
     del bpy.types.Scene.w_import_cubes
@@ -1001,8 +999,8 @@ def unregister():
     del bpy.types.Scene.ta_current_slot
     del bpy.types.Scene.texture    
     del bpy.types.Scene.delay
-    del bpy.types.Scene.frame_end
-    del bpy.types.Scene.frame_start
+    del bpy.types.Scene.rvio_frame_end
+    del bpy.types.Scene.rvio_frame_start
     del bpy.types.Scene.ta_max_frames
     del bpy.types.Scene.ta_max_slots
     del bpy.types.Scene.texture_animations
