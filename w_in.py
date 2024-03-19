@@ -26,6 +26,9 @@ if "bpy" in locals():
     imp.reload(prm_in)
 
 def import_file(filepath, scene):
+    # Resets the index of the current env color
+    scene.envidx = 0
+
     with open(filepath, 'rb') as file:
         filename = os.path.basename(filepath)
         world = World(file)
