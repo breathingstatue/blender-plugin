@@ -114,7 +114,7 @@ def get_or_create_material(texture_path):
 
     return mat
 
-def add_rvmesh_to_bmesh(prm, bm, me, filepath, scene, envlist=None):
+def add_rvmesh_to_bmesh(prm, bm, me, filepath, context, scene, envlist=None):
     """
     Adds PRM data to an existing bmesh. Returns the resulting bmesh.
     """
@@ -168,12 +168,7 @@ def add_rvmesh_to_bmesh(prm, bm, me, filepath, scene, envlist=None):
         
         bm.verts.ensure_lookup_table()
         bm.faces.ensure_lookup_table()
-
-        # Assigns env alpha to face. Colors are on a vcol layer
-        if envlist and (poly.type & FACE_ENV):
-            env_col_alpha = envlist[scene.envidx].alpha
-            face[env_alpha_layer] = float(env_col_alpha) / 255
-
+        
         # Assign UVs and colors
         for l, loop in enumerate(face.loops):
             loop[uv_layer].uv = (uvs[l].u, 1 - uvs[l].v)
@@ -199,7 +194,7 @@ def add_rvmesh_to_bmesh(prm, bm, me, filepath, scene, envlist=None):
         if envlist and (poly.type & FACE_ENV):
             scene.envidx += 1
     
-    # Assign the material to the face
+        # Assign the material to the face
     for face, poly in zip(created_faces, prm.polygons):
         if poly.texture >= 0:
             texture_path = get_texture_path(filepath, poly.texture, scene)
@@ -212,4 +207,9 @@ def add_rvmesh_to_bmesh(prm, bm, me, filepath, scene, envlist=None):
         # Assigns the face properties (bit field, one int per face)
         face[type_layer] = poly.type
         face[texnum_layer] = poly.texture
+
+        # Assigns env alpha to face. Colors are on a vcol layer
+        if envlist and (poly.type & FACE_ENV):
+            env_col_alpha = envlist[scene.envidx].alpha
+            face[env_alpha_layer] = float(env_col_alpha) / 255
 
