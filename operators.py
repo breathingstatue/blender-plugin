@@ -22,7 +22,7 @@ from . import tools
 from .hul_in import create_sphere
 from .layers import *
 from .texanim import *
-from .tools import generate_chull, bake_shadow
+from .tools import generate_chull
 from .rvstruct import *
 from . import carinfo
 from .common import get_format, FORMAT_PRM, FORMAT_FIN, FORMAT_NCP, FORMAT_HUL, FORMAT_W, FORMAT_RIM, FORMAT_TA_CSV, FORMAT_TAZ, FORMAT_UNK
@@ -113,7 +113,7 @@ class ImportRV(bpy.types.Operator):
 
         elif frmt == FORMAT_W:
             from . import w_in
-            w_in.import_file(self.filepath, scene)
+            w_in.import_file(self.filepath, context, scene)
 
         elif frmt == FORMAT_RIM:
             from . import rim_in
@@ -318,164 +318,6 @@ class ButtonReExport(bpy.types.Operator):
             self.report({'WARNING'}, "No file path found for re-exporting.")
             return {'CANCELLED'}
         
-class ToggleTriangulateNgons(bpy.types.Operator):
-    """Toggle Triangulate Ngons"""
-    bl_idname = "export.triangulate_ngons"
-    bl_label = "Triangulate Ngons"
-
-    def execute(self, context):
-        context.scene.triangulate_ngons = not context.scene.triangulate_ngons
-        self.report({'INFO'}, "Triangulate Ngons: {}".format("Enabled" if context.scene.triangulate_ngons else "Disabled"))
-        return {'FINISHED'}
-
-class ExportWithoutTexture(bpy.types.Operator):
-    """Toggle Export w/o Texture"""
-    bl_idname = "export.without_texture"
-    bl_label = "Toggle Export w/o Texture"
-
-    def execute(self, context):
-        context.scene.use_tex_num = not context.scene.use_tex_num
-        if context.scene.use_tex_num:
-            self.report({'INFO'}, "Exports without Texture")
-        else:
-            self.report({'INFO'}, "Uses Texture on Export")
-        return {'FINISHED'}
-    
-class ToggleApplyScale(bpy.types.Operator):
-    """Toggle Apply Scale on Export"""
-    bl_idname = "export.apply_scale"
-    bl_label = "Apply Scale on Export"
-
-    def execute(self, context):
-        context.scene.apply_scale = not context.scene.apply_scale
-        if context.scene.apply_scale:
-            self.report({'INFO'}, "Apply Scale on Export ON")
-        else:
-            self.report({'INFO'}, "Apply Scale on Export OFF")
-        return {'FINISHED'}
-
-class ToggleApplyRotation(bpy.types.Operator):
-    """Toggle Apply Rotation on Export"""
-    bl_idname = "export.apply_rotation"
-    bl_label = "Toggle Apply Rotation on Export"
-
-    def execute(self, context):
-        context.scene.apply_rotation = not context.scene.apply_rotation
-        if context.scene.apply_rotation:
-            self.report({'INFO'}, "Apply Rotation on Export ON")
-        else:
-            self.report({'INFO'}, "Apply Rotation on Export OFF")
-        return {'FINISHED'}
-    
-class ToggleApplyTranslation(bpy.types.Operator):
-    """Toggle Apply Translation on Export.\nDisable for single/instance .ncp files"""
-    bl_idname = "export.apply_translation"
-    bl_label = "Apply Translation on Export."
-
-    def execute(self, context):
-        context.scene.apply_translation = not context.scene.apply_translation
-        if context.scene.apply_translation:
-            self.report({'INFO'}, "Apply Translation on Export ON")
-        else:
-            self.report({'INFO'}, "Apply Translation on Export OFF")
-        return {'FINISHED'}
-    
-class RVIO_OT_ToggleWParentMeshes(bpy.types.Operator):
-    bl_idname = "rvio.toggle_w_parent_meshes"
-    bl_label = "Toggle Parent Meshes"
-    
-    def execute(self, context):
-        context.scene.w_parent_meshes = not context.scene.w_parent_meshes
-        self.report({'INFO'}, f"Toggle Parent Meshes: {'ON' if context.scene.w_parent_meshes else 'OFF'}")
-        return {'FINISHED'}
-
-class RVIO_OT_ToggleWImportBoundBoxes(bpy.types.Operator):
-    bl_idname = "rvio.toggle_w_import_bound_boxes"
-    bl_label = "Toggle Import Bound Boxes"
-    
-    def execute(self, context):
-        context.scene.w_import_bound_boxes = not context.scene.w_import_bound_boxes
-        self.report({'INFO'}, f"Toggle Import Bound Boxes: {'ON' if context.scene.w_import_bound_boxes else 'OFF'}")
-        return {'FINISHED'}
-
-class RVIO_OT_ToggleWImportCubes(bpy.types.Operator):
-    bl_idname = "rvio.toggle_w_import_cubes"
-    bl_label = "Toggle Import Cubes"
-    
-    def execute(self, context):
-        context.scene.w_import_cubes = not context.scene.get("w_import_cubes", False)
-        self.report({'INFO'}, f"Toggle Import Cubes: {'ON' if context.scene.w_import_cubes else 'OFF'}")
-        return {'FINISHED'}
-
-class RVIO_OT_ToggleWImportBigCubes(bpy.types.Operator):
-    bl_idname = "rvio.toggle_w_import_big_cubes"
-    bl_label = "Toggle Import Big Cubes"
-    
-    def execute(self, context):
-        context.scene.w_import_big_cubes = not context.scene.get("w_import_big_cubes", False)
-        self.report({'INFO'}, f"Toggle Import Big Cubes: {'ON' if context.scene.w_import_big_cubes else 'OFF'}")
-        return {'FINISHED'}
-
-class RVIO_OT_NCPExportSelected(bpy.types.Operator):
-    bl_idname = "rvio.ncp_export_selected"
-    bl_label = "Toggle NCP Export Selected"
-    
-    def execute(self, context):
-        scene = context.scene
-        # Toggle the ncp_export_selected property
-        scene.ncp_export_selected = not scene.ncp_export_selected
-        
-        # Conditional message based on the toggled state
-        if scene.ncp_export_selected:
-            self.report({'INFO'}, "Will export selected as .ncp")
-        else:
-            self.report({'INFO'}, ".ncp exporting disabled for object")
-            
-        return {'FINISHED'}
-
-class RVIO_OT_NCPExportCollgrid(bpy.types.Operator):
-    bl_idname = "rvio.ncp_export_collgrid"
-    bl_label = "Toggle NCP Export Collision Grid"
-    
-    def execute(self, context):
-        scene = context.scene
-        # Toggle the ncp_export_collgrid property
-        scene.ncp_export_collgrid = not scene.ncp_export_collgrid
-        
-        # Conditional message based on the toggled state
-        if scene.ncp_export_collgrid:
-            self.report({'INFO'}, "Exporting collgrid for .ncp")
-        else:
-            self.report({'INFO'}, "Collgrid export disabled")
-            
-        return {'FINISHED'}
-    
-class RVIO_OT_NCPGridSize(bpy.types.Operator):
-    bl_idname = "rvio.ncp_grid_size"
-    bl_label = "Set NCP Grid Size"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    grid_size: bpy.props.IntProperty(
-        name="Grid Size",
-        default=1024,
-        min=512,
-        max=8192,
-        description="Size of the lookup grid",
-        subtype='UNSIGNED'
-    )
-
-    def execute(self, context):
-        scene = context.scene
-        scene.ncp_collgrid_size = self.grid_size
-        self.report({'INFO'}, f"Collgrid size set to {self.grid_size}")
-        return {'FINISHED'}
-
-    def invoke(self, context, event):
-        return context.window_manager.invoke_props_dialog(self)
-
-    def draw(self, context):
-        self.layout.prop(self, "grid_size", text="Grid Size", slider=True)
-
 
 """
 HELPERS -----------------------------------------------------------------------
@@ -753,7 +595,7 @@ class RemoveInstanceProperty(bpy.types.Operator):
     
 class InstanceColor(bpy.types.Operator):
     bl_idname = "object.use_fin_col"
-    bl_label = "Apply Fin Color"
+    bl_label = "Set Instance Color"
     bl_options = {'REGISTER', 'UNDO'}
 
     fin_col: bpy.props.FloatVectorProperty(
@@ -771,14 +613,13 @@ class InstanceColor(bpy.types.Operator):
             self.report({'WARNING'}, "No active object")
             return {'CANCELLED'}
 
-        # Store the color directly in the object's custom properties
-        obj["fin_col"] = self.fin_col[:3]  # Store RGB values
+        # Now fin_col comes from the color picker, so we directly update the object's fin_col property
+        obj.fin_col = self.fin_col[:3]  # Update the object's fin_col property
 
-        if hasattr(obj, "color"):
-            obj.color = (self.fin_col[0], self.fin_col[1], self.fin_col[2], 1.0)  # Set RGBA
-
+        # Report the new color to the user
         color_values = tuple(round(val, 3) for val in self.fin_col[:3])
         self.report({'INFO'}, f"Fin color applied to {obj.name}: {color_values}")
+
         return {'FINISHED'}
 
     def invoke(self, context, event):
@@ -817,7 +658,7 @@ class SetEnvironmentMapColor(bpy.types.Operator):
         name="EnvMap Color",
         subtype='COLOR',
         default=(1.0, 1.0, 1.0, 1.0),
-        size=4,  # Include alpha
+        size=4,  # Including alpha
         min=0.0, max=1.0,
         description="Set the environment map's color and alpha"
     )
@@ -829,11 +670,9 @@ class SetEnvironmentMapColor(bpy.types.Operator):
             self.report({'WARNING'}, "No active object")
             return {'CANCELLED'}
 
-        # Store the RGBA color directly in the object's custom properties
-        obj["fin_envcol"] = [self.fin_envcol[0], self.fin_envcol[1], self.fin_envcol[2], self.fin_envcol[3]]
+        obj.fin_envcol = self.fin_envcol
 
-        # Correctly format the message to display color values
-        color_values = tuple(round(val, 3) for val in obj["fin_envcol"])
+        color_values = tuple(round(val, 3) for val in self.fin_envcol)
         self.report({'INFO'}, f"Environment map color set to {color_values} for {obj.name}")
 
         return {'FINISHED'}
@@ -844,172 +683,25 @@ class SetEnvironmentMapColor(bpy.types.Operator):
 
 class SetBCubeMeshIndices(bpy.types.Operator):
     bl_idname = "object.set_bcube_mesh_indices"
-    bl_label = "Set Mesh Indices"
+    bl_label = "Set BCube Mesh Indices"
     
     def execute(self, context):
         obj = context.object
         
-        # Clear any previous mesh indices
-        obj["bcube_mesh_indices"] = ""
+        # Initialize the bcube_mesh_indices property with an empty string
+        obj.bcube_mesh_indices = ""
         
-        # Iterate through child meshes and add their indices
+        # Iterate through child meshes and concatenate their names
         for child_obj in obj.children:
             if child_obj.type == 'MESH':
-                if obj["bcube_mesh_indices"]:
-                    obj["bcube_mesh_indices"] += ","
-                # Ensure you're getting the right index or identifier for the child mesh here
-                obj["bcube_mesh_indices"] += str(child_obj.data.index)  # Verify if 'data.index' is correct
+                if obj.bcube_mesh_indices:
+                    obj.bcube_mesh_indices += ","
+                # Append the mesh name or another unique identifier
+                obj.bcube_mesh_indices += child_obj.data.name
         
         self.report({'INFO'}, f"BCube mesh indices set for {obj.name}.")
         return {'FINISHED'}
-
-class ToggleModelRGB(bpy.types.Operator):
-    bl_idname = "object.toggle_model_rgb"
-    bl_label = "Toggle Model RGB"
-    bl_description = "Toggle the 'Use Model Color' property"
-
-    def execute(self, context):
-        obj = context.object
-        if obj and "is_instance" in obj and obj["is_instance"]:
-            # Toggle the 'fin_model_rgb' property
-            current_state = obj.get("fin_model_rgb", False)
-            obj["fin_model_rgb"] = not current_state
-            # Report the new state of 'fin_model_rgb'
-            self.report({'INFO'}, f"Use Model Color {'enabled' if obj['fin_model_rgb'] else 'disabled'} for {obj.name}.")
-        else:
-            # Report if 'is_instance' is not found or not true
-            self.report({'WARNING'}, "'is_instance' property not found or not true.")
-
-        return {'FINISHED'}
-
-class ToggleFinHide(bpy.types.Operator):
-    bl_idname = "object.toggle_fin_hide"
-    bl_label = "Toggle Hide Property"
-    bl_description = "Toggle the 'Hide' property for the object"
-
-    def execute(self, context):
-        obj = context.object
-        if obj and "is_instance" in obj and obj["is_instance"]:
-            obj.fin_hide = not obj.fin_hide
-            self.report({'INFO'}, f"Hide property {'enabled' if obj.fin_hide else 'disabled'} for {obj.name}.")
-        else:
-            self.report({'WARNING'}, "'is_instance' property not found or not true.")
-        
-        return {'FINISHED'}
-    
-class ToggleFinPriority(bpy.types.Operator):
-    bl_idname = "object.toggle_fin_priority"
-    bl_label = "Toggle Priority Property"
-    bl_description = "Toggle the 'Priority' property for the object between 0 and 1"
-
-    def execute(self, context):
-        obj = context.object
-        if obj and "is_instance" in obj and obj["is_instance"]:
-            # Toggle the 'fin_priority' property between 0 and 1
-            obj.fin_priority = 1 if obj.fin_priority == 0 else 0
-            self.report({'INFO'}, f"Priority set to {obj.fin_priority} for {obj.name}.")
-        else:
-            self.report({'WARNING'}, "'is_instance' property not found or not true.")
-        
-        return {'FINISHED'}
-    
-class ResetFinLoDBias(bpy.types.Operator):
-    bl_idname = "object.reset_fin_lod_bias"
-    bl_label = "Reset LoD Bias"
-    bl_description = "Reset the 'LoD Bias' to its default value"
-
-    def execute(self, context):
-        obj = context.object
-        if obj and "is_instance" in obj and obj["is_instance"]:
-            obj.fin_lod_bias = 1024  # Reset to default
-            self.report({'INFO'}, f"LoD Bias reset to 1024 for {obj.name}.")
-        else:
-            self.report({'WARNING'}, "'is_instance' property not found or not true.")
-        
-        return {'FINISHED'}
-    
-class ToggleNoMirror(bpy.types.Operator):
-    bl_idname = "object.toggle_no_mirror"
-    bl_label = "Toggle No Mirror Mode"
-    bl_description = "Toggle the 'Don't show in Mirror Mode' property"
-
-    def execute(self, context):
-        obj = context.object
-        if obj and "is_instance" in obj and obj["is_instance"]:
-            current_state = obj.get("fin_no_mirror", False)
-            obj["fin_no_mirror"] = not current_state
-            self.report({'INFO'}, f"No Mirror Mode {'enabled' if not current_state else 'disabled'} for {obj.name}.")
-        else:
-            self.report({'WARNING'}, "'is_instance' property not found or not true.")
-        return {'FINISHED'}
-
-class ToggleNoLights(bpy.types.Operator):
-    bl_idname = "object.toggle_no_lights"
-    bl_label = "Is Affected by Light"
-    bl_description = "Toggle the 'Is affected by Light' property"
-
-    def execute(self, context):
-        obj = context.object
-        if obj and "is_instance" in obj and obj["is_instance"]:
-            # Directly toggle the fin_no_lights property on the object
-            current_state = obj.get("fin_no_lights", False)
-            obj["fin_no_lights"] = not current_state
-            self.report({'INFO'}, f"'Is affected by Light' property {'enabled' if not current_state else 'disabled'} for {obj.name}.")
-        else:
-            self.report({'WARNING'}, "'is_instance' property not found or not set to True.")
-        return {'FINISHED'}
-        
-class ToggleNoCameraCollision(bpy.types.Operator):
-    bl_idname = "object.toggle_no_cam_coll"
-    bl_label = "No Camera Collision"
-    bl_description = "Toggle the 'No Camera Collision' property"
-
-    def execute(self, context):
-        obj = context.object
-        if obj and "is_instance" in obj and obj["is_instance"]:
-            current_state = obj.get("", False)
-            obj["fin_no_cam_coll"] = not current_state
-            self.report({'INFO'}, f"No Camera Collision property {'enabled' if not current_state else 'disabled'} for {obj.name}.")
-        else:
-            self.report({'WARNING'}, "'is_instance' property not found or not true.")
-        return {'FINISHED'}
-    
-class ToggleNoObjectCollision(bpy.types.Operator):
-    bl_idname = "object.toggle_no_obj_coll"
-    bl_label = "No Object Collision"
-    bl_description = "Toggle the 'No Object Collision' property"
-
-    def execute(self, context):
-        obj = context.object
-        if obj and "is_instance" in obj and obj["is_instance"]:
-            current_state = obj.get("fin_no_obj_coll", False)
-            obj["fin_no_obj_coll"] = not current_state
-            self.report({'INFO'}, f"No Object Collision property {'enabled' if not current_state else 'disabled'} for {obj.name}.")
-        else:
-            self.report({'WARNING'}, "'is_instance' property not found or not true.")
-        return {'FINISHED'}
-   
-class ToggleMirrorPlane(bpy.types.Operator):
-    bl_idname = "object.toggle_mirror_plane"
-    bl_label = "Toggle Mirror Plane"
-    bl_description = "Toggle Mirror Plane property for the selected object"
-
-    @classmethod
-    def poll(cls, context):
-        return context.selected_objects
-
-    def execute(self, context):
-        for obj in context.selected_objects:
-            if "is_mirror_plane" not in obj.keys():
-                obj["is_mirror_plane"] = True
-            else:
-                obj["is_mirror_plane"] = not obj["is_mirror_plane"]
-            
-            status = "tagged" if obj["is_mirror_plane"] else "untagged"
-            self.report({'INFO'}, f"Object is {status} as Mirror Plane")
-        
-        return {'FINISHED'}
-    
+  
 class ButtonHullGenerate(bpy.types.Operator):
     bl_idname = "hull.generate"
     bl_label = "Generate Convex Hull"
@@ -1022,44 +714,11 @@ class ButtonHullGenerate(bpy.types.Operator):
     def execute(self, context):
         hull_object = generate_chull(context)
         if hull_object:
-            hull_object.name = f"is_hull_convex"
-            hull_object.is_hull_convex = True  # Marking the object as a convex hull
             self.report({'INFO'}, "Convex hull generated successfully.")
         else:
             self.report({'ERROR'}, "Convex hull generation failed.")
         return {'FINISHED'}
     
-class SelectNCPMaterial(bpy.types.Operator):
-    bl_idname = "ncpmaterial.select"
-    bl_label = "Select Material Faces"
-    bl_description = "Select all faces with the currently selected material"
-
-    def execute(self, context):
-        obj = context.object
-        
-        # Ensure the operation is being performed on a mesh
-        if not obj or obj.type != 'MESH':
-            self.report({'ERROR'}, "Active object is not a mesh")
-            return {'CANCELLED'}
-        
-        mesh = obj.data
-        
-        # Assuming 'select_material' is an index or identifier for the material
-        target_material_index = context.scene.select_material
-        
-        # Deselect all faces first
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.select_all(action='DESELECT')
-        bpy.ops.object.mode_set(mode='OBJECT')
-        
-        # Select faces that use the target material
-        for polygon in mesh.polygons:
-            if polygon.material_index == target_material_index:
-                polygon.select = True
-        
-        # Update the view
-        bpy.ops.object.mode_set(mode='EDIT')
-        return {'FINISHED'}
     
 """
 SHADOW -----------------------------------------------------------------------
@@ -1089,7 +748,7 @@ class BakeShadow(bpy.types.Operator):
 
         lamp_data_pos = bpy.data.lights.new(name="ShadePositive", type="AREA")
         lamp_data_pos.energy = 1.0
-        lamp_data_pos.size = max(scene.shadow_softness)
+        lamp_data_pos.size = scene.shadow_softness
         lamp_positive = bpy.data.objects.new(name="ShadePositive", object_data=lamp_data_pos)
 
         # Link lights to the scene
@@ -1292,56 +951,97 @@ class OBJECT_OT_add_texanim_uv(bpy.types.Operator):
     """Add a new texanim UV layer with an associated image"""
     bl_idname = "object.add_texanim_uv"
     bl_label = "Add Texanim UV Layer and Image"
-    bl_options = {'REGISTER'}
+    bl_options = {'REGISTER', 'UNDO'}
+
+    create_new_material: bpy.props.BoolProperty(
+        name="Create New Material",
+        description="Create a new material for this object, or use the existing one",
+        default=False
+    )
 
     def execute(self, context):
         obj = context.active_object
-        scene = context.scene
 
-        if not obj or not obj.type == 'MESH':
+        if not obj or obj.type != 'MESH':
             self.report({'ERROR'}, "Active object is not a mesh")
             return {'CANCELLED'}
 
-        if not scene.texture_animations:
-            scene.texture_animations = json.dumps([])
-        ta = json.loads(scene.texture_animations)
-
         base_name_root = obj.name[:7]
-        next_letter = self.find_next_letter(uv_layers=obj.data.uv_layers, base_name_root=base_name_root)
-        base_name = f"{base_name_root}{next_letter}"
-        new_uv_layer = obj.data.uv_layers.new(name=base_name)
-        new_image = bpy.data.images.new(name=base_name, width=512, height=512)
-
-        # Initialize new material and set up nodes
-        new_mat = self.initialize_material(obj=obj, base_name=base_name, new_image=new_image)
-
-        new_animation_entry = self.create_animation_entry(context)
+        uv_layer_exists, uv_layer = self.get_uv_layer(obj, base_name_root)
     
+        if not uv_layer_exists:
+            uv_layer = obj.data.uv_layers.new(name=f"{base_name_root}_TexAnim")
+
+        # Check if there is an existing material with a texture node. If there is, use that texture.
+        material = obj.material_slots[0].material if obj.material_slots else None
+        existing_texture_node = self.get_existing_texture_node(material) if material else None
+
+        if not existing_texture_node or self.create_new_material:
+            # Create a new texture only if there isn't an existing one to use or if we're creating a new material.
+            image = bpy.data.images.new(name=f"{base_name_root}_TexAnim", width=512, height=512)
+
+            if not material:
+                material = self.initialize_material(obj, uv_layer.name, image)
+                self.assign_image_to_material(material, image)
+                self.report({'INFO'}, f"New material '{material.name}' created and assigned.")
+            elif self.create_new_material:
+                # If there is an existing material but we want a new one.
+                material = self.initialize_material(obj, uv_layer.name, image)
+                obj.material_slots[0].material = material
+                self.assign_image_to_material(material, image)
+                self.report({'INFO'}, f"New material '{material.name}' created and assigned.")
+            else:
+                # Existing material is there, just assign a new image to it.
+                self.assign_image_to_material(material, image)
+                self.report({'INFO'}, "Existing material found. New image assigned to it.")
+        else:
+            # Existing texture found. No need to create a new one.
+            self.report({'INFO'}, "Existing texture found in the material. No new texture created.")
+
         return {'FINISHED'}
+    
+    def get_uv_layer(self, obj, base_name_root):
+        # Check for an existing UV layer that matches the base name root
+        for uv_layer in obj.data.uv_layers:
+            if uv_layer.name.startswith(base_name_root):
+                return True, uv_layer
+        return False, None
+
+    def get_existing_texture_node(self, material):
+        if material and material.use_nodes:
+            for node in material.node_tree.nodes:
+                if node.type == 'TEX_IMAGE':
+                    return node
+        return None
+
+    def assign_image_to_material(self, material, image):
+        # Assign the image texture to the material
+        bsdf = material.node_tree.nodes.get('Principled BSDF')
+        if bsdf:
+            # Create a new image texture node and assign the image.
+            tex_image = material.node_tree.nodes.new('ShaderNodeTexImage')
+            tex_image.image = image
+            # Link the texture node to the Principled BSDF's Base Color.
+            material.node_tree.links.new(bsdf.inputs['Base Color'], tex_image.outputs['Color'])
 
     def find_next_letter(self, uv_layers, base_name_root):
+        existing = {uv_layer.name[-1] for uv_layer in uv_layers if uv_layer.name.startswith(base_name_root)}
         next_letter = 'a'
-        for uv_layer in uv_layers:
-            if uv_layer.name.startswith(base_name_root):
-                current_letter = uv_layer.name[-1]
-                if current_letter.isalpha() and current_letter >= next_letter:
-                    next_letter = chr(ord(current_letter) + 1)
+        while next_letter in existing:
+            next_letter = chr(ord(next_letter) + 1)
         return next_letter
 
     def initialize_material(self, obj, base_name, new_image):
-        if not obj.material_slots:
-            new_mat = bpy.data.materials.new(name="Material_" + base_name)
-            obj.data.materials.append(new_mat)
-        else:
-            new_mat = obj.material_slots[0].material
-
-        if new_mat.use_nodes:
-            bsdf = new_mat.node_tree.nodes.get('Principled BSDF')
-            if bsdf:
-                tex_image = new_mat.node_tree.nodes.new('ShaderNodeTexImage')
-                tex_image.image = new_image
-                new_mat.node_tree.links.new(bsdf.inputs['Base Color'], tex_image.outputs['Color'])
+        new_mat = bpy.data.materials.new(name="Material_" + base_name)
+        obj.data.materials.append(new_mat)
         return new_mat
+
+    def assign_image_to_material(self, material, image):
+        bsdf = material.node_tree.nodes.get('Principled BSDF')
+        if bsdf:
+            tex_image = material.node_tree.nodes.new('ShaderNodeTexImage')
+            tex_image.image = image
+            material.node_tree.links.new(bsdf.inputs['Base Color'], tex_image.outputs['Color'])
 
     def create_animation_entry(self, context):
         scene = context.scene
@@ -1351,6 +1051,7 @@ class OBJECT_OT_add_texanim_uv(bpy.types.Operator):
         uv_data = [scene.ta_current_frame_uv0, scene.ta_current_frame_uv1, scene.ta_current_frame_uv2, scene.ta_current_frame_uv3]
         texture = scene.ta_current_frame_tex
         delay = scene.delay
+        ta = json.loads(scene.texture_animations)
 
         # Construct frame data
         frames = [{"uv": [{"u": 0, "v": 0} for _ in range(4)]} for _ in range(frame_start, frame_end + 1)]
@@ -1365,15 +1066,10 @@ class OBJECT_OT_add_texanim_uv(bpy.types.Operator):
             "delay": delay,
         }
 
-        # Initialize slots if necessary
-        ta = json.loads(scene.texture_animations)
         while len(ta) <= slot:
             ta.append({"frames": [], "slot": len(ta)})
 
-        # Update the specific slot
         ta[slot] = new_animation_entry
-
-        # Save back to the scene
         scene.texture_animations = json.dumps(ta)
 
         return new_animation_entry
@@ -1418,51 +1114,59 @@ class TexAnimTransform(bpy.types.Operator):
         frame_end = scene.rvio_frame_end - 1
 
         ta = json.loads(scene.texture_animations)
-
-        if frame_end >= len(ta[slot]["frames"]) or frame_end < 0:
-            self.report({'ERROR'}, "Frame end index is out of range.")
-            return {'CANCELLED'}
         
-        # Retrieve the direction deltas from the scene properties
-        delta_u = getattr(scene, 'texanim_delta_u', 0.01)  # Default to slight right movement
-        delta_v = getattr(scene, 'texanim_delta_v', 0.0)  # Default to no vertical movement
+        if check_uv_layer(context):
+            # Proceed with the operation as the UV layer exists
+            self.report({'INFO'}, "Proceeding with the operation...")
 
-        nframes = abs(frame_end - frame_start) + 1
+            if frame_end >= len(ta[slot]["frames"]) or frame_end < 0:
+                self.report({'ERROR'}, "Frame end index is out of range.")
+                return {'CANCELLED'}
+        
+            # Retrieve the direction deltas from the scene properties
+            delta_u = getattr(scene, 'texanim_delta_u', 0.01)  # Default to slight right movement
+            delta_v = getattr(scene, 'texanim_delta_v', 0.0)  # Default to no vertical movement
 
-        for frame_idx in range(nframes):
-            frame_number = frame_start + frame_idx
-            # Calculate progression ratio based on frame index
-            prog = frame_idx / (nframes - 1) if nframes > 1 else 1
+            nframes = abs(frame_end - frame_start) + 1
 
-            for vertex_idx in range(4):
-                # Initialize with start frame's UVs
-                if frame_idx == 0:
-                    uv_start = (
-                        ta[slot]["frames"][frame_start]["uv"][vertex_idx]["u"],
-                        ta[slot]["frames"][frame_start]["uv"][vertex_idx]["v"]
-                    )
-                # Use the last frame's UVs for subsequent frames
-                else:
-                    uv_start = (
-                        ta[slot]["frames"][frame_number - 1]["uv"][vertex_idx]["u"],
-                        ta[slot]["frames"][frame_number - 1]["uv"][vertex_idx]["v"]
-                    )
+            for frame_idx in range(nframes):
+                frame_number = frame_start + frame_idx
+                # Calculate progression ratio based on frame index
+                prog = frame_idx / (nframes - 1) if nframes > 1 else 1
 
-                # Apply the UV transformation based on direction and progression
-                new_u = (uv_start[0] + delta_u * prog) % 1.0  # Wrap around the UV map
-                new_v = (uv_start[1] + delta_v * prog) % 1.0  # Wrap around the UV map
+                for vertex_idx in range(4):
+                    # Initialize with start frame's UVs
+                    if frame_idx == 0:
+                        uv_start = (
+                            ta[slot]["frames"][frame_start]["uv"][vertex_idx]["u"],
+                            ta[slot]["frames"][frame_start]["uv"][vertex_idx]["v"]
+                        )
+                    # Use the last frame's UVs for subsequent frames
+                    else:
+                        uv_start = (
+                            ta[slot]["frames"][frame_number - 1]["uv"][vertex_idx]["u"],
+                            ta[slot]["frames"][frame_number - 1]["uv"][vertex_idx]["v"]
+                        )
 
-                ta[slot]["frames"][frame_number]["uv"][vertex_idx]["u"] = new_u
-                ta[slot]["frames"][frame_number]["uv"][vertex_idx]["v"] = new_v
+                    # Apply the UV transformation based on direction and progression
+                    new_u = (uv_start[0] + delta_u * prog) % 1.0  # Wrap around the UV map
+                    new_v = (uv_start[1] + delta_v * prog) % 1.0  # Wrap around the UV map
 
-            # Update texture and delay based on the current frame settings
-            ta[slot]["frames"][frame_number]["texture"] = scene.ta_current_frame_tex
-            ta[slot]["frames"][frame_number]["delay"] = scene.delay
+                    ta[slot]["frames"][frame_number]["uv"][vertex_idx]["u"] = new_u
+                    ta[slot]["frames"][frame_number]["uv"][vertex_idx]["v"] = new_v
 
-        scene.texture_animations = json.dumps(ta)
-        update_ta_current_frame(self, context)
+                # Update texture and delay based on the current frame settings
+                ta[slot]["frames"][frame_number]["texture"] = scene.ta_current_frame_tex
+                ta[slot]["frames"][frame_number]["delay"] = scene.delay
 
-        self.report({'INFO'}, "Animation from frame {} to {} completed.".format(frame_start, frame_end))
+            scene.texture_animations = json.dumps(ta)
+            update_ta_current_frame(self, context)
+
+            self.report({'INFO'}, "Animation from frame {} to {} completed.".format(frame_start, frame_end))
+        else:
+            # Report that no UV layer was found and the operation will not proceed
+            self.report({'WARNING'}, "No UV layer found. Operation cancelled.")
+            return {'CANCELLED'}
         return {'FINISHED'}
 
 class TexAnimGrid(bpy.types.Operator):
@@ -1483,47 +1187,55 @@ class TexAnimGrid(bpy.types.Operator):
         grid_y = context.scene.grid_y
         nframes = grid_x * grid_y
 
-        if nframes > max_frames:
-            msg_box(
-                "Frame out of range.\n"
-                "Please set the amount of frames to {}.".format(
-                    frame_end + 1),
-                "ERROR"
-            )
-            return {'FINISHED'}
+        if check_uv_layer(context):
+            # Proceed with the operation as the UV layer exists
+            self.report({'INFO'}, "Proceeding with the operation...")
 
-        i = 0
-        for y in range(grid_y):
-            for x in range(grid_x):
-                uv0 = (x / grid_x, y / grid_y)
-                uv1 = ((x + 1) / grid_x, y / grid_y)
-                uv2 = ((x + 1) / grid_x, (y + 1) / grid_y)
-                uv3 = (x / grid_x, (y + 1) / grid_y)
+            # Ensure the total frames do not exceed max_frames and the specified range
+            if nframes > max_frames or frame_start + nframes > frame_end:
+                self.report({'ERROR'}, "Frame out of range. Please adjust the grid size or frame range.")
+                return {'CANCELLED'}
+
+            i = 0
+            for y in range(grid_y):
+                for x in range(grid_x):
+                    if i >= max_frames or frame_start + i >= frame_end:
+                        self.report({'ERROR'}, "Exceeded maximum frames or frame range.")
+                        return {'CANCELLED'}
+                    uv0 = (x / grid_x, y / grid_y)
+                    uv1 = ((x + 1) / grid_x, y / grid_y)
+                    uv2 = ((x + 1) / grid_x, (y + 1) / grid_y)
+                    uv3 = (x / grid_x, (y + 1) / grid_y)
 
 
-                ta[slot]["frames"][frame_start + i]["delay"] = scene.delay
-                ta[slot]["frames"][frame_start + i]["texture"] = texture_name
+                    ta[slot]["frames"][frame_start + i]["delay"] = scene.delay
+                    ta[slot]["frames"][frame_start + i]["texture"] = texture_name
 
-                ta[slot]["frames"][frame_start + i]["uv"][0]["u"] = uv0[0]
-                ta[slot]["frames"][frame_start + i]["uv"][0]["v"] = uv0[1]
-                ta[slot]["frames"][frame_start + i]["uv"][1]["u"] = uv1[0]
-                ta[slot]["frames"][frame_start + i]["uv"][1]["v"] = uv1[1]
-                ta[slot]["frames"][frame_start + i]["uv"][2]["u"] = uv2[0]
-                ta[slot]["frames"][frame_start + i]["uv"][2]["v"] = uv2[1]
-                ta[slot]["frames"][frame_start + i]["uv"][3]["u"] = uv3[0]
-                ta[slot]["frames"][frame_start + i]["uv"][3]["v"] = uv3[1]
+                    ta[slot]["frames"][frame_start + i]["uv"][0]["u"] = uv0[0]
+                    ta[slot]["frames"][frame_start + i]["uv"][0]["v"] = uv0[1]
+                    ta[slot]["frames"][frame_start + i]["uv"][1]["u"] = uv1[0]
+                    ta[slot]["frames"][frame_start + i]["uv"][1]["v"] = uv1[1]
+                    ta[slot]["frames"][frame_start + i]["uv"][2]["u"] = uv2[0]
+                    ta[slot]["frames"][frame_start + i]["uv"][2]["v"] = uv2[1]
+                    ta[slot]["frames"][frame_start + i]["uv"][3]["u"] = uv3[0]
+                    ta[slot]["frames"][frame_start + i]["uv"][3]["v"] = uv3[1]
 
-                i += 1
+                    i += 1
 
-        scene.texture_animations = json.dumps(ta)
-        update_ta_current_frame(self, context)
+            scene.texture_animations = json.dumps(ta)
+            update_ta_current_frame(self, context)
                 
-        msg_box("Animation of {} frames completed.".format(
-            nframes),
-            icon = "FILE_TICK"
-        )
+            msg_box("Animation of {} frames completed.".format(
+                nframes),
+                icon = "FILE_TICK"
+            )
 
-        return {'FINISHED'}        
+        else:
+            # Report that no UV layer was found and the operation will not proceed
+            self.report({'WARNING'}, "No UV layer found. Operation cancelled.")
+            return {'CANCELLED'}
+
+        return {'FINISHED'} 
 
 
 """

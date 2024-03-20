@@ -32,7 +32,6 @@ from mathutils import Color
 
 
 def import_file(filepath, scene):
-    props = scene.revolt
 
     with open(filepath, 'rb') as file:
         filename = os.path.basename(filepath)

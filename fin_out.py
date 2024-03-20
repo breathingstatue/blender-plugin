@@ -7,6 +7,7 @@ Imports Instance files.
 
 """
 
+import os
 import bpy
 import bmesh
 import mathutils
@@ -15,8 +16,9 @@ from . import common
 from . import rvstruct
 from . import prm_out
 
-from .rvstruct import Instances, Instance, Vector, Color
-from .common import *
+from .rvstruct import Instances, Instance, Vector, Color, Matrix
+from .common import to_revolt_coord, FIN_SET_MODEL_RGB, to_or_matrix, FIN_ENV, FIN_HIDE, FIN_NO_MIRROR, FIN_NO_LIGHTS
+from .common import FIN_NO_CAMERA_COLLISION, FIN_NO_OBJECT_COLLISION
 
 if "bpy" in locals():
     import imp
@@ -45,8 +47,7 @@ def export_file(filepath, context):
         )
         print(instance.color)
 
-        # Assuming fin_envcol is an RGBA value stored as a custom property
-        fin_envcol = obj.get("fin_envcol", [0.5, 0.5, 0.5, 1.0])  # Default: mid-gray + opaque alpha
+        fin_envcol = obj.get("fin_envcol", [0.5, 0.5, 0.5, 1.0])
         instance.env_color = rvstruct.Color(
             color=(
                 int(fin_envcol[0] * 255),
@@ -58,8 +59,8 @@ def export_file(filepath, context):
         instance.env_color.alpha = int((1 - fin_envcol[3]) * 255)
     
         # Access other custom properties similarly
-        instance.priority = obj.get("fin_priority", 0)
-        instance.lod_bias = obj.get("fin_lod_bias", 0)
+        instance.priority = obj.get("fin_priority", 1)
+        instance.lod_bias = obj.get("fin_lod_bias", 1024)
     
         # Position and orientation
         instance.position = Vector(data=to_revolt_coord(obj.location))

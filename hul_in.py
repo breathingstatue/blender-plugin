@@ -196,7 +196,7 @@ def create_sphere(scene, center, radius, filename):
     bpy.context.collection.objects.link(ob)
     ob.location = center
     ob.scale = (radius, radius, radius)
-    ob.display_type = "SOLID"  # Updated for Blender 2.8+
+    ob.display_type = "SOLID"
     ob.is_hull_sphere = True
     return ob
 

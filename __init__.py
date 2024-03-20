@@ -6,27 +6,27 @@ Description:
 Marv's Add-On for Re-Volt with Theman's Update 
 """
 
-# Global debug flag
-DEBUG_MODE = True
-
-from tokenize import Ignore
-from xml.dom.domreg import well_known_implementations
+from collections import defaultdict
 import bpy
 import bmesh
 import os
 import os.path
 import importlib
 from bpy.app.handlers import persistent  # For the scene update handler
-from bpy.app.handlers import load_post
-
-# Importing modules from the add-on's package
-
-from .props import (
-    props_mesh,
-    props_obj,
-    props_scene,
+from bpy.props import (
+    BoolProperty,
+    BoolVectorProperty,
+    EnumProperty,
+    FloatProperty,
+    IntProperty,
+    StringProperty,
+    CollectionProperty,
+    IntVectorProperty,
+    FloatVectorProperty,
+    PointerProperty
 )
 
+# Importing modules from the add-on's package
 from . import (
     carinfo,
     common,
@@ -70,10 +70,6 @@ from .ui import (
 )
 
 # Reloads potentially changed modules on reload (F8 in Blender)
-importlib.reload(props_mesh)
-importlib.reload(props_obj)
-importlib.reload(props_scene)
-
 importlib.reload(common)
 importlib.reload(layers)
 importlib.reload(operators)
@@ -91,8 +87,6 @@ importlib.reload(texanim)
 importlib.reload(helpers)
 importlib.reload(settings)
 
-if "bpy" in locals():
-    importlib.reload(props_scene)
 if "fin_in" in locals():
     importlib.reload(fin_in)
 if "fin_out" in locals():
@@ -126,27 +120,18 @@ if "rim_in" in locals():
 if "rim_out" in locals():
     importlib.reload(rim_out)
 
-from .props.props_mesh import RVMeshProperties
-from .props.props_obj import RVObjectProperties
-from .props.props_scene import RVSceneProperties
 from .common import DialogOperator, TEX_ANIM_MAX, TEX_PAGES_MAX, BAKE_LIGHTS, BAKE_LIGHT_ORIENTATIONS, BAKE_SHADOW_METHODS
 from .common import FACE_DOUBLE, FACE_TRANSLUCENT, FACE_MIRROR, FACE_TRANSL_TYPE, FACE_TEXANIM, FACE_NOENV, FACE_ENV, FACE_CLOTH, FACE_SKIP
 from .common import NCP_DOUBLE, NCP_NO_SKID, NCP_OIL, NCP_OBJECT_ONLY, NCP_CAMERA_ONLY, NCP_NOCOLL, MATERIALS
 from .layers import select_ncp_material, get_face_material, set_face_material, set_face_texture, get_face_texture
 from .layers import set_face_ncp_property, get_face_ncp_property, get_face_env, set_face_env, get_face_property, set_face_property
 from .operators import ImportRV, ExportRV, RVIO_OT_ReadCarParameters, RVIO_OT_SelectRevoltDirectory, ButtonReExport
-from .operators import SelectNCPMaterial, VertexColorRemove, SetVertexColor
-from .operators import VertexColorCreateLayer, TexAnimDirection
+from .operators import VertexColorRemove, SetVertexColor, BakeShadow, ToggleEnvironmentMap, InstanceColor
+from .operators import VertexColorCreateLayer, TexAnimDirection, SetEnvironmentMapColor
 from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, UseTextureNumber
 from .operators import SetInstanceProperty, RemoveInstanceProperty, LaunchRV, TexturesSave
 from .operators import TexturesRename, CarParametersExport, ButtonZoneHide, AddTrackZone
-from .operators import ToggleTriangulateNgons, ExportWithoutTexture, ToggleApplyScale, ToggleApplyRotation
-from .operators import BakeShadow, ToggleEnvironmentMap, ToggleNoMirror, ToggleModelRGB, ToggleFinHide
-from .operators import SetEnvironmentMapColor, ToggleNoLights, ToggleNoCameraCollision, ToggleFinPriority
-from .operators import ToggleNoObjectCollision, ToggleMirrorPlane, InstanceColor, ResetFinLoDBias
-from .operators import SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere, RVIO_OT_ToggleWParentMeshes
-from .operators import RVIO_OT_ToggleWImportBoundBoxes, RVIO_OT_ToggleWImportCubes, RVIO_OT_ToggleWImportBigCubes
-from .operators import RVIO_OT_NCPExportSelected, RVIO_OT_NCPExportCollgrid, ToggleApplyTranslation, RVIO_OT_NCPGridSize
+from .operators import SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere
 from .operators import ButtonCopyUvToFrame, ButtonCopyFrameToUv, TexAnimTransform, TexAnimGrid, OBJECT_OT_add_texanim_uv
 from .rvstruct import World, PRM, Mesh, BoundingBox, Vector, Matrix, Polygon, Vertex, UV, BigCube, TexAnimation
 from .rvstruct import Frame, Color, Instances, Instance, PosNodes, PosNode, NCP, Polyhedron, Plane, LookupGrid
@@ -205,12 +190,7 @@ def edit_object_change_handler(scene):
 
 def register():
     
-    # Register Classes
-   
     #Register Custom Properties
-    props_scene.register()
-    props_obj.register()
-    props_mesh.register()
     
     bpy.types.Object.is_instance = bpy.props.BoolProperty(
         name = "Is Instance",
@@ -295,8 +275,8 @@ def register():
         default=1024,
         min=1,
         max=8192,
-        soft_min=1,  # Recommended range start for the slider
-        soft_max=8192,  # Recommended range end for the slider
+        soft_min=1,
+        soft_max=8192,
         subtype='UNSIGNED'
     )
     
@@ -499,7 +479,13 @@ def register():
         default = False,
         description = ""
     )
-    
+
+    bpy.types.Object.bcube_mesh_indices = bpy.props.StringProperty(
+        name="Mesh Indices",
+        default="",
+        description="Names of child meshes"
+    )    
+
     bpy.types.Object.is_mirror_plane = bpy.props.BoolProperty(
         name = "Is Mirror Plane",
         default = False,
@@ -786,6 +772,66 @@ def register():
         description = "Color picker for painting custom vertex colors"
     )
 
+    bpy.types.WindowManager.create_new_material = bpy.props.BoolProperty(
+        name="Create New Material",
+        description="Create a new material for this object",
+        default=False
+    )    
+
+    #Unused
+    #bpy.types.Scene.batch_bake_model_rgb = bpy.props.BoolProperty(
+    #    name = "Bake to Model RGB",
+    #    default = True,
+    #    description = "Bake scene lighting to Instance model RGB"
+    #)
+    
+    #Unused
+    #bpy.types.Scene.batch_bake_model_env = bpy.props.BoolProperty(
+    #    name = "Bake to Model Env",
+    #    default = True,
+    #    description = "Bake scene lighting to Instance model environment color"
+    #)
+    
+    #Unused
+    #bpy.types.Scene.light1 = bpy.props.EnumProperty(
+    #    name = "Light 1",
+    #    items = BAKE_LIGHTS,
+    #    default = "SUN",
+    #    description = "Type of light"
+    #)
+    
+    #Unused
+    #bpy.types.Scene.light2 = bpy.props.EnumProperty(
+    #    name = "Light 2",
+    #    items = BAKE_LIGHTS,
+    #    default = "AO",
+    #    description = "Type of light"
+    #)
+    
+    #Unused
+    #bpy.types.Scene.light_intensity1 = bpy.props.FloatProperty(
+    #    name = "Intensity 1",
+    #    min = 0.0,
+    #    default = 1.5,
+    #    description = "Intensity of Light 1"
+    #)
+    
+    #Unused
+    #bpy.types.Scene.light_intensity2 = bpy.props.FloatProperty(
+    #    name = "Intensity 2",
+    #    min = 0.0,
+    #    default = .05,
+    #    description = "Intensity of Light 2"
+    #)
+    
+    #Unused
+    #bpy.types.Scene.light_orientation = bpy.props.EnumProperty(
+    #    name = "Orientation",
+    #    items = BAKE_LIGHT_ORIENTATIONS,
+    #    default = "Z",
+    #    description = "Directions of the lights"
+    #)
+
     
     #Register Operators
     bpy.utils.register_class(DialogOperator)
@@ -793,7 +839,6 @@ def register():
     bpy.utils.register_class(ExportRV)
     bpy.utils.register_class(RVIO_OT_ReadCarParameters)
     bpy.utils.register_class(ButtonReExport)
-    bpy.utils.register_class(SelectNCPMaterial)
     bpy.utils.register_class(VertexColorCreateLayer)
     bpy.utils.register_class(VertexColorRemove)
     bpy.utils.register_class(SetVertexColor)
@@ -818,32 +863,11 @@ def register():
     bpy.utils.register_class(OBJECT_OT_add_texanim_uv)
     bpy.utils.register_class(ButtonZoneHide)
     bpy.utils.register_class(AddTrackZone)
-    bpy.utils.register_class(ToggleTriangulateNgons)
-    bpy.utils.register_class(ExportWithoutTexture)
-    bpy.utils.register_class(ToggleApplyScale)
-    bpy.utils.register_class(ToggleApplyRotation)
     bpy.utils.register_class(SetBCubeMeshIndices)
     bpy.utils.register_class(ToggleEnvironmentMap)
     bpy.utils.register_class(SetEnvironmentMapColor)
-    bpy.utils.register_class(ToggleModelRGB)
-    bpy.utils.register_class(ToggleFinHide)
-    bpy.utils.register_class(ToggleFinPriority)
-    bpy.utils.register_class(ToggleNoMirror)
-    bpy.utils.register_class(ToggleNoLights)
-    bpy.utils.register_class(ToggleNoCameraCollision)
-    bpy.utils.register_class(ToggleNoObjectCollision)
-    bpy.utils.register_class(ToggleMirrorPlane)
     bpy.utils.register_class(InstanceColor)
-    bpy.utils.register_class(ResetFinLoDBias)
     bpy.utils.register_class(RVIO_OT_SelectRevoltDirectory)
-    bpy.utils.register_class(RVIO_OT_ToggleWParentMeshes)
-    bpy.utils.register_class(RVIO_OT_ToggleWImportBoundBoxes)
-    bpy.utils.register_class(RVIO_OT_ToggleWImportCubes)
-    bpy.utils.register_class(RVIO_OT_ToggleWImportBigCubes)
-    bpy.utils.register_class(RVIO_OT_NCPExportSelected)
-    bpy.utils.register_class(RVIO_OT_NCPExportCollgrid)
-    bpy.utils.register_class(ToggleApplyTranslation)
-    bpy.utils.register_class(RVIO_OT_NCPGridSize)
     
     # Register UI
     bpy.utils.register_class(RVIO_PT_RevoltFacePropertiesPanel)
@@ -865,8 +889,6 @@ def unregister():
     # UI and Handlers Unregistration
     bpy.app.handlers.depsgraph_update_pre.remove(edit_object_change_handler)
      
-    # Unregister Classes
-
     # Unregister UI
     bpy.utils.unregister_class(RVIO_PT_RevoltObjectPanel)
     bpy.utils.unregister_class(RVIO_PT_RevoltLightPanel)
@@ -880,32 +902,11 @@ def unregister():
     bpy.utils.unregister_class(RVIO_PT_RevoltFacePropertiesPanel)
     
     # Unregister Operators
-    bpy.utils.unregister_class(RVIO_OT_NCPGridSize)
-    bpy.utils.unregister_class(ToggleApplyTranslation)
-    bpy.utils.unregister_class(RVIO_OT_NCPExportCollgrid)
-    bpy.utils.unregister_class(RVIO_OT_NCPExportSelected)
-    bpy.utils.unregister_class(RVIO_OT_ToggleWImportBigCubes)
-    bpy.utils.unregister_class(RVIO_OT_ToggleWImportCubes)
-    bpy.utils.unregister_class(RVIO_OT_ToggleWImportBoundBoxes)
-    bpy.utils.unregister_class(RVIO_OT_ToggleWParentMeshes)
     bpy.utils.unregister_class(RVIO_OT_SelectRevoltDirectory)
-    bpy.utils.unregister_class(ResetFinLoDBias)
     bpy.utils.unregister_class(InstanceColor)
-    bpy.utils.unregister_class(ToggleMirrorPlane)
-    bpy.utils.unregister_class(ToggleNoObjectCollision)
-    bpy.utils.unregister_class(ToggleNoCameraCollision)
-    bpy.utils.unregister_class(ToggleNoLights)
-    bpy.utils.unregister_class(ToggleNoMirror)
-    bpy.utils.unregister_class(ToggleFinPriority)
-    bpy.utils.unregister_class(ToggleFinHide)
-    bpy.utils.unregister_class(ToggleModelRGB)
     bpy.utils.unregister_class(SetEnvironmentMapColor)
     bpy.utils.unregister_class(ToggleEnvironmentMap)
     bpy.utils.unregister_class(SetBCubeMeshIndices)
-    bpy.utils.unregister_class(ToggleApplyRotation)
-    bpy.utils.unregister_class(ToggleApplyScale)
-    bpy.utils.unregister_class(ExportWithoutTexture)
-    bpy.utils.unregister_class(ToggleTriangulateNgons)
     bpy.utils.unregister_class(AddTrackZone)
     bpy.utils.unregister_class(ButtonZoneHide)
     bpy.utils.unregister_class(OBJECT_OT_add_texanim_uv)
@@ -930,7 +931,6 @@ def unregister():
     bpy.utils.unregister_class(VertexColorRemove)
     bpy.utils.unregister_class(SetVertexColor)
     bpy.utils.unregister_class(VertexColorCreateLayer)
-    bpy.utils.unregister_class(SelectNCPMaterial)
     bpy.utils.unregister_class(ButtonReExport)
     bpy.utils.unregister_class(RVIO_OT_ReadCarParameters)
     bpy.utils.unregister_class(ExportRV)
@@ -938,7 +938,14 @@ def unregister():
     bpy.utils.unregister_class(DialogOperator)
     
     # Unregister Custom Properties
-    
+    #del bpy.types.Scene.light_orientation
+    #del bpy.types.Scene.light_intensity2
+    #del bpy.types.Scene.light_intensity1
+    #del bpy.types.Scene.light2
+    #del bpy.types.Scene.light1
+    #del bpy.types.Scene.batch_bake_model_env
+    #del bpy.types.Scene.batch_bake_model_rgb
+    del bpy.types.WindowManager.create_new_material
     del bpy.types.Scene.vertex_color_picker
     del bpy.types.Mesh.face_ncp_nocoll
     del bpy.types.Mesh.face_ncp_oil
@@ -977,11 +984,12 @@ def unregister():
     del bpy.types.Scene.ncp_collgrid_size
     del bpy.types.Scene.rvgl_dir
     del bpy.types.Object.is_mirror_plane
+    del bpy.types.Object.bcube_mesh_indices
     del bpy.types.Object.is_hull_convex
     del bpy.types.Object.is_hull_sphere
-    del bpy.types.Scene.apply_rotation_on_export
+    del bpy.types.Scene.apply_rotation
     del bpy.types.Scene.apply_scale
-    del bpy.types.Scene.use_tex_num
+    del bpy.types.Scene.export_without_texture
     del bpy.types.Scene.triangulate_ngons
     
     del bpy.types.Scene.w_import_cubes
@@ -1001,8 +1009,8 @@ def unregister():
     del bpy.types.Scene.ta_current_slot
     del bpy.types.Scene.texture    
     del bpy.types.Scene.delay
-    del bpy.types.Scene.frame_end
-    del bpy.types.Scene.frame_start
+    del bpy.types.Scene.rvio_frame_end
+    del bpy.types.Scene.rvio_frame_start
     del bpy.types.Scene.ta_max_frames
     del bpy.types.Scene.ta_max_slots
     del bpy.types.Scene.texture_animations
@@ -1020,16 +1028,7 @@ def unregister():
     del bpy.types.Object.fin_no_mirror
     del bpy.types.Object.fin_env
     
-    props_mesh.unregister()
-    props_obj.unregister()
-    props_scene.unregister()
-
 if __name__ == "__main__":
     register()
 
-def dprint(*args):
-    """ Debug print function """
-    if DEBUG_MODE:
-        print("DEBUG:", *args)
-
-dprint("Re-Volt addon successfully registered.")
+print("Re-Volt addon successfully registered.")

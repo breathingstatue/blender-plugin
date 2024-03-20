@@ -20,22 +20,46 @@ if "bpy" in locals():
 from .common import TEX_PAGES_MAX, get_edit_bmesh, get_active_face, msg_box, TEX_ANIM_MAX
 from .rvstruct import TexAnimation, Frame
 
+
+def check_uv_layer(context):
+    obj = context.object
+    
+    # Check if the object is a mesh
+    if obj and obj.type == 'MESH':
+        # Check if there is at least one UV layer
+        if not obj.data.uv_layers:
+            # No UV layers found
+            message = "No UV layer found. Please create a UV layer first."
+            self.report({'WARNING'}, message)
+            print(message)
+            return False
+        else:
+            # At least one UV layer exists
+            print("UV layer exists.")
+            return True
+    else:
+        # The active object is not a mesh
+        message = "Active object is not a mesh or no object is selected."
+        self.report({'WARNING'}, message)
+        print(message)
+        return False
+
 def get_texture_items(self, context):
     items = []
-    obj = context.active_object
+    obj = context.object
 
-    if not obj or not obj.material_slots:
+    if not obj:
         return items
 
+    # Assume the texture is linked to the object's materials
     for mat_slot in obj.material_slots:
         mat = mat_slot.material
         if mat and mat.use_nodes:
             for node in mat.node_tree.nodes:
                 if node.type == 'TEX_IMAGE':
-                    tex_name = node.image.name if node.image else "Unnamed"
-                    item = (tex_name, tex_name, f"Use texture: {tex_name}")
-                    if item not in items:
-                        items.append(item)
+                    tex_name = node.image.name if node.image else "None"
+                    items.append((tex_name, tex_name, "Texture: " + tex_name))
+
     return items
 
 def update_ta_max_slots(self, context):

@@ -16,7 +16,7 @@ if "common" in locals():
 from . import common
 from . import texanim
 
-from .common import *
+from .common import TA_CSV_HEADER
 
 def export_file(filepath, scene):
 

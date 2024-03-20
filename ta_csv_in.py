@@ -22,9 +22,9 @@ if "common" in locals():
 from .common import TA_CSV_HEADER
 
 def import_file(filepath, scene):
-
     f = open(filepath, "r")
     lines = f.readlines()
+    f.close()
 
     if not TA_CSV_HEADER in lines[0]:
         common.queue_error(
@@ -34,10 +34,8 @@ def import_file(filepath, scene):
     # Removes the header
     lines = lines[1:]
 
-    # Resets the texture animations
-    scene.texture_animations = "[]"
-
-    animations = {}
+    # Initializes an empty list for animations
+    animations = []
 
     for line in lines:
         if line == "\n":
@@ -49,22 +47,25 @@ def import_file(filepath, scene):
         frame_delay = float(values[3])
         u0, v0, u1, v1, u2, v2, u3, v3 = [float(c) for c in values[4:12]]
 
-        if not slot_num in animations:
-            animations[slot_num] = rvstruct.TexAnimation()
+        # Ensure the slot exists in animations
+        while len(animations) <= slot_num:
+            animations.append(rvstruct.TexAnimation())
 
-        frame = rvstruct.Frame()
+        # Since we're directly inserting frames, ensure slots are pre-initialized
+        animation = animations[slot_num]
+        while len(animation.frames) <= frame_num:
+            animation.frames.append(rvstruct.Frame())  # Initialize with empty frames
+
+        # Create and set the actual frame
+        frame = animation.frames[frame_num]
         frame.texture = frame_tex
         frame.delay = frame_delay
-        uv0 = rvstruct.UV(uv=(u0, v0))
-        uv1 = rvstruct.UV(uv=(u1, v1))
-        uv2 = rvstruct.UV(uv=(u2, v2))
-        uv3 = rvstruct.UV(uv=(u3, v3))
-        frame.uv = [uv0, uv1, uv2, uv3]
+        frame.uv = [rvstruct.UV(uv=(u0, v0)), rvstruct.UV(uv=(u1, v1)), rvstruct.UV(uv=(u2, v2)), rvstruct.UV(uv=(u3, v3))]
 
-        animations[slot_num].frames.insert(frame_num, frame)
+        # Update frame_count after all insertions
+        animation.frame_count = len(animation.frames)
 
-        animations[slot_num].frame_count = len(animations[slot_num].frames)
-
-    scene.texture_animations = str([a.as_dict() for a in animations.values()])
+    # Converts animations to dictionary format and dumps to JSON string
+    scene.texture_animations = json.dumps([a.as_dict() for a in animations])
 
     scene.ta_max_slots = len(animations)

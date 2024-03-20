@@ -26,7 +26,6 @@ from . import layers
 
 from .common import *
 from .layers import *
-from .props.props_scene import RVSceneProperties
 
 
 def export_file(filepath, scene, context):
@@ -142,7 +141,6 @@ def export_mesh(me, obj, scene, filepath, world=None):
 
     # Gets layers
     uv_layer = bm.loops.layers.uv.get("UVMap")
-    tex_layer = bm.loops.layers.uv.get("UVMap")
     vc_layer = (bm.loops.layers.color.get("Col") or 
                 bm.loops.layers.color.new("Col"))
     env_layer = (bm.loops.layers.color.get("Env") or
@@ -189,7 +187,7 @@ def export_mesh(me, obj, scene, filepath, world=None):
 
         # Gets the texture number from the integer layer if setting enabled
         # use_tex_num is the only way to achieve no texture
-        if bpy.context.scene.use_tex_num and texnum_layer:
+        if scene.use_tex_num and texnum_layer:
             poly.texture = face[texnum_layer]
         # Falls back to texture if not enabled or texnum layer not found
         image = get_texture_from_material(face, obj)

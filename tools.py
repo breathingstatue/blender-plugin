@@ -45,7 +45,6 @@ def bake_shadow(self, context):
     resolution = scene.shadow_resolution
     quality = scene.shadow_quality
     softness = scene.shadow_softness
-    method = scene.shadow_method
     shtable = scene.shadow_table
 
     # Create a hemi light (positive)
@@ -263,7 +262,7 @@ def batch_bake(self, context):
 
         for c in range(3):
             if context.scene.batch_bake_model_rgb:
-                obj.revolt.fin_col[c] = inf_col[c]
+                obj.fin_col[c] = inf_col[c]
             if context.scene.batch_bake_model_env:
                 obj.fin_envcol[c] = inf_col[c]
         obj.fin_model_rgb = True

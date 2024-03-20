@@ -31,6 +31,8 @@ def import_file(filepath, scene):
     It also imports all LoDs of a PRM file, which can be sequentially written
     to the file. There is no indicator for it, the file end has to be checked.
     """
+    # Resets the index of the current env color
+    scene.envidx = 0
     meshes = []
 
     # common.TEXTURES = {}
@@ -114,7 +116,7 @@ def get_or_create_material(texture_path):
 
     return mat
 
-def add_rvmesh_to_bmesh(prm, bm, me, filepath, context, scene, envlist=None):
+def add_rvmesh_to_bmesh(prm, bm, me, filepath, scene, envlist=None):
     """
     Adds PRM data to an existing bmesh. Returns the resulting bmesh.
     """
@@ -175,11 +177,6 @@ def add_rvmesh_to_bmesh(prm, bm, me, filepath, context, scene, envlist=None):
             # Converts the colors to float (req. by Blender)
             alpha = 1-(float(colors[l].alpha) / 255)
             color = [float(c) / 255 for c in colors[l].color]
-            if envlist and (poly.type & FACE_ENV):
-                env_col = [float(c) / 255 for c in envlist[scene.envidx].color]
-                loop[env_layer][0] = env_col[0]
-                loop[env_layer][1] = env_col[1]
-                loop[env_layer][2] = env_col[2]
 
             loop[vc_layer][0] = color[0]
             loop[vc_layer][1] = color[1]
@@ -189,10 +186,18 @@ def add_rvmesh_to_bmesh(prm, bm, me, filepath, context, scene, envlist=None):
             loop[va_layer][1] = alpha
             loop[va_layer][2] = alpha
             
+            if envlist and (poly.type & FACE_ENV):
+                env_col = [float(c) / 255 for c in envlist[scene.envidx].color]
+                loop[env_layer][0] = env_col[0]
+                loop[env_layer][1] = env_col[1]
+                loop[env_layer][2] = env_col[2]
+                
+                face[env_alpha_layer] = envlist[scene.envidx].alpha / 255
+            
         # Enables smooth shading for that face
         face.smooth = True
         if envlist and (poly.type & FACE_ENV):
-            scene.envidx += 1
+            scene.envidx += 1  # Increment index for environment colors
     
         # Assign the material to the face
     for face, poly in zip(created_faces, prm.polygons):

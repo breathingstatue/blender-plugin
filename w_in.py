@@ -25,13 +25,16 @@ if "bpy" in locals():
     imp.reload(img_in)
     imp.reload(prm_in)
 
-def import_file(filepath, scene):
+def import_file(filepath, context, scene):
     with open(filepath, 'rb') as file:
         filename = os.path.basename(filepath)
         world = World(file)
+        
+    scene = context.scene
 
     meshes = world.meshes
     print(f"Imported {filename} with {len(meshes)} meshes")
+    scene.envidx = 0
 
     main_w = None
     if scene.get('w_parent_meshes', False):
@@ -72,12 +75,6 @@ def import_file(filepath, scene):
 
     scene.texture_animations = json.dumps([a.as_dict() for a in world.animations])
     scene.ta_max_slots = world.animation_count
-
-    # Clears the used texture paths
-    # # global textures
-    # textures = {}
-    # print("Cleared textures...")
-
 
 def create_bound_box(scene, bbox, filename):
     # Creates a new mesh and bmesh
