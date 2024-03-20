@@ -22,6 +22,7 @@ class RVIO_PT_AnimModesPanel(bpy.types.Panel):
         col.prop(scene, "rvio_frame_end")
         col.prop(scene, "ta_current_frame", text="Current Frame")
         
+        layout.prop(context.window_manager, 'create_new_material')
         layout.operator("object.add_texanim_uv", text="Add Animation UV Layer")
         layout.prop(scene, "texture", icon="TEXTURE")
         

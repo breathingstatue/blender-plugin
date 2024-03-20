@@ -10,8 +10,6 @@ class RVIO_PT_RevoltIOToolPanel(bpy.types.Panel):
     bl_options = {"HIDE_HEADER"}
 
     def draw(self, context):
-        # i/o buttons
-        props = context.scene.revolt
 
         row = self.layout.row(align=True)
         row.operator("import_scene.revolt", text="Import", icon="IMPORT")

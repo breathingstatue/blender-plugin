@@ -9,20 +9,13 @@ class RVIO_PT_RevoltInstancesPanel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        scene = context.scene
+        obj = context.object
 
-        # Correctly access the 'is_instance' property
-        instance_count = sum(1 for obj in scene.objects if "is_instance" in obj and obj["is_instance"])
+        if obj:
+            instance_count = sum(1 for obj in context.scene.objects if "is_instance" in obj and obj["is_instance"])
+            layout.label(text=f"Instances: {instance_count}/1024")
 
-        layout.label(text=f"Instances: {instance_count}/1024")
-
-        col = layout.column(align=True)
-        col.operator("instances.set_instance_property", text="Mark as Instance")
-        col.operator("instances.rem_instance_property", text="Remove Instance Property")
-        col.operator("object.use_fin_col", text="Set Instance Color")
-        
-def register():
-    bpy.types.VIEW3D_MT_mesh_add.append(menu_func)
-    
-def unregister():
-    bpy.types.VIEW3D_MT_mesh_add.remove(menu_func)    
+            col = layout.column(align=True)
+            col.operator("instances.set_instance_property", text="Mark as Instance")
+            col.operator("instances.rem_instance_property", text="Remove Instance Property")
+            col.operator("object.use_fin_col", text="Set Model Color")

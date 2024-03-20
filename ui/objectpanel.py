@@ -1,7 +1,6 @@
 import bpy
 import bmesh
 from ..operators import *
-from ..props.props_obj import *
 from ..rvstruct import *
 from bpy.props import (BoolProperty,
                        FloatVectorProperty, 
@@ -28,30 +27,30 @@ class RVIO_PT_RevoltObjectPanel(bpy.types.Panel):
         box = layout.box()
         box.label(text="Debug Properties:")
         col = box.column(align=True)
-        col.prop(context.object, "is_bcube", text="Object is a BigCube")
-        col.prop(context.object, "is_cube", text="Object is a Cube")
-        col.prop(context.object, "is_bbox", text="Object is a Boundary Box")
-        col.prop(context.object, "ignore_ncp", text="Ignore for .ncp")
+        col.prop(obj, "is_bcube", text="Object is a BigCube")
+        col.prop(obj, "is_cube", text="Object is a Cube")
+        col.prop(obj, "is_bbox", text="Object is a Boundary Box")
+        col.prop(obj, "ignore_ncp", text="Ignore for .ncp")
+        col.operator("object.set_bcube_mesh_indices")
 
         # Instance properties
         box = layout.box()
         box.label(text="Instance Properties:")
         col = box.column(align=True)
-        col.operator("object.toggle_model_rgb", text="Use Model Color")
-        col.operator("object.toggle_fin_hide", text="Hide")
-        col.operator("object.toggle_fin_priority", text="Instance Priority")
-        col.prop(context.object, "fin_lod_bias", text="LoD Bias", slider=True)
-        col.operator("object.reset_fin_lod_bias", text="Reset LoD Bias")
-        col.operator("object.toggle_no_mirror", text="No Mirror Mode")
-        col.operator("object.toggle_no_lights", text="Not affected by Lights")
-        col.operator("object.toggle_no_cam_coll", text="No Camera Collision")
-        col.operator("object.toggle_no_obj_coll", text="No Object Collision")
+        col.prop(obj, "fin_model_rgb", text="Use Model Color")
+        col.prop(obj, "fin_hide", text="Hide")
+        col.prop(obj, "fin_priority", text="Fin Priority", slider=True)
+        col.prop(obj, "fin_lod_bias", text="LoD Bias", slider=True)
+        col.prop(obj, "fin_no_mirror", text="No Mirror Mode")
+        col.prop(obj, "fin_no_lights", text="Not affected by Lights")
+        col.prop(obj, "fin_no_cam_coll", text="No Camera Collision")
+        col.prop(obj, "fin_no_obj_coll", text="No Object Collision")
 
         # Mirror properties
         mirror_box = layout.box()
         mirror_box.label(text="Mirror Properties:")
         mirror_col = mirror_box.column(align=True)
-        mirror_col.operator("object.toggle_mirror_plane", text="Is Mirror Plane")
+        mirror_col.prop(obj, "is_mirror_plane", text="Is Mirror Plane")
 
         # Hull properties
         hull_box = layout.box()
