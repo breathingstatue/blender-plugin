@@ -1,5 +1,5 @@
 """
-Name:    ncp_in
+Name:    ncp_out
 Purpose: Exports Re-Volt collisision files (.ncp)
 
 Description:
@@ -40,73 +40,67 @@ def export_file(filepath, scene):
     # Collects objects for export
     objs = []
     if scene.ncp_export_selected:
-        objs = [ob for ob in scene.objects if ob.select_get() and not ob.get("ignore_ncp", False)]
+        # Accessing the 'ignore_ncp' property directly from the object
+        # Using obj.get('ignore_ncp', False) provides a default value of False if the property is not found
+        objs = [ob for ob in scene.objects if ob.select_get() and not ob.get('ignore_ncp', False)]
     else:
         for obj in scene.objects:
             conditions = (
                 obj.data and
                 obj.type == "MESH" and
-                not obj.get("is_cube", False) and
-                not obj.get("is_bcube", False) and
-                not obj.get("is_bbox", False) and
-                not obj.get("ignore_ncp", False) and
-                not obj.get("is_mirror_plane", False) and
-                not obj.get("is_track_zone", False)
+                not obj.get('is_cube', False) and
+                not obj.get('is_bcube', False) and
+                not obj.get('is_bbox', False) and
+                not obj.get('ignore_ncp', False) and
+                not obj.get('is_mirror_plane', False) and
+                not obj.get('is_track_zone', False)
             )
             if conditions:
                 objs.append(obj)
 
-    if objs == []:
+    if not objs:
         common.queue_error("exporting NCP", "No suitable objects in scene.")
         return
     else:
-        print("Suitable objects: {}".format(", ".join([o.name for o in objs])))
+        dprint("Suitable objects: {}".format(", ".join([o.name for o in objs])))
 
-    # Creates a mesh for all objects
-    transform = len(objs) != 1 or scene.apply_translation
-    # bm = objects_to_bmesh(objs, transform)
 
     ncp = NCP()
 
-    # Adds all meshes to the ncp
+    # Determine if a transformation is necessary
+    transform = len(objs) != 1 or scene.apply_translation
+
+    # Adds all meshes to the NCP
     for obj in objs:
-        print("Adding {} to ncp...".format(obj.name))
+        dprint(f"Adding {obj.name} to ncp...")
         bm = bmesh.new()
         bm.from_mesh(obj.data)
 
         if scene.triangulate_ngons:
             num_ngons = triangulate_ngons(bm)
-            if scene.triangulate_ngons > 0:
-                print("Triangulated {} n-gons".format(num_ngons))
+            if num_ngons > 0:
+                print(f"Triangulated {num_ngons} n-gons")
 
-        # Applies translation, rotation and scale
+        # Applies translation, rotation, and scale
         apply_trs(obj, bm, transform)
 
-        add_bm_to_ncp(bm, ncp)
+        add_bm_to_ncp(bm, ncp, scene)
 
-    # Sets length of polyhedron list
     ncp.polyhedron_count = len(ncp.polyhedra)
     if ncp.polyhedron_count > 65535:
-        common.queue_error(
-            "exporting ncp",
-            "Too many collision polygons, try cutting it down."
-        )
-        return None
+        common.queue_error("exporting ncp", "Too many collision polygons, try cutting it down.")
+        return
 
-    # Creates a collision grid
     if scene.ncp_export_collgrid:
-        print("Exporting collision grid...")
+        dprint("Exporting collision grid...")
         ncp.generate_lookup_grid(grid_size=scene.ncp_collgrid_size)
 
-    # Writes the NCP to file
     with open(filepath, "wb") as f:
         ncp.write(f)
 
-    # Frees the bmesh
     bm.free()
 
-
-def add_bm_to_ncp(bm, ncp):
+def add_bm_to_ncp(bm, ncp, scene):
 
     # Material and type layers. The preview layer will be ignored.
     material_layer = (bm.faces.layers.int.get("Material") or
@@ -123,7 +117,7 @@ def add_bm_to_ncp(bm, ncp):
 
         # Doesn't export if nocoll flag is set (non-RV)
         if face[type_layer] & NCP_NOCOLL:
-            print("Ignoring polygon due to nocoll flag")
+            dprint("Ignoring polygon due to nocoll flag")
             continue
 
         # Sets polyhedron properties

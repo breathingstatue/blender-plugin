@@ -126,7 +126,7 @@ from .common import NCP_DOUBLE, NCP_NO_SKID, NCP_OIL, NCP_OBJECT_ONLY, NCP_CAMER
 from .layers import select_ncp_material, get_face_material, set_face_material, set_face_texture, get_face_texture
 from .layers import set_face_ncp_property, get_face_ncp_property, get_face_env, set_face_env, get_face_property, set_face_property
 from .operators import ImportRV, ExportRV, RVIO_OT_ReadCarParameters, RVIO_OT_SelectRevoltDirectory, ButtonReExport
-from .operators import VertexColorRemove, SetVertexColor, BakeShadow, ToggleEnvironmentMap, InstanceColor
+from .operators import VertexColorRemove, SetVertexColor, BakeShadow, InstanceColor
 from .operators import VertexColorCreateLayer, TexAnimDirection, SetEnvironmentMapColor
 from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, UseTextureNumber
 from .operators import SetInstanceProperty, RemoveInstanceProperty, LaunchRV, TexturesSave
@@ -319,7 +319,7 @@ def register():
         max=TEX_PAGES_MAX-1
     )
 
-    bpy.types.Scene.delay = bpy.props.FloatProperty(
+    bpy.types.Scene.ta_delay = bpy.props.FloatProperty(
         name="Frame Duration",
         description="Duration of every frame",
         default=0.02,
@@ -864,7 +864,6 @@ def register():
     bpy.utils.register_class(ButtonZoneHide)
     bpy.utils.register_class(AddTrackZone)
     bpy.utils.register_class(SetBCubeMeshIndices)
-    bpy.utils.register_class(ToggleEnvironmentMap)
     bpy.utils.register_class(SetEnvironmentMapColor)
     bpy.utils.register_class(InstanceColor)
     bpy.utils.register_class(RVIO_OT_SelectRevoltDirectory)
@@ -905,7 +904,6 @@ def unregister():
     bpy.utils.unregister_class(RVIO_OT_SelectRevoltDirectory)
     bpy.utils.unregister_class(InstanceColor)
     bpy.utils.unregister_class(SetEnvironmentMapColor)
-    bpy.utils.unregister_class(ToggleEnvironmentMap)
     bpy.utils.unregister_class(SetBCubeMeshIndices)
     bpy.utils.unregister_class(AddTrackZone)
     bpy.utils.unregister_class(ButtonZoneHide)
@@ -989,7 +987,7 @@ def unregister():
     del bpy.types.Object.is_hull_sphere
     del bpy.types.Scene.apply_rotation
     del bpy.types.Scene.apply_scale
-    del bpy.types.Scene.export_without_texture
+    del bpy.types.Scene.use_tex_num
     del bpy.types.Scene.triangulate_ngons
     
     del bpy.types.Scene.w_import_cubes
@@ -1008,7 +1006,7 @@ def unregister():
     del bpy.types.Scene.ta_current_frame_tex
     del bpy.types.Scene.ta_current_slot
     del bpy.types.Scene.texture    
-    del bpy.types.Scene.delay
+    del bpy.types.Scene.ta_delay
     del bpy.types.Scene.rvio_frame_end
     del bpy.types.Scene.rvio_frame_start
     del bpy.types.Scene.ta_max_frames

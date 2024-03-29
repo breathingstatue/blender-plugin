@@ -129,26 +129,32 @@ def update_ta_current_frame(self, context):
 
     print("TexAnim: Updating current frame..")
 
-    # Load the texture animations data
     ta = json.loads(scene.texture_animations)
 
-    # Check if the slot is valid
     if slot < 0 or slot >= len(ta):
         print(f"Invalid slot index: {slot}.")
         return
 
-    if frame >= 0 and (frame < maxframes or frame == maxframes):
-        scene.ta_current_frame_tex = slot
-        scene.ta_current_frame_delay = ta[slot]['frames'][frame]['delay']
-        uv = ta[slot]['frames'][frame]['uv']
-        # Assuming you want to update all UVs; adjust based on your needs
-        scene.ta_current_frame_uv0 = (uv[0]['u'], uv[0]['v'])
-        scene.ta_current_frame_uv1 = (uv[1]['u'], uv[1]['v'])
-        scene.ta_current_frame_uv2 = (uv[2]['u'], uv[2]['v'])
-        scene.ta_current_frame_uv3 = (uv[3]['u'], uv[3]['v'])
+    # Check if the frame index is within the valid range
+    if 0 <= frame < maxframes:
+        if 'frames' in ta[slot] and frame < len(ta[slot]['frames']):
+            frame_data = ta[slot]['frames'][frame]
+            if 'delay' in frame_data and 'uv' in frame_data:
+                scene.ta_current_frame_tex = slot
+                scene.ta_current_frame_delay = frame_data['delay']
+
+                # Update UVs only if the necessary data is available
+                for i in range(4):
+                    if i < len(frame_data['uv']):
+                        uv_data = frame_data['uv'][i]
+                        setattr(scene, f"ta_current_frame_uv{i}", (uv_data['u'], uv_data['v']))
+            else:
+                print(f"Missing 'delay' or 'uv' data in frame {frame} for slot {slot}.")
+        else:
+            print(f"Invalid frame data or missing frames for slot {slot}.")
     else:
-        print(f"Invalid frame index: {frame} for slot {slot}.")
-    
+        print(f"Invalid frame index: {frame}. Expected frame index between 0 and {maxframes - 1}.")
+
     scene.texture_animations = json.dumps(ta)
 
 def update_ta_current_frame_tex(self, context):

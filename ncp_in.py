@@ -7,26 +7,22 @@ Imports collision files.
 
 """
 
-import os
+if "bpy" in locals():
+    import imp
+    imp.reload(common)
+    imp.reload(rvstruct)
+
 import bpy
 import bmesh
 import mathutils
-import importlib
+
 from . import common
 from . import rvstruct
 
-# Check if 'bpy' is already in locals to determine if this is a reload scenario
-if "bpy" in locals():
-    importlib.reload(common)
-    importlib.reload(rvstruct)
-
-# Importing specific classes and functions
-from .common import to_blender_axis, to_blender_scale, NCP_QUAD, COLORS
 from .rvstruct import NCP, Vector
+from .common import *
 from mathutils import Color
 
-# Add specific imports from common as needed
-# Example: from .common import specific_function, SpecificClass
 
 def intersect(d1, n1, d2, n2, d3, n3):
     """ Intersection of three planes
@@ -50,7 +46,7 @@ def import_file(filepath, scene):
     with open(filepath, 'rb') as file:
         filename = os.path.basename(filepath)
         ncp = NCP(file)
-        print("Imported NCP file.")
+        dprint("Imported NCP file.")
 
     filename = os.path.basename(filepath)
     # Creates a new mesh and bmesh
@@ -83,7 +79,7 @@ def import_file(filepath, scene):
 
         # Skips the poly if no intersection was found
         if None in verts:
-            print('Skipping polyhedron (no intersection).')
+            dprint('Skipping polyhedron (no intersection).')
             continue
 
         # Creates the bmverts and face
@@ -114,4 +110,4 @@ def import_file(filepath, scene):
     # ob.show_wire = True
     # ob.show_all_edges = True
     bpy.context.collection.objects.link(ob)
-    ob.select_set(True)
+    bpy.context.view_layer.objects.active = ob

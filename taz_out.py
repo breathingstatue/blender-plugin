@@ -29,29 +29,28 @@ def export_file(filepath, scene):
         if "is_track_zone" not in obj or not obj["is_track_zone"]:
             continue
         
+        # Get a name of object and zone id from it
         zid = int(obj.name.split(".", 1)[0][1:])
-        location, rotation_matrix_data, size = transforms_to_revolt(
-            obj.location, obj.rotation_euler, obj.scale, obj.dimensions)
-        
-        zones.append(zid, location, rotation_matrix_data, size)
+        zones.append(zid, *transforms_to_revolt(obj.location, obj.rotation_euler, obj.scale))
     
+    # Exports all zones to the TAZ file
     with open(filepath, "wb") as file:
         zones.write(file)
 
-def transforms_to_revolt(location, rotation_euler=(0, 0, 0), scale=(1, 1, 1), dimensions=(1, 1, 1)):
+def transforms_to_revolt(location, rotation_euler = (0,0,0), scale = (1,1,1)):
     """
     This function takes blender's order transformation parameters values and converts
     them into values ready to export
     """
     location = to_revolt_coord(location)
     rotation_euler = to_revolt_axis(rotation_euler)
-    scale = to_revolt_coord(scale)
-
-    # Correctly apply the scale to the object's dimensions
-    # The size for each dimension is calculated by multiplying the dimension by its corresponding scale factor.
-    size = [dimensions[i] * abs(scale[i]) for i in range(3)]
-
     rotation_matrix = mathutils.Euler(rotation_euler, 'XZY').to_matrix()
-    rotation_matrix_3x3 = [list(row)[:3] for row in rotation_matrix][:3]
+    rotation_matrix.transpose()
 
-    return location, rotation_matrix_3x3, size
+    # Ensuring the rotation matrix is in the correct format
+    rotation_matrix_correct_format = [list(row)[:3] for row in rotation_matrix]
+
+    scale = to_revolt_coord(scale)
+    scale = [abs(val) for val in scale]
+    
+    return location, rotation_matrix_correct_format, scale

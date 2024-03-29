@@ -45,7 +45,6 @@ from bpy.props import (
     PointerProperty
 )
 
-
 class World:
     """
     Reads a .w file and stores all sub-structures
@@ -452,7 +451,11 @@ class Matrix:
         if file:
             self.read(file)
         elif data:
-            if isinstance(data, list) and all(isinstance(row, (list, tuple)) and len(row) == 3 for row in data):
+            print("Data received:", data)
+            if isinstance(data, Matrix):
+                # If a Matrix instance is provided, use its data directly
+                self.data = data.data
+            elif isinstance(data, list) and all(isinstance(row, (list, tuple)) and len(row) == 3 for row in data):
                 self.data = data
             else:
                 raise ValueError("Data must be a list of three lists or tuples, each with three floats.")
@@ -694,33 +697,46 @@ class TexAnimation:
         return "TexAnimation"
 
     def read(self, file):
-        # Reads the amount of frames
-        self.frame_count = struct.unpack("<L", file.read(4))[0]
+        # Ensure there are at least 4 bytes to read for frame count
+        if file.read(4):
+            file.seek(-4, os.SEEK_CUR)  # Move the cursor back 4 bytes after checking
+            self.frame_count = struct.unpack("<L", file.read(4))[0]
 
-        # Reads the frames themselves
-        for frame in range(self.frame_count):
-            self.frames.append(Frame(file))
+            # Reads the frames themselves
+            for frame in range(self.frame_count):
+                self.frames.append(Frame(file))
+        else:
+            # Handle the case where there are not enough bytes to read
+            print("Warning: Not enough data to read frame count. The file may be corrupted or incomplete.")
 
     def write(self, file):
         # Writes the amount of frames
         file.write(struct.pack("<L", self.frame_count))
 
-        # Writes the frames
+        # Writes the frames, ensuring each frame is not None
         for frame in self.frames[:self.frame_count]:
-            frame.write(file)
+            if frame is not None:
+                frame.write(file)
+            else:
+                print("Encountered a None frame, skipping...")
 
     def as_dict(self):
         dic = { "frame_count": self.frame_count,
-                "frames": self.frames
+                "frames": [frame.as_dict() for frame in self.frames]
         }
         return dic
 
+
     def from_dict(self, dic):
-        self.frame_count = dic["frame_count"]
-        for framedic in dic["frames"]:
-            frame = Frame()
-            frame.from_dict(framedic)
-            self.frames.append(frame)
+        # Check if 'frame_count' is in the dictionary, else default to 0
+        self.frame_count = dic.get("frame_count", 0)
+
+        # If 'frames' key is missing or empty, initialize a default frame if frame_count is positive
+        if 'frames' not in dic or not dic['frames']:
+            self.frames = [Frame() for _ in range(self.frame_count)] if self.frame_count > 0 else []
+        else:
+            # If 'frames' is present, use it to populate the TexAnimation object
+            self.frames = [Frame().from_dict(framedic) for framedic in dic['frames']]
 
 class Frame:
     """
@@ -1469,12 +1485,15 @@ class TrackZones:
         for zone in self.zones:
             zone.write(file)
             
-    def append(self, id, pos, rotation_matrix, size):
+    def append(self, id, pos, rotation_matrix, scale):
         new_zone = Zone()
         new_zone.id = id
-        new_zone.pos = Vector(data = pos)
-        new_zone.matrix = Matrix(data=rotation_matrix)
-        new_zone.size = Vector(data = size)
+        new_zone.pos = Vector(data=pos)
+
+        # Ensure rotation_matrix is always a Matrix instance
+        new_zone.matrix = Matrix(data=rotation_matrix) if not isinstance(rotation_matrix, Matrix) else rotation_matrix
+
+        new_zone.size = Vector(data=scale)
         self.zones.append(new_zone)
         self.zones_count += 1
 
@@ -1508,8 +1527,7 @@ class Zone:
         self.pos.write(file)
         self.matrix.write(file)
         self.size.write(file)
-        
-    
+            
     def as_dict(self):
         dic = { "id": self.id,
                 "pos": self.pos,

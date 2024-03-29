@@ -11,13 +11,16 @@ import os
 import bpy
 import bmesh
 import json
-from mathutils import Vector
-from . import common, rvstruct, img_in, prm_in
+from mathutils import Color, Vector
+from . import common
+from . import rvstruct
+from . import img_in
+from . import prm_in
+
 from .rvstruct import World
 from .common import *
 from .prm_in import import_mesh
 
-# Reload modules if already loaded
 if "bpy" in locals():
     import imp
     imp.reload(common)
@@ -25,56 +28,88 @@ if "bpy" in locals():
     imp.reload(img_in)
     imp.reload(prm_in)
 
+
 def import_file(filepath, context, scene):
+    """
+    Imports a .w file and links it to the scene as a Blender object.
+    """
+
+    # Clears textures since they might not exist anymore
+    # common.TEXTURES = {}
+
+    scene = context.scene
+    # Resets the index of the current env color
+    scene.envidx = 0
+
     with open(filepath, 'rb') as file:
         filename = os.path.basename(filepath)
         world = World(file)
-        
-    scene = context.scene
 
     meshes = world.meshes
-    print(f"Imported {filename} with {len(meshes)} meshes")
-    scene.envidx = 0
+    print("Imported {} ({} meshes)".format(filename, len(meshes)))
 
-    main_w = None
-    if scene.get('w_parent_meshes', False):
-        main_w = bpy.data.objects.new(filename, None)
-        scene.collection.objects.link(main_w)
-
-    for index, rvmesh in enumerate(meshes):
-        mesh_name = filename if index == 0 else f"{filename}.{str(index).zfill(3)}"
+    # Creates an empty object to parent meshes to if enabled in settings
+    if scene.w_parent_meshes:
+        main_w = bpy.data.objects.new(bpy.path.basename(filename), None)
+        bpy.context.scene.collection.objects.link(main_w)
+    for rvmesh in meshes:
+        # Creates a mesh from rv data and links it to the scene as an object
         me = import_mesh(rvmesh, scene, filepath, world.env_list)
-        ob = bpy.data.objects.new(mesh_name, me)
-        scene.collection.objects.link(ob)
+        ob = bpy.data.objects.new(filename, me)
+        bpy.context.collection.objects.link(ob)
+        bpy.context.view_layer.objects.active = ob
 
-        if main_w:
+        # Parents the mesh to the main .w object
+        if scene.w_parent_meshes:
             ob.parent = main_w
 
-        if scene.get('w_import_bound_boxes', False):
-            bbox = create_bound_box(scene, rvmesh.bbox, mesh_name)
-            bbox.parent = ob if not main_w else main_w
-            bbox["is_bbox"] = True
+        # Imports bound box for each mesh if enabled in settings
+        if scene.w_import_bound_boxes:
+            bbox = create_bound_box(scene, rvmesh.bbox, filename)
+            bbox.layers = props.w_bound_box_layers
+            bbox.revolt.is_bbox = True
+            bbox.parent = ob
 
-        if scene.get('w_import_cubes', False):
-            center = rvmesh.bound_ball_center.data
+        # Imports bound cube for each mesh if enabled in settings
+        if scene.w_import_cubes:
             radius = rvmesh.bound_ball_radius
-            cube = create_cube(scene, "CUBE", center, radius, mesh_name)
-            cube.parent = ob if not main_w else main_w
-            cube["is_cube"] = True
+            center = rvmesh.bound_ball_center.data
+            cube = create_cube(
+                scene, "CUBE", center, radius, filename
+            )
+            cube.layers = props.w_cube_layers
+            cube.revolt.is_cube = True
+            cube.parent = ob
 
-    # Import big cubes - should be outside the mesh loop
-    if scene.get('w_import_big_cubes', False):
-        if world.bigcubes:
-            cube_data = world.bigcubes[0]
-            radius = cube_data.size
-            center = cube_data.center.data
-            bcube = create_cube(scene, "BIGCUBE", center, radius, filename)
-            if main_w:
+    # Creates the big cubes around multiple meshes if enabled
+    if scene.w_import_big_cubes:
+        for cube in world.bigcubes:
+            radius = cube.size
+            center = cube.center.data
+            bcube = create_cube(
+                scene, "BIGCUBE", center, radius, filename
+            )
+            m_indices = ", ".join([str(c) for c in cube.mesh_indices])
+            bcube.revolt.bcube_mesh_indices = m_indices
+            bcube.revolt.is_bcube = True
+            bcube.layers = props.w_big_cube_layers
+            if scene.w_parent_meshes:
                 bcube.parent = main_w
-            bcube["is_bcube"] = True
 
-    scene.texture_animations = json.dumps([a.as_dict() for a in world.animations])
-    scene.ta_max_slots = world.animation_count
+    texture_animations = []
+
+    # Check each animation and ensure it has valid data before adding it to the scene
+    for animation in world.animations:
+        if animation.frame_count > 0 and all(frame is not None for frame in animation.frames):
+            # If the animation is valid, convert it to a dictionary and add it to the list
+            texture_animations.append(animation.as_dict())
+        else:
+            # Log or handle invalid animations here
+            print(f"Warning: Invalid or incomplete texture animation data found and will be skipped.")
+
+    # Store the processed texture animations back to the scene
+    scene.texture_animations = json.dumps(texture_animations)
+    scene.ta_max_slots = len(texture_animations)
 
 def create_bound_box(scene, bbox, filename):
     # Creates a new mesh and bmesh
@@ -129,7 +164,7 @@ def create_bound_box(scene, bbox, filename):
 
     # Makes the object transparent
     ob.show_transparent = True
-    ob.display_type = "SOLID"
+    ob.draw_type = "SOLID"
     ob.show_wire = True
 
     return ob
@@ -168,7 +203,8 @@ def create_cube(scene, sptype, center, radius, filename):
 
     # Makes the object transparent
     ob.show_transparent = True
-    ob.display_type = "SOLID"
+    ob.draw_type = "SOLID"
     ob.show_wire = True
 
     return ob
+
