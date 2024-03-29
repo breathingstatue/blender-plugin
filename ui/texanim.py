@@ -17,7 +17,7 @@ class RVIO_PT_AnimModesPanel(bpy.types.Panel):
         col = box.column(align=True)
         col.prop(scene, "ta_current_slot")
         col.prop(scene, "ta_max_frames", slider=True)
-        col.prop(scene, "delay")
+        col.prop(scene, "ta_delay")
         col.prop(scene, "rvio_frame_start")
         col.prop(scene, "rvio_frame_end")
         col.prop(scene, "ta_current_frame", text="Current Frame")

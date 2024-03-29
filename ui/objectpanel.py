@@ -20,7 +20,7 @@ class RVIO_PT_RevoltObjectPanel(bpy.types.Panel):
 
         if obj:
             col = layout.column()
-            col.operator("object.toggle_environment_map", text="Environment Map On/Off")
+            col.prop(obj, "fin_env", text="Environment Map On/Off")
             col.operator("object.set_environment_map_color", text="Set EnvMap Color")
     
         # Debug Properties
