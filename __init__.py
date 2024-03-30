@@ -125,6 +125,7 @@ from .common import FACE_DOUBLE, FACE_TRANSLUCENT, FACE_MIRROR, FACE_TRANSL_TYPE
 from .common import NCP_DOUBLE, NCP_NO_SKID, NCP_OIL, NCP_OBJECT_ONLY, NCP_CAMERA_ONLY, NCP_NOCOLL, MATERIALS
 from .layers import select_ncp_material, get_face_material, set_face_material, set_face_texture, get_face_texture
 from .layers import set_face_ncp_property, get_face_ncp_property, get_face_env, set_face_env, get_face_property, set_face_property
+from .layers import alpha_values, update_vertex_color_picker, update_vertex_alpha
 from .operators import ImportRV, ExportRV, RVIO_OT_ReadCarParameters, RVIO_OT_SelectRevoltDirectory, ButtonReExport
 from .operators import VertexColorRemove, SetVertexColor, BakeShadow, InstanceColor
 from .operators import VertexColorCreateLayer, TexAnimDirection, SetEnvironmentMapColor
@@ -765,11 +766,21 @@ def register():
     )    
     
     bpy.types.Scene.vertex_color_picker = bpy.props.FloatVectorProperty(
-        name = "Object Color",
-        subtype = 'COLOR',
-        default = (0, 0, 1.0),
-        min = 0.0, max=1.0,
-        description = "Color picker for painting custom vertex colors"
+        name="Object Color",
+        subtype='COLOR',
+        default=(0, 0, 1.0),
+        min=0.0,
+        max=1.0,
+        description="Color picker for painting custom vertex colors",
+        update=update_vertex_color_picker
+    )
+    
+    bpy.types.Scene.vertex_alpha = bpy.props.EnumProperty(
+        name="Vertex Alpha",
+        items=[(str(i), f"{i*100}%", f"{i}") for i in alpha_values],
+        description="Set the alpha value for vertex colors",
+        default=str(alpha_values[-1]),
+        update=update_vertex_alpha
     )
 
     bpy.types.WindowManager.create_new_material = bpy.props.BoolProperty(
@@ -944,6 +955,7 @@ def unregister():
     #del bpy.types.Scene.batch_bake_model_env
     #del bpy.types.Scene.batch_bake_model_rgb
     del bpy.types.WindowManager.create_new_material
+    del bpy.types.Scene.vertex_alpha
     del bpy.types.Scene.vertex_color_picker
     del bpy.types.Mesh.face_ncp_nocoll
     del bpy.types.Mesh.face_ncp_oil

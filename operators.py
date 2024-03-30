@@ -486,7 +486,7 @@ class TexturesRename(bpy.types.Operator):
     bl_idname = "helpers.texture_rename"
     bl_label = "Rename Texture"
     bl_description = (
-        "Rename selected object's texture(s) with a base name and a letter suffix for multiple textures"
+        "Rename selected object's texture(s) with a base name and a dual letter suffix for multiple textures"
     )
 
     base_name: bpy.props.StringProperty(
@@ -507,16 +507,15 @@ class TexturesRename(bpy.types.Operator):
             self.report({'WARNING'}, "No textures found in selected objects")
             return {'CANCELLED'}
 
-        base_name = active_object.name[:7]  # Limit base name to 7 characters to leave room for the suffix
+        base_name = self.base_name if self.base_name else active_object.name[:7]
 
         for i, texture in enumerate(textures):
-            suffix = self.number_to_letter(i)
-            texture.name = f"{base_name}{suffix}"
+            # Use the int_to_texture method for naming
+            texture.name = self.int_to_texture(i, base_name)
 
         return {'FINISHED'}
 
     def get_textures(self, context):
-        # Retrieve all textures from selected objects
         textures = []
         for obj in context.selected_objects:
             for slot in obj.material_slots:
@@ -526,9 +525,18 @@ class TexturesRename(bpy.types.Operator):
                             textures.append(node.image)
         return textures
 
-    def number_to_letter(self, number):
-        # Convert a number to a letter, starting from 'a'
-        return chr(97 + number % 26)  # Modulo 26 to loop back after 'z'
+    @staticmethod
+    def int_to_texture(tex_num, name=""):
+        # The first suffix cycles through a-z repeatedly
+        suffix1 = chr(tex_num % 26 + 97)
+        # The second suffix increments once after every 26 textures
+        suffix2_num = tex_num // 26 - 1  # Adjusted to start from -1
+        suffix2 = ''
+
+        if suffix2_num >= 0:
+            suffix2 = chr(suffix2_num % 26 + 97)
+        
+        return name + suffix2 + suffix1 + ".bmp"
     
 class UseTextureNumber(bpy.types.Operator):
     """Toggle Use Texture Number"""
@@ -1033,27 +1041,24 @@ class OBJECT_OT_add_texanim_uv(bpy.types.Operator):
         while len(ta) <= slot:
             ta.append({"frames": [], "slot": len(ta)})
 
-        # Initialize frame data ensuring each frame has a UV mapping for four vertices.
         frame_data = []
         for frame_num in range(frame_start, frame_end + 1):
+            # Placeholder UVs should be replaced with actual UV data
+            uv_data = [{"u": 0.0, "v": 0.0} for _ in range(4)]  # Four vertices
             frame = {
                 "frame": frame_num,
-                "uv": [{"u": 0.0, "v": 0.0} for _ in range(4)]  # Placeholder UVs for each vertex
+                "texture": texture,
+                "delay": delay,
+                "UV": uv_data
             }
             frame_data.append(frame)
 
         new_animation_entry = {
             "slot": slot,
-            "frame_start": frame_start,
-            "frame_end": frame_end,
-            "frame_count": frame_end - frame_start + 1,
-            "frames": frame_data,
-            "texture": texture,
-            "delay": delay,
+            "frames": frame_data
         }
 
         ta[slot] = new_animation_entry
-        
         scene.texture_animations = json.dumps(ta)
 
         return {'FINISHED'}
@@ -1099,53 +1104,50 @@ class TexAnimTransform(bpy.types.Operator):
 
         ta = json.loads(scene.texture_animations)
         
-        if check_uv_layer(context):
-            # Proceed with the operation as the UV layer exists
-            self.report({'INFO'}, "Proceeding with the operation...")
+        if slot < 0 or slot >= len(ta) or 'frames' not in ta[slot] or not isinstance(ta[slot]['frames'], list):
+            self.report({'WARNING'}, "Animation layer or data is not properly set up.")
+            return {'CANCELLED'}
+        
+        # Retrieve the direction deltas from the scene properties
+        delta_u = getattr(scene, 'texanim_delta_u', 0.01)  # Default to slight right movement
+        delta_v = getattr(scene, 'texanim_delta_v', 0.0)  # Default to no vertical movement
 
-            # Retrieve the direction deltas from the scene properties
-            delta_u = getattr(scene, 'texanim_delta_u', 0.01)  # Default to slight right movement
-            delta_v = getattr(scene, 'texanim_delta_v', 0.0)  # Default to no vertical movement
+        nframes = abs(frame_end - frame_start) + 1
 
-            nframes = abs(frame_end - frame_start) + 1
+        for frame_idx in range(nframes):
+            frame_number = frame_start + frame_idx
+            adjusted_frame_index = frame_number - frame_start
 
-            for frame_idx in range(nframes):
-                frame_number = frame_start + frame_idx
-                adjusted_frame_index = frame_number - frame_start
+            if adjusted_frame_index < 0 or adjusted_frame_index >= len(ta[slot]["frames"]):
+                self.report({'ERROR'}, f"Frame index out of range: {adjusted_frame_index} (Frame number in Blender: {frame_number})")
+                return {'CANCELLED'}
 
-                if adjusted_frame_index < 0 or adjusted_frame_index >= len(ta[slot]["frames"]):
-                    self.report({'ERROR'}, f"Frame index out of range: {adjusted_frame_index} (Frame number in Blender: {frame_number})")
+            for vertex_idx in range(4):
+                if vertex_idx >= len(ta[slot]["frames"][adjusted_frame_index]["UV"]):
+                    self.report({'ERROR'}, f"Vertex index out of range: {vertex_idx} for frame {adjusted_frame_index}")
                     return {'CANCELLED'}
 
-                for vertex_idx in range(4):
-                    if vertex_idx >= len(ta[slot]["frames"][adjusted_frame_index]["uv"]):
-                        self.report({'ERROR'}, f"Vertex index out of range: {vertex_idx} for frame {adjusted_frame_index}")
-                        return {'CANCELLED'}
+                uv_start = (
+                    ta[slot]["frames"][adjusted_frame_index]["UV"][vertex_idx]["u"],
+                    ta[slot]["frames"][adjusted_frame_index]["UV"][vertex_idx]["v"]
+                )
 
-                    uv_start = (
-                        ta[slot]["frames"][adjusted_frame_index]["uv"][vertex_idx]["u"],
-                        ta[slot]["frames"][adjusted_frame_index]["uv"][vertex_idx]["v"]
-                    )
+                prog = frame_idx / (nframes - 1) if nframes > 1 else 1
+                new_u = (uv_start[0] + delta_u * prog) % 1.0
+                new_v = (uv_start[1] + delta_v * prog) % 1.0
 
-                    prog = frame_idx / (nframes - 1) if nframes > 1 else 1
-                    new_u = (uv_start[0] + delta_u * prog) % 1.0
-                    new_v = (uv_start[1] + delta_v * prog) % 1.0
+                ta[slot]["frames"][adjusted_frame_index]["UV"][vertex_idx]["u"] = new_u
+                ta[slot]["frames"][adjusted_frame_index]["UV"][vertex_idx]["v"] = new_v
 
-                    ta[slot]["frames"][adjusted_frame_index]["uv"][vertex_idx]["u"] = new_u
-                    ta[slot]["frames"][adjusted_frame_index]["uv"][vertex_idx]["v"] = new_v
+            # Ensure to use adjusted_frame_index to update texture and delay
+            ta[slot]["frames"][adjusted_frame_index]["texture"] = scene.ta_current_frame_tex
+            ta[slot]["frames"][adjusted_frame_index]["delay"] = scene.ta_delay
 
-                # Ensure to use adjusted_frame_index to update texture and delay
-                ta[slot]["frames"][adjusted_frame_index]["texture"] = scene.ta_current_frame_tex
-                ta[slot]["frames"][adjusted_frame_index]["delay"] = scene.ta_delay
+            scene.texture_animations = json.dumps(ta)
+            update_ta_current_frame(self, context)
 
-                scene.texture_animations = json.dumps(ta)
-                update_ta_current_frame(self, context)
+            self.report({'INFO'}, "Animation from frame {} to {} completed.".format(frame_start, frame_end))
 
-                self.report({'INFO'}, "Animation from frame {} to {} completed.".format(frame_start, frame_end))
-        else:
-            # Report that no UV layer was found and the operation will not proceed
-            self.report({'WARNING'}, "No UV layer found. Operation cancelled.")
-            return {'CANCELLED'}
         return {'FINISHED'}
 
 class TexAnimGrid(bpy.types.Operator):
@@ -1155,8 +1157,6 @@ class TexAnimGrid(bpy.types.Operator):
 
     def execute(self, context):
         scene = context.scene
-
-        ta = json.loads(scene.texture_animations)
         slot = scene.ta_current_slot - 1
         max_frames = scene.ta_max_frames
         texture_name = scene.texture
@@ -1165,54 +1165,46 @@ class TexAnimGrid(bpy.types.Operator):
         grid_x = context.scene.grid_x
         grid_y = context.scene.grid_y
         nframes = grid_x * grid_y
+        ta = json.loads(scene.texture_animations)
 
-        if check_uv_layer(context):
-            # Proceed with the operation as the UV layer exists
-            self.report({'INFO'}, "Proceeding with the operation...")
-
-            # Ensure the total frames do not exceed max_frames and the specified range
-            if nframes > max_frames or frame_start + nframes > frame_end:
-                self.report({'ERROR'}, "Frame out of range. Please adjust the grid size or frame range.")
-                return {'CANCELLED'}
-
-            i = 0
-            for y in range(grid_y):
-                for x in range(grid_x):
-                    if i >= max_frames or frame_start + i >= frame_end:
-                        self.report({'ERROR'}, "Exceeded maximum frames or frame range.")
-                        return {'CANCELLED'}
-                    uv0 = (x / grid_x, y / grid_y)
-                    uv1 = ((x + 1) / grid_x, y / grid_y)
-                    uv2 = ((x + 1) / grid_x, (y + 1) / grid_y)
-                    uv3 = (x / grid_x, (y + 1) / grid_y)
-
-
-                    ta[slot]["frames"][frame_start + i]["delay"] = scene.ta_delay
-                    ta[slot]["frames"][frame_start + i]["texture"] = texture_name
-
-                    ta[slot]["frames"][frame_start + i]["uv"][0]["u"] = uv0[0]
-                    ta[slot]["frames"][frame_start + i]["uv"][0]["v"] = uv0[1]
-                    ta[slot]["frames"][frame_start + i]["uv"][1]["u"] = uv1[0]
-                    ta[slot]["frames"][frame_start + i]["uv"][1]["v"] = uv1[1]
-                    ta[slot]["frames"][frame_start + i]["uv"][2]["u"] = uv2[0]
-                    ta[slot]["frames"][frame_start + i]["uv"][2]["v"] = uv2[1]
-                    ta[slot]["frames"][frame_start + i]["uv"][3]["u"] = uv3[0]
-                    ta[slot]["frames"][frame_start + i]["uv"][3]["v"] = uv3[1]
-
-                    i += 1
-
-            scene.texture_animations = json.dumps(ta)
-            update_ta_current_frame(self, context)
-                
-            msg_box("Animation of {} frames completed.".format(
-                nframes),
-                icon = "FILE_TICK"
-            )
-
-        else:
-            # Report that no UV layer was found and the operation will not proceed
-            self.report({'WARNING'}, "No UV layer found. Operation cancelled.")
+        # Check if the animation layer or required data is properly set up
+        if slot < 0 or slot >= len(ta) or 'frames' not in ta[slot] or not isinstance(ta[slot]['frames'], list):
+            self.report({'WARNING'}, "Animation layer or data is not properly set up.")
             return {'CANCELLED'}
+
+        # Ensure the total frames do not exceed max_frames and the specified range
+        if nframes > max_frames or frame_start + nframes > frame_end:
+            self.report({'ERROR'}, "Frame out of range. Please adjust the grid size or frame range.")
+            return {'CANCELLED'}
+
+        i = 0
+        for y in range(grid_y):
+            for x in range(grid_x):
+                if i >= max_frames or frame_start + i >= frame_end:
+                    self.report({'ERROR'}, "Exceeded maximum frames or frame range.")
+                    return {'CANCELLED'}
+
+                # Calculate UV coordinates for each vertex
+                uv0 = (x / grid_x, y / grid_y)
+                uv1 = ((x + 1) / grid_x, y / grid_y)
+                uv2 = ((x + 1) / grid_x, (y + 1) / grid_y)
+                uv3 = (x / grid_x, (y + 1) / grid_y)
+
+                # Update the UV mapping for each vertex in the frame data
+                frame_data = ta[slot]["frames"][frame_start + i]
+                frame_data["texture"] = texture_name
+                frame_data["delay"] = scene.ta_delay
+                frame_data["UV"][0] = {"u": uv0[0], "v": uv0[1]}
+                frame_data["UV"][1] = {"u": uv1[0], "v": uv1[1]}
+                frame_data["UV"][2] = {"u": uv2[0], "v": uv2[1]}
+                frame_data["UV"][3] = {"u": uv3[0], "v": uv3[1]}
+
+                i += 1
+
+        scene.texture_animations = json.dumps(ta)
+        update_ta_current_frame(self, context)
+                
+        msg_box("Animation of {} frames completed.".format(nframes), icon="FILE_TICK")
 
         return {'FINISHED'} 
 
@@ -1332,13 +1324,12 @@ class VertexColorRemove(bpy.types.Operator):
     bl_label = "Remove Vertex Color Layer"
     bl_description = "Removes the active vertex color layer from the mesh"
 
+    @classmethod
+    def poll(cls, context):
+        return context.object is not None and context.object.type == 'MESH' and context.object.mode == 'EDIT'
+
     def execute(self, context):
         obj = context.object
-
-        if obj.type != 'MESH' or obj.mode != 'EDIT':
-            self.report({'WARNING'}, "Operation requires an active mesh object in edit mode.")
-            return {'CANCELLED'}
-
         mesh = obj.data
         bm = bmesh.from_edit_mesh(mesh)
         color_layer = bm.loops.layers.color.active
@@ -1347,8 +1338,10 @@ class VertexColorRemove(bpy.types.Operator):
             self.report({'WARNING'}, "No active vertex color layer found.")
             return {'CANCELLED'}
 
-        # Remove the active color layer
-        bm.loops.layers.color.remove(color_layer)
+        # Clear the color data in the loops
+        for face in bm.faces:
+            for loop in face.loops:
+                loop[color_layer] = (0.0, 0.0, 0.0, 1.0)  # Set color to black with full alpha
 
         bmesh.update_edit_mesh(mesh, destructive=True)
         self.report({'INFO'}, "Active vertex color layer removed.")
@@ -1367,20 +1360,25 @@ class SetVertexColor(bpy.types.Operator):
         eo = context.edit_object
         bm = bmesh.from_edit_mesh(eo.data)
 
-        v_layer = bm.loops.layers.color.active
-        if not v_layer:
-            self.report({'WARNING'}, "No active vertex color layer found.")
+        vc_layer = bm.loops.layers.color.get("Col")  # Use "Col" for vertex colors
+        va_layer = bm.loops.layers.color.get("Alpha")  # Use "Alpha" for alpha values
+        if not vc_layer or not va_layer:
+            self.report({'WARNING'}, "No active vertex color or alpha layer found.")
             return {'CANCELLED'}
 
         selmode = context.tool_settings.mesh_select_mode
-        color = context.scene.vertex_color_picker  # Refer to the scene property here
+        color = context.scene.vertex_color_picker  # RGB color from the scene property
+        alpha_percentage = float(context.scene.vertex_alpha) / 100.0  # Convert alpha percentage to float
+        alpha_value = alpha_percentage * 255  # Convert float alpha to the range [0, 255]
 
         # Apply the color and alpha based on the selection mode
         for face in bm.faces:
             for loop in face.loops:
                 if selmode[0] and loop.vert.select or selmode[1] and (loop.edge.select or loop.link_loop_prev.edge.select) or selmode[2] and face.select:
-                    loop[v_layer] = (color[0], color[1], color[2], 1.0)  # Assuming full alpha
+                    loop[vc_layer] = (color[0], color[1], color[2], 1.0)  # Include a default alpha value of 1.0
+                    loop[va_layer] = (alpha_value, alpha_value, alpha_value, alpha_value)
 
         bmesh.update_edit_mesh(eo.data, destructive=False)
         self.report({'INFO'}, "Vertex color set.")
         return {'FINISHED'}
+

@@ -66,19 +66,15 @@ def import_file(filepath, context, scene):
         # Imports bound box for each mesh if enabled in settings
         if scene.w_import_bound_boxes:
             bbox = create_bound_box(scene, rvmesh.bbox, filename)
-            bbox.layers = props.w_bound_box_layers
-            bbox.revolt.is_bbox = True
+            bbox["is_bbox"] = True
             bbox.parent = ob
 
         # Imports bound cube for each mesh if enabled in settings
         if scene.w_import_cubes:
             radius = rvmesh.bound_ball_radius
             center = rvmesh.bound_ball_center.data
-            cube = create_cube(
-                scene, "CUBE", center, radius, filename
-            )
-            cube.layers = props.w_cube_layers
-            cube.revolt.is_cube = True
+            cube = create_cube(scene, "CUBE", center, radius, filename)
+            cube["is_cube"] = True
             cube.parent = ob
 
     # Creates the big cubes around multiple meshes if enabled
@@ -86,13 +82,9 @@ def import_file(filepath, context, scene):
         for cube in world.bigcubes:
             radius = cube.size
             center = cube.center.data
-            bcube = create_cube(
-                scene, "BIGCUBE", center, radius, filename
-            )
-            m_indices = ", ".join([str(c) for c in cube.mesh_indices])
-            bcube.revolt.bcube_mesh_indices = m_indices
-            bcube.revolt.is_bcube = True
-            bcube.layers = props.w_big_cube_layers
+            bcube = create_cube(scene, "BIGCUBE", center, radius, filename)
+            bcube["bcube_mesh_indices"] = ", ".join([str(c) for c in cube.mesh_indices])
+            bcube["is_bcube"] = True
             if scene.w_parent_meshes:
                 bcube.parent = main_w
 
@@ -156,15 +148,19 @@ def create_bound_box(scene, bbox, filename):
     # Gets or creates a transparent material for the boxes
     mat = bpy.data.materials.get("RVBBox")
     if not mat:
-        mat = create_material("RVBBox", COL_BBOX, 0.3)
+        # Ensure COL_BBOX is defined as a tuple or convert it
+        if isinstance(COL_BBOX, Color):
+            diffuse = (COL_BBOX.r, COL_BBOX.g, COL_BBOX.b)
+        else:
+            diffuse = COL_BBOX  # Assuming COL_BBOX is already a tuple
+        mat = create_material("RVBBox", diffuse, 0.3)
     me.materials.append(mat)
 
     ob = bpy.data.objects.new("RVBBox_{}".format(filename), me)
     bpy.context.collection.objects.link(ob)
 
-    # Makes the object transparent
-    ob.show_transparent = True
-    ob.draw_type = "SOLID"
+    # Setting display type and wireframe overlay
+    ob.display_type = "SOLID"
     ob.show_wire = True
 
     return ob
@@ -180,6 +176,7 @@ def create_cube(scene, sptype, center, radius, filename):
 
     center = to_blender_coord(center)
     radius = to_blender_scale(radius)
+    
     if mname not in bpy.data.meshes:
         me = bpy.data.meshes.new(mname)
         bm = bmesh.new()
@@ -187,8 +184,15 @@ def create_cube(scene, sptype, center, radius, filename):
         bmesh.ops.create_cube(bm, size=2, calc_uvs=True)
         bm.to_mesh(me)
         bm.free()
+        # Check and convert the color format if necessary
+        if isinstance(col, Color):
+            diffuse = (col.r, col.g, col.b)
+        else:
+            diffuse = col  # Assuming col is already a tuple
+
         # Creates a transparent material for the object
-        me.materials.append(create_material(mname, col, 0.3))
+        me.materials.append(create_material(mname, diffuse, 0.3))
+
         # Makes polygons smooth
         for poly in me.polygons:
             poly.use_smooth = True
@@ -201,9 +205,7 @@ def create_cube(scene, sptype, center, radius, filename):
     ob.location = center
     ob.scale = (radius, radius, radius)
 
-    # Makes the object transparent
-    ob.show_transparent = True
-    ob.draw_type = "SOLID"
+    ob.display_type = "SOLID"
     ob.show_wire = True
 
     return ob

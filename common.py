@@ -361,11 +361,18 @@ def texture_to_int(string):
 
 
 def int_to_texture(tex_num, name=""):
-    suffix = chr(tex_num % 26 + 97)
-    suffix2 = (tex_num // 26 )
-    if suffix2 > 0:
-        suffix += chr(suffix2 + 96) 
-    return name + suffix + ".bmp"
+    # The first suffix cycles through a-z repeatedly
+    suffix1 = chr(tex_num % 26 + 97)
+    
+    # The second suffix increments once after every 26 textures
+    suffix2_num = tex_num // 26 - 1  # Adjusted to start from -1
+    suffix2 = ''
+    
+    # Only append the second suffix if it's 0 or greater
+    if suffix2_num >= 0:
+        suffix2 = chr(suffix2_num % 26 + 97)
+    
+    return name + suffix2 + suffix1 + ".bmp"
 
 def create_material(name, diffuse, alpha):
     """ Creates a material, mostly used for debugging objects """
@@ -567,7 +574,7 @@ class DialogOperator(bpy.types.Operator):
 def msg_box(message, icon="INFO"):
     global dialog_message
     global dialog_icon
-    print(message)
+    dprint(message)
     dialog_message = message
     dialog_icon = icon
     bpy.ops.revolt.dialog("INVOKE_DEFAULT")
@@ -576,7 +583,7 @@ def msg_box(message, icon="INFO"):
 def queue_error(action, error_message):
     """ Adds an error message to the error dict """
     global ERRORS
-    print("Error while {}: {}".format(action, error_message))
+    dprint("Error while {}: {}".format(action, error_message))
     ERRORS[action] = error_message
 
 

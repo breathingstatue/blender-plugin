@@ -156,41 +156,6 @@ def bake_vertex(self, context):
     bpy.context.view_layer.update()
 
 
-def rename_all_objects(self, context):
-    for obj in context.scene.selected_objects:
-        obj.name = scene.rename_all_name
-
-    return len(context.selected_objects)
-
-
-def select_by_name(self, context):
-    sce = context.scene
-
-    objs = [obj for obj in sce.objects if scene.rename_all_name in obj.name]
-
-    for obj in objs:
-        obj.select = True
-
-    return len(objs)
-
-def select_by_data(self, context):
-    sce = context.scene
-    compare = context.object
-
-    objs = [obj for obj in sce.objects if obj.data == compare.data]
-
-    for obj in objs:
-            obj.select = True
-
-    return len(objs)
-
-
-def set_property_to_selected(self, context, prop, value):
-    for obj in context.selected_objects:
-        setattr(obj, prop, value)
-    return len(context.selected_objects)
-
-
 def batch_bake(self, context):
 
     rd = context.scene.render

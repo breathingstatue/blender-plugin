@@ -118,7 +118,52 @@ def set_vertex_color(context, number):
                     loop[v_layer] = color
 
     bmesh.update_edit_mesh(mesh, tessface=False, destructive=False)
+    
+def update_vertex_color_picker(self, context):
+    # Get the active object and its edit mesh
+    active_object = context.active_object
+    if active_object and active_object.mode == 'EDIT':
+        bm = bmesh.from_edit_mesh(active_object.data)
 
+        # Get or create the vertex color layer
+        vc_layer = bm.loops.layers.color.get("Col")
+        if not vc_layer:
+            vc_layer = bm.loops.layers.color.new("Col")
+
+        # Set the color value for each loop
+        color_value = self.vertex_color_picker
+        for face in bm.faces:
+            for loop in face.loops:
+                loop[vc_layer] = color_value
+
+        # Update the edit mesh
+        bmesh.update_edit_mesh(active_object.data)
+
+# Define the alpha values
+alpha_values = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+
+# Property definition function for vertex alpha
+def update_vertex_alpha(self, context):
+    # Get the active object and its edit mesh
+    active_object = context.active_object
+    if active_object and active_object.mode == 'EDIT':
+        bm = bmesh.from_edit_mesh(active_object.data)
+
+        # Get or create the vertex alpha layer
+        va_layer = bm.loops.layers.color.get("Alpha")
+        if not va_layer:
+            va_layer = bm.loops.layers.color.new("Alpha")
+
+        # Convert the alpha value from the enum property to a float
+        alpha_percentage = float(self.vertex_alpha) / 100.0
+
+        # Set the alpha value for each loop
+        for face in bm.faces:
+            for loop in face.loops:
+                loop[va_layer] = (alpha_percentage, alpha_percentage, alpha_percentage, alpha_percentage)
+
+        # Update the edit mesh
+        bmesh.update_edit_mesh(active_object.data)
 
 def get_face_material(self):
     eo = bpy.context.edit_object

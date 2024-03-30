@@ -21,29 +21,6 @@ from .common import TEX_PAGES_MAX, get_edit_bmesh, get_active_face, msg_box, TEX
 from .rvstruct import TexAnimation, Frame
 
 
-def check_uv_layer(context):
-    obj = context.object
-    
-    # Check if the object is a mesh
-    if obj and obj.type == 'MESH':
-        # Check if there is at least one UV layer
-        if not obj.data.uv_layers:
-            # No UV layers found
-            message = "No UV layer found. Please create a UV layer first."
-            self.report({'WARNING'}, message)
-            print(message)
-            return False
-        else:
-            # At least one UV layer exists
-            print("UV layer exists.")
-            return True
-    else:
-        # The active object is not a mesh
-        message = "Active object is not a mesh or no object is selected."
-        self.report({'WARNING'}, message)
-        print(message)
-        return False
-
 def get_texture_items(self, context):
     items = []
     obj = context.object
@@ -139,17 +116,17 @@ def update_ta_current_frame(self, context):
     if 0 <= frame < maxframes:
         if 'frames' in ta[slot] and frame < len(ta[slot]['frames']):
             frame_data = ta[slot]['frames'][frame]
-            if 'delay' in frame_data and 'uv' in frame_data:
+            if 'delay' in frame_data and 'UV' in frame_data:
                 scene.ta_current_frame_tex = slot
                 scene.ta_current_frame_delay = frame_data['delay']
 
                 # Update UVs only if the necessary data is available
                 for i in range(4):
-                    if i < len(frame_data['uv']):
-                        uv_data = frame_data['uv'][i]
+                    if i < len(frame_data['UV']):
+                        uv_data = frame_data['UV'][i]
                         setattr(scene, f"ta_current_frame_uv{i}", (uv_data['u'], uv_data['v']))
             else:
-                print(f"Missing 'delay' or 'uv' data in frame {frame} for slot {slot}.")
+                print(f"Missing 'delay' or 'UV' data in frame {frame} for slot {slot}.")
         else:
             print(f"Invalid frame data or missing frames for slot {slot}.")
     else:
@@ -232,8 +209,8 @@ def update_ta_current_frame_uv(context, num):
 
     # Safe to update UV data
     num = 3 - num  # Reverse num if necessary
-    ta[slot]["frames"][frame]["uv"][num]["u"] = uv_data[0]
-    ta[slot]["frames"][frame]["uv"][num]["v"] = 1 - uv_data[1]
+    ta[slot]["frames"][frame]["UV"][num]["u"] = uv_data[0]
+    ta[slot]["frames"][frame]["UV"][num]["v"] = 1 - uv_data[1]
     scene.texture_animations = json.dumps(ta)
 
 def copy_uv_to_frame(context):
