@@ -193,11 +193,9 @@ def add_rvmesh_to_bmesh(prm, bm, me, filepath, scene, envlist=None):
                 loop[env_layer][2] = env_col[2]
                 
                 face[env_alpha_layer] = envlist[scene.envidx].alpha / 255
-            
-        # Enables smooth shading for that face
-        face.smooth = True
-        if envlist and (poly.type & FACE_ENV):
-            scene.envidx += 1  # Increment index for environment colors
+                
+            # Enables smooth shading for that face
+            face.smooth = True
     
         # Assign the material to the face
     for face, poly in zip(created_faces, prm.polygons):
@@ -217,4 +215,6 @@ def add_rvmesh_to_bmesh(prm, bm, me, filepath, scene, envlist=None):
         if envlist and (poly.type & FACE_ENV):
             env_col_alpha = envlist[scene.envidx].alpha
             face[env_alpha_layer] = float(env_col_alpha) / 255
+            
+    scene.envidx += 1  # Increment index for environment colors
 

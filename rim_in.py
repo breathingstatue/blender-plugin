@@ -25,14 +25,17 @@ def import_file(filepath, scene):
 
     dprint("Mirror planes:", rim.num_mirror_planes)
 
-    base_filename = filepath.rsplit(os.sep, 1)[1].rsplit('.', 1)[0]  # Get the base filename without extension
+    # Extracts the base filename without path and extension
+    base_filename = filepath.rsplit(os.sep, 1)[1].rsplit('.', 1)[0]
 
     if rim.num_mirror_planes == 0 or rim.mirror_planes == []:
         queue_error("importing mirror file", "File contains 0 mirror planes")
         return
 
     for index, mirror_plane in enumerate(rim.mirror_planes):
-        unique_name = f"{base_filename}_{index:03}"  # Generate a unique name for each object
+        # Modified to include '.rim' in the unique name
+        unique_name = f"{base_filename}_{index:03}.rim"  # Appends the index and '.rim'
+        
         me = bpy.data.meshes.new(unique_name)
         bm = bmesh.new()
 
