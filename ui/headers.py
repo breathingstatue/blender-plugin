@@ -15,5 +15,3 @@ class RVIO_PT_RevoltIOToolPanel(bpy.types.Panel):
         row.operator("import_scene.revolt", text="Import", icon="IMPORT")
         row.operator("export_scene.revolt", text="Export", icon="EXPORT")
         row.operator("export_scene.revolt_redo", text="Re-Export", icon="FILE_REFRESH")
-        
-dprint

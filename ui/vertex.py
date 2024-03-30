@@ -20,5 +20,6 @@ class RVIO_PT_VertexPanel(bpy.types.Panel):
         
         layout.operator("vertexcolor.create_layer")
         layout.prop(scene, 'vertex_color_picker', text="Choose Color")
-        layout.operator("vertexcolor.set_color")
+        layout.prop(scene, 'vertex_alpha', text="Alpha")
+        layout.operator("vertexcolor.set_color", text="Set Color and Alpha")
         layout.operator("vertexcolor.remove_layer")
