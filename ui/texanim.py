@@ -1,6 +1,5 @@
 import bpy
 import bmesh
-from ..operators import OBJECT_OT_add_texanim_uv, TexAnimTransform
 
 class RVIO_PT_AnimModesPanel(bpy.types.Panel):
     bl_idname = "RVIO_PT_AnimModesPanel"
@@ -10,29 +9,29 @@ class RVIO_PT_AnimModesPanel(bpy.types.Panel):
     bl_context = "object"
     
     def draw(self, context):
-        layout = self.layout
-        scene = context.scene
+        pass
+        # layout = self.layout
+        # scene = context.scene
         
-        box = layout.box()
-        col = box.column(align=True)
-        col.prop(scene, "ta_current_slot")
-        col.prop(scene, "ta_max_frames", slider=True)
-        col.prop(scene, "ta_delay")
-        col.prop(scene, "rvio_frame_start")
-        col.prop(scene, "rvio_frame_end")
-        col.prop(scene, "ta_current_frame", text="Current Frame")
+        # box = layout.box()
+        # col = box.column(align=True)
+        # col.prop(scene, "ta_current_slot")
+        # col.prop(scene, "ta_max_frames", slider=True)
+        # col.prop(scene, "ta_delay")
+        # col.prop(scene, "rvio_frame_start")
+        # col.prop(scene, "rvio_frame_end")
+        # col.prop(scene, "ta_current_frame", text="Current Frame")
         
-        layout.prop(context.window_manager, 'create_new_material')
-        layout.operator("object.add_texanim_uv", text="Add Animation UV Layer")
-        layout.prop(scene, "texture", icon="TEXTURE")
+        # layout.operator("object.add_texanim_uv", text="Add Animation UV Layer")
+        # layout.prop(scene, "texture", icon="TEXTURE")
         
-        layout.operator("uv.texanim_direction", text="Animation Direction")
-        layout.operator("texanim.transform", icon="UV", text="Transform Animation")
+        # layout.operator("uv.texanim_direction", text="Animation Direction")
+        # layout.operator("texanim.transform", icon="UV", text="Transform Animation")
         
-        box = layout.box()
-        col = box.column(align=True)
-        col.prop(scene, "grid_x", slider=True)
-        col.prop(scene, "grid_y", slider=True)
-        col.operator("texanim.grid", icon="GRID", text="Grid Animation")
+        # box = layout.box()
+        # col = box.column(align=True)
+        # col.prop(scene, "grid_x", slider=True)
+        # col.prop(scene, "grid_y", slider=True)
+        # col.operator("texanim.grid", icon="GRID", text="Grid Animation")
         
-        layout.prop(scene, "ta_max_slots", slider=True)
+        # layout.prop(scene, "ta_max_slots", slider=True)
