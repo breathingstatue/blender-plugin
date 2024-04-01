@@ -133,7 +133,7 @@ from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, UseTe
 from .operators import SetInstanceProperty, RemoveInstanceProperty, LaunchRV, TexturesSave
 from .operators import TexturesRename, CarParametersExport, ButtonZoneHide, AddTrackZone
 from .operators import SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere
-from .operators import ButtonCopyUvToFrame, ButtonCopyFrameToUv, TexAnimTransform, TexAnimGrid, OBJECT_OT_add_texanim_uv
+from .operators import ButtonCopyUvToFrame, ButtonCopyFrameToUv, TexAnimTransform, TexAnimGrid, OBJECT_OT_texanim_uv
 from .rvstruct import World, PRM, Mesh, BoundingBox, Vector, Matrix, Polygon, Vertex, UV, BigCube, TexAnimation
 from .rvstruct import Frame, Color, Instances, Instance, PosNodes, PosNode, NCP, Polyhedron, Plane, LookupGrid
 from .rvstruct import LookupList, Hull, ConvexHull, Edge, Interior, Sphere, RIM, MirrorPlane, TrackZones, Zone
@@ -783,12 +783,6 @@ def register():
         update=update_vertex_alpha
     )
 
-    bpy.types.WindowManager.create_new_material = bpy.props.BoolProperty(
-        name="Create New Material",
-        description="Create a new material for this object",
-        default=False
-    )    
-
     #Unused
     #bpy.types.Scene.batch_bake_model_rgb = bpy.props.BoolProperty(
     #    name = "Bake to Model RGB",
@@ -871,7 +865,7 @@ def register():
     bpy.utils.register_class(ButtonCopyFrameToUv)
     bpy.utils.register_class(TexAnimTransform)
     bpy.utils.register_class(TexAnimGrid)
-    bpy.utils.register_class(OBJECT_OT_add_texanim_uv)
+    bpy.utils.register_class(OBJECT_OT_texanim_uv)
     bpy.utils.register_class(ButtonZoneHide)
     bpy.utils.register_class(AddTrackZone)
     bpy.utils.register_class(SetBCubeMeshIndices)
@@ -918,7 +912,7 @@ def unregister():
     bpy.utils.unregister_class(SetBCubeMeshIndices)
     bpy.utils.unregister_class(AddTrackZone)
     bpy.utils.unregister_class(ButtonZoneHide)
-    bpy.utils.unregister_class(OBJECT_OT_add_texanim_uv)
+    bpy.utils.unregister_class(OBJECT_OT_texanim_uv)
     bpy.utils.unregister_class(TexAnimGrid)
     bpy.utils.unregister_class(TexAnimTransform)
     bpy.utils.unregister_class(ButtonCopyFrameToUv)
@@ -954,7 +948,6 @@ def unregister():
     #del bpy.types.Scene.light1
     #del bpy.types.Scene.batch_bake_model_env
     #del bpy.types.Scene.batch_bake_model_rgb
-    del bpy.types.WindowManager.create_new_material
     del bpy.types.Scene.vertex_alpha
     del bpy.types.Scene.vertex_color_picker
     del bpy.types.Mesh.face_ncp_nocoll

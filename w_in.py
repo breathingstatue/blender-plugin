@@ -90,14 +90,8 @@ def import_file(filepath, context, scene):
 
     texture_animations = []
 
-    # Check each animation and ensure it has valid data before adding it to the scene
     for animation in world.animations:
-        if animation.frame_count > 0 and all(frame is not None for frame in animation.frames):
-            # If the animation is valid, convert it to a dictionary and add it to the list
-            texture_animations.append(animation.as_dict())
-        else:
-            # Log or handle invalid animations here
-            print(f"Warning: Invalid or incomplete texture animation data found and will be skipped.")
+        texture_animations.append(animation.as_dict())
 
     # Store the processed texture animations back to the scene
     scene.texture_animations = json.dumps(texture_animations)

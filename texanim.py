@@ -116,17 +116,17 @@ def update_ta_current_frame(self, context):
     if 0 <= frame < maxframes:
         if 'frames' in ta[slot] and frame < len(ta[slot]['frames']):
             frame_data = ta[slot]['frames'][frame]
-            if 'delay' in frame_data and 'UV' in frame_data:
+            if 'delay' in frame_data and 'uv' in frame_data:
                 scene.ta_current_frame_tex = slot
                 scene.ta_current_frame_delay = frame_data['delay']
 
                 # Update UVs only if the necessary data is available
                 for i in range(4):
-                    if i < len(frame_data['UV']):
-                        uv_data = frame_data['UV'][i]
+                    if i < len(frame_data['uv']):
+                        uv_data = frame_data['uv'][i]
                         setattr(scene, f"ta_current_frame_uv{i}", (uv_data['u'], uv_data['v']))
             else:
-                print(f"Missing 'delay' or 'UV' data in frame {frame} for slot {slot}.")
+                print(f"Missing 'delay' or 'uv' data in frame {frame} for slot {slot}.")
         else:
             print(f"Invalid frame data or missing frames for slot {slot}.")
     else:
@@ -209,8 +209,8 @@ def update_ta_current_frame_uv(context, num):
 
     # Safe to update UV data
     num = 3 - num  # Reverse num if necessary
-    ta[slot]["frames"][frame]["UV"][num]["u"] = uv_data[0]
-    ta[slot]["frames"][frame]["UV"][num]["v"] = 1 - uv_data[1]
+    ta[slot]["frames"][frame]["uv"][num]["u"] = uv_data[0]
+    ta[slot]["frames"][frame]["uv"][num]["v"] = 1 - uv_data[1]
     scene.texture_animations = json.dumps(ta)
 
 def copy_uv_to_frame(context):

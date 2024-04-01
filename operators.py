@@ -450,36 +450,50 @@ class LaunchRV(bpy.types.Operator):
 
 class TexturesSave(bpy.types.Operator):
     bl_idname = "helpers.textures_save"
-    bl_label = "Copy project textures"
-    bl_description = (
-        "Saves all used track texture files to desired project directory and takes a care of correct files names"
-    )
-    bl_options = {'REGISTER'}
-    
-    directory = bpy.props.StringProperty(
-        name="Outdir Path",
-        description="Where to save all the textures",
-        subtype='DIR_PATH' 
-    )
+    bl_label = "Save Textures to RVGL Directory"
+    bl_description = "Saves all used track texture files to the RVGL directory"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return context.scene.rvgl_dir != ""
 
     def execute(self, context):
-        dirname = os.path.basename(os.path.dirname(self.directory))
-        # try to copy each image to selected project directory
+        directory_path = context.scene.rvgl_dir
+
+        if not directory_path or not os.path.isdir(directory_path):
+            self.report({'ERROR'}, "Invalid or no RVGL directory path set.")
+            return {'CANCELLED'}
+
         for image in bpy.data.images:
-            if ".bmp" in image.name:
-                base, ext = image.name.split(".", 1)
-            try:
-                if image.source == 'FILE':
-                    dst = os.path.join(self.directory, int_to_texture(int(base), dirname))
-                    shutil.copyfile(image.filepath, dst)                 
-            except:
-                print("Failed to copy image %s" % image.name)
-                
+            # Work only with image files
+            if image.source == 'FILE' and image.file_format in ['BMP', 'PNG', 'JPEG', 'TIFF', 'TGA']:  # Extendable for any format
+                base, ext = os.path.splitext(image.name)
+                base = base[:8]  # Truncate to 8 characters
+                suffix = 'a'  # Placeholder for your suffix logic
+                new_filename = f"{base}{suffix}.bmp"  # Force the .bmp extension
+                dst = os.path.join(directory_path, new_filename)
+            
+                # Save the file as BMP
+                try:
+                    original_path = image.filepath_from_user()
+                    image.filepath_raw = dst
+                    image.file_format = 'BMP'
+                    image.save()
+                    image.filepath_raw = original_path  # Restore the original path
+                    image.reload()  # Reload to undo changes made to the image in Blender
+                except Exception as e:
+                    self.report({'ERROR'}, f"Failed to save image {image.name} as BMP: {str(e)}")
+                    continue
+
+        self.report({'INFO'}, "Textures saved to RVGL directory in BMP format.")
         return {'FINISHED'}
 
     def invoke(self, context, event):
-        context.window_manager.fileselect_add(self)
-        return {'RUNNING_MODAL'}
+        if not context.scene.rvgl_dir:
+            self.report({'WARNING'}, "No RVGL directory selected. Please specify the directory first.")
+            return {'CANCELLED'}
+        return context.window_manager.invoke_confirm(self, event)
 
 
 class TexturesRename(bpy.types.Operator):
@@ -507,7 +521,8 @@ class TexturesRename(bpy.types.Operator):
             self.report({'WARNING'}, "No textures found in selected objects")
             return {'CANCELLED'}
 
-        base_name = self.base_name if self.base_name else active_object.name[:7]
+        # Split the base name at the period and use the part before the period
+        base_name = self.base_name.split('.')[0] if self.base_name else active_object.name.split('.')[0][:7]
 
         for i, texture in enumerate(textures):
             # Use the int_to_texture method for naming
@@ -895,161 +910,104 @@ class TexAnimDirection(bpy.types.Operator):
         default='RIGHT'
     )
 
-    delta_u: bpy.props.FloatProperty(
-        name="Delta U",
-        description="U coordinate increment per frame",
-        default=0.01,
-        min=-1.0,
-        max=1.0
-    )
-
-    delta_v: bpy.props.FloatProperty(
-        name="Delta V",
-        description="V coordinate increment per frame",
-        default=0.0,
-        min=-1.0,
-        max=1.0
-    )
-
     def execute(self, context):
-        direction = self.direction
-        delta_u = self.delta_u
-        delta_v = self.delta_v
-
-        if direction == 'RIGHT':
-            delta_u, delta_v = 0.01, 0.0
-        elif direction == 'LEFT':
-            delta_u, delta_v = -0.01, 0.0
-        elif direction == 'UP':
-            delta_u, delta_v = 0.0, -0.01
-        elif direction == 'DOWN':
-            delta_u, delta_v = 0.0, 0.01
-        # Custom direction uses the user-provided delta_u and delta_v
-
-        # Store the deltas in scene properties for later use
         scene = context.scene
+
+        # Retrieve the total number of frames for the animation
+        frame_start = scene.rvio_frame_start
+        frame_end = scene.rvio_frame_end
+        total_frames = frame_end - frame_start + 1
+
+        # Calculate the increment per frame to move across the UV space over the animation duration
+        delta_u = 1.0 / total_frames if total_frames > 0 else 0.0
+        delta_v = 1.0 / total_frames if total_frames > 0 else 0.0
+
+        if self.direction == 'RIGHT':
+            delta_v = 0.0
+        elif self.direction == 'LEFT':
+            delta_u = -delta_u
+            delta_v = 0.0
+        elif self.direction == 'UP':
+            delta_u = 0.0
+            delta_v = -delta_v  # Assuming UV (0,0) is bottom-left and (1,1) is top-right
+        elif self.direction == 'DOWN':
+            delta_u = 0.0
+
+        # Store the deltas in scene properties
         scene.texanim_delta_u = delta_u
         scene.texanim_delta_v = delta_v
 
-        self.report({'INFO'}, f"UV Animation Direction set: {direction} (ΔU={delta_u}, ΔV={delta_v})")
+        self.report({'INFO'}, f"UV Animation Direction set: {self.direction} with ΔU={delta_u}, ΔV={delta_v}")
         return {'FINISHED'}
 
-    def invoke(self, context, event):
-        return context.window_manager.invoke_props_dialog(self)
-
-class OBJECT_OT_add_texanim_uv(bpy.types.Operator):
-    """Add a new texanim UV layer with an associated image"""
+class OBJECT_OT_texanim_uv(bpy.types.Operator):
+    """Add a new texanim UV layer without creating new materials or images, to be used in Edit Mode"""
     bl_idname = "object.add_texanim_uv"
-    bl_label = "Add Texanim UV Layer and Image"
+    bl_label = "Set Animation"
     bl_options = {'REGISTER', 'UNDO'}
 
-    create_new_material: bpy.props.BoolProperty(
-        name="Create New Material",
-        description="Create a new material for this object, or use the existing one",
-        default=False
-    )
-
     def execute(self, context):
-        obj = context.active_object
+        obj = context.edit_object  # Ensure we're getting the object in edit mode
 
         if not obj or obj.type != 'MESH':
-            self.report({'ERROR'}, "Active object is not a mesh")
+            self.report({'ERROR'}, "Active object is not a mesh or not in edit mode")
             return {'CANCELLED'}
 
-        base_name_root = obj.name[:7]
-        uv_layer_exists, uv_layer = self.get_uv_layer(obj, base_name_root)
-    
-        if not uv_layer_exists:
-            uv_layer = obj.data.uv_layers.new(name=f"{base_name_root}_TexAnim")
+        bm = bmesh.from_edit_mesh(obj.data)
+        uv_layer = bm.loops.layers.uv.verify()
 
-        # Check if there is an existing material with a texture node. If there is, use that texture.
-        material = obj.material_slots[0].material if obj.material_slots else None
-        existing_texture_node = self.get_existing_texture_node(material) if material else None
+        selected_faces = [f for f in bm.faces if f.select]
+        if not selected_faces:
+            self.report({'WARNING'}, "No faces selected")
+            return {'CANCELLED'}
 
-        image = bpy.data.images.new(name=f"{base_name_root}_TexAnim", width=512, height=512)
-
-        if not material:
-            material = self.initialize_material(obj, uv_layer.name, image)
-            self.assign_image_to_material(material, image)
-            self.report({'INFO'}, f"New material '{material.name}' created and assigned.")
-        elif self.create_new_material:
-            material = self.initialize_material(obj, uv_layer.name, image)
-            obj.material_slots[0].material = material
-            self.assign_image_to_material(material, image)
-            self.report({'INFO'}, f"New material '{material.name}' created and assigned.")
-        else:
-            self.assign_image_to_material(material, image)
-            self.report({'INFO'}, "Existing material found. New image assigned to it.")
-
-        # Call create_animation_entry here
-        self.create_animation_entry(context)
+        self.analyze_uv_map(selected_faces, uv_layer)
+        self.create_animation_entry(context, selected_faces, uv_layer, obj)
 
         return {'FINISHED'}
-    
-    def get_uv_layer(self, obj, base_name_root):
-        # Check for an existing UV layer that matches the base name root
-        for uv_layer in obj.data.uv_layers:
-            if uv_layer.name.startswith(base_name_root):
-                return True, uv_layer
-        return False, None
 
-    def get_existing_texture_node(self, material):
-        if material and material.use_nodes:
-            for node in material.node_tree.nodes:
-                if node.type == 'TEX_IMAGE':
-                    return node
-        return None
+    def analyze_uv_map(self, selected_faces, uv_layer):
+        u_min, v_min, u_max, v_max = (1.0, 1.0, 0.0, 0.0)
+        for face in selected_faces:
+            for loop in face.loops:
+                uv = loop[uv_layer].uv
+                u_min, v_min = min(uv.x, u_min), min(uv.y, v_min)
+                u_max, v_max = max(uv.x, u_max), max(uv.y, v_max)
 
-    def assign_image_to_material(self, material, image):
-        # Assign the image texture to the material
-        bsdf = material.node_tree.nodes.get('Principled BSDF')
-        if bsdf:
-            # Create a new image texture node and assign the image.
-            tex_image = material.node_tree.nodes.new('ShaderNodeTexImage')
-            tex_image.image = image
-            # Link the texture node to the Principled BSDF's Base Color.
-            material.node_tree.links.new(bsdf.inputs['Base Color'], tex_image.outputs['Color'])
+        self.report({'INFO'}, f"Analyzed UV Map (Selected) - U Min: {u_min}, V Min: {v_min}, U Max: {u_max}, V Max: {v_max}")
 
-    def find_next_letter(self, uv_layers, base_name_root):
-        existing = {uv_layer.name[-1] for uv_layer in uv_layers if uv_layer.name.startswith(base_name_root)}
-        next_letter = 'a'
-        while next_letter in existing:
-            next_letter = chr(ord(next_letter) + 1)
-        return next_letter
-
-    def initialize_material(self, obj, base_name, new_image):
-        new_mat = bpy.data.materials.new(name="Material_" + base_name)
-        obj.data.materials.append(new_mat)
-        return new_mat
-
-    def assign_image_to_material(self, material, image):
-        bsdf = material.node_tree.nodes.get('Principled BSDF')
-        if bsdf:
-            tex_image = material.node_tree.nodes.new('ShaderNodeTexImage')
-            tex_image.image = image
-            material.node_tree.links.new(bsdf.inputs['Base Color'], tex_image.outputs['Color'])
-
-    def create_animation_entry(self, context):
+    def create_animation_entry(self, context, selected_faces, uv_layer, obj):
         scene = context.scene
-        slot = scene.ta_current_slot - 1
+        slot = max(scene.ta_current_slot - 1, 0)  # Ensure slot is non-negative
         frame_start = scene.rvio_frame_start
         frame_end = scene.rvio_frame_end - 1
-        texture = scene.ta_current_frame_tex
-        delay = scene.ta_delay
-        ta = json.loads(scene.texture_animations) if scene.texture_animations else []
 
+        texture_name = scene.texture  # Use the scene property to get the texture name
+        texture = bpy.data.images.get(texture_name) if texture_name else None
+        delay = scene.ta_delay
+
+        # Initialize texture_animations if it doesn't exist or is empty
+        if 'texture_animations' not in obj or not obj['texture_animations']:
+            obj['texture_animations'] = json.dumps([{"frames": [], "slot": 0} for _ in range(slot + 1)])
+        ta = json.loads(obj['texture_animations'])
+
+        # Ensure the slot exists within the texture_animations array
         while len(ta) <= slot:
             ta.append({"frames": [], "slot": len(ta)})
 
         frame_data = []
         for frame_num in range(frame_start, frame_end + 1):
-            # Placeholder UVs should be replaced with actual UV data
-            uv_data = [{"u": 0.0, "v": 0.0} for _ in range(4)]  # Four vertices
+            uv_data = []
+            for face in selected_faces:
+                for loop in face.loops:
+                    uv = loop[uv_layer].uv
+                    uv_data.append({"u": uv.x, "v": uv.y})
+
             frame = {
                 "frame": frame_num,
-                "texture": texture,
+                "texture": texture.name if texture else "Default",
                 "delay": delay,
-                "UV": uv_data
+                "uv": uv_data
             }
             frame_data.append(frame)
 
@@ -1059,9 +1017,7 @@ class OBJECT_OT_add_texanim_uv(bpy.types.Operator):
         }
 
         ta[slot] = new_animation_entry
-        scene.texture_animations = json.dumps(ta)
-
-        return {'FINISHED'}
+        obj['texture_animations'] = json.dumps(ta)
     
 class ButtonCopyUvToFrame(bpy.types.Operator):
     bl_idname = "texanim.copy_uv_to_frame"
@@ -1103,51 +1059,42 @@ class TexAnimTransform(bpy.types.Operator):
         frame_end = scene.rvio_frame_end - 1
 
         ta = json.loads(scene.texture_animations)
-        
-        if slot < 0 or slot >= len(ta) or 'frames' not in ta[slot] or not isinstance(ta[slot]['frames'], list):
-            self.report({'WARNING'}, "Animation layer or data is not properly set up.")
+
+        # Initialize ta with one slot if empty
+        if not ta:
+            ta.append({"frames": []})  # Append a default slot with an empty frames list
+
+        # Continue with debugging or actual logic
+        print(f"Current slot: {slot}")
+        print(f"Total slots available: {len(ta)}")
+
+        # Validate that the slot and frame data are properly set up
+        if slot < 0 or slot >= len(ta):
+            self.report({'WARNING'}, "Invalid animation slot.")
             return {'CANCELLED'}
-        
-        # Retrieve the direction deltas from the scene properties
-        delta_u = getattr(scene, 'texanim_delta_u', 0.01)  # Default to slight right movement
-        delta_v = getattr(scene, 'texanim_delta_v', 0.0)  # Default to no vertical movement
+        if 'frames' not in ta[slot] or not isinstance(ta[slot]['frames'], list):
+            self.report({'WARNING'}, "Invalid or missing frame data.")
+            return {'CANCELLED'}
 
-        nframes = abs(frame_end - frame_start) + 1
+        # Iterate over the frames, ensuring we don't exceed the stored frame count
+        for frame_idx, frame_data in enumerate(ta[slot]["frames"]):
+            if frame_idx + frame_start > frame_end:
+                break  # Exit the loop if the current frame exceeds the end frame
 
-        for frame_idx in range(nframes):
-            frame_number = frame_start + frame_idx
-            adjusted_frame_index = frame_number - frame_start
+            for uv_data in frame_data["uv"]:
+                # Calculate the progress and update UV coordinates
+                prog = frame_idx / (len(ta[slot]["frames"]) - 1)
+                uv_data["u"] = (uv_data["u"] + scene.texanim_delta_u * prog) % 1.0
+                uv_data["v"] = (uv_data["v"] + scene.texanim_delta_v * prog) % 1.0
 
-            if adjusted_frame_index < 0 or adjusted_frame_index >= len(ta[slot]["frames"]):
-                self.report({'ERROR'}, f"Frame index out of range: {adjusted_frame_index} (Frame number in Blender: {frame_number})")
-                return {'CANCELLED'}
+            # Optionally update other frame-specific data as needed
+            frame_data["texture"] = scene.ta_current_frame_tex
+            frame_data["delay"] = scene.ta_delay
 
-            for vertex_idx in range(4):
-                if vertex_idx >= len(ta[slot]["frames"][adjusted_frame_index]["UV"]):
-                    self.report({'ERROR'}, f"Vertex index out of range: {vertex_idx} for frame {adjusted_frame_index}")
-                    return {'CANCELLED'}
+        # Update the animation data with the transformed frames
+        scene.texture_animations = json.dumps(ta)
 
-                uv_start = (
-                    ta[slot]["frames"][adjusted_frame_index]["UV"][vertex_idx]["u"],
-                    ta[slot]["frames"][adjusted_frame_index]["UV"][vertex_idx]["v"]
-                )
-
-                prog = frame_idx / (nframes - 1) if nframes > 1 else 1
-                new_u = (uv_start[0] + delta_u * prog) % 1.0
-                new_v = (uv_start[1] + delta_v * prog) % 1.0
-
-                ta[slot]["frames"][adjusted_frame_index]["UV"][vertex_idx]["u"] = new_u
-                ta[slot]["frames"][adjusted_frame_index]["UV"][vertex_idx]["v"] = new_v
-
-            # Ensure to use adjusted_frame_index to update texture and delay
-            ta[slot]["frames"][adjusted_frame_index]["texture"] = scene.ta_current_frame_tex
-            ta[slot]["frames"][adjusted_frame_index]["delay"] = scene.ta_delay
-
-            scene.texture_animations = json.dumps(ta)
-            update_ta_current_frame(self, context)
-
-            self.report({'INFO'}, "Animation from frame {} to {} completed.".format(frame_start, frame_end))
-
+        self.report({'INFO'}, "Animation updated.")
         return {'FINISHED'}
 
 class TexAnimGrid(bpy.types.Operator):
@@ -1194,10 +1141,10 @@ class TexAnimGrid(bpy.types.Operator):
                 frame_data = ta[slot]["frames"][frame_start + i]
                 frame_data["texture"] = texture_name
                 frame_data["delay"] = scene.ta_delay
-                frame_data["UV"][0] = {"u": uv0[0], "v": uv0[1]}
-                frame_data["UV"][1] = {"u": uv1[0], "v": uv1[1]}
-                frame_data["UV"][2] = {"u": uv2[0], "v": uv2[1]}
-                frame_data["UV"][3] = {"u": uv3[0], "v": uv3[1]}
+                frame_data["uv"][0] = {"u": uv0[0], "v": uv0[1]}
+                frame_data["uv"][1] = {"u": uv1[0], "v": uv1[1]}
+                frame_data["uv"][2] = {"u": uv2[0], "v": uv2[1]}
+                frame_data["uv"][3] = {"u": uv3[0], "v": uv3[1]}
 
                 i += 1
 
