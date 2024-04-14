@@ -1,6 +1,6 @@
 """
 Name:    ncp_in
-Purpose: Imports Re-Volt collisision files (.ncp)
+Purpose: Imports Re-Volt collision files (.ncp)
 
 Description:
 Imports collision files.
