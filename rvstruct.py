@@ -28,7 +28,6 @@ Missing Formats:
 """
 
 import os
-import json
 import bmesh
 import struct
 from math import ceil, sqrt
@@ -612,7 +611,7 @@ class UV:
             self.read(file)
 
     def __repr__(self):
-        return json.dumps(self.as_dict())
+        return str(self.as_dict())
 
     def read(self, file):
         # Reads the uv coordinates
@@ -697,46 +696,33 @@ class TexAnimation:
         return "TexAnimation"
 
     def read(self, file):
-        # Ensure there are at least 4 bytes to read for frame count
-        if file.read(4):
-            file.seek(-4, os.SEEK_CUR)  # Move the cursor back 4 bytes after checking
-            self.frame_count = struct.unpack("<L", file.read(4))[0]
+        # Reads the amount of frames
+        self.frame_count = struct.unpack("<L", file.read(4))[0]
 
-            # Reads the frames themselves
-            for frame in range(self.frame_count):
-                self.frames.append(Frame(file))
-        else:
-            # Handle the case where there are not enough bytes to read
-            print("Warning: Not enough data to read frame count. The file may be corrupted or incomplete.")
+        # Reads the frames themselves
+        for frame in range(self.frame_count):
+            self.frames.append(Frame(file))
 
     def write(self, file):
         # Writes the amount of frames
         file.write(struct.pack("<L", self.frame_count))
 
-        # Writes the frames, ensuring each frame is not None
+        # Writes the frames
         for frame in self.frames[:self.frame_count]:
-            if frame is not None:
-                frame.write(file)
-            else:
-                print("Encountered a None frame, skipping...")
+            frame.write(file)
 
     def as_dict(self):
         dic = { "frame_count": self.frame_count,
-                "frames": [frame.as_dict() for frame in self.frames]
+                "frames": self.frames
         }
         return dic
 
-
     def from_dict(self, dic):
-        # Check if 'frame_count' is in the dictionary, else default to 0
-        self.frame_count = dic.get("frame_count", 0)
-
-        # If 'frames' key is missing or empty, initialize a default frame if frame_count is positive
-        if 'frames' not in dic or not dic['frames']:
-            self.frames = [Frame() for _ in range(self.frame_count)] if self.frame_count > 0 else []
-        else:
-            # If 'frames' is present, use it to populate the TexAnimation object
-            self.frames = [Frame().from_dict(framedic) for framedic in dic['frames']]
+        self.frame_count = dic["frame_count"]
+        for framedic in dic["frames"]:
+            frame = Frame()
+            frame.from_dict(framedic)
+            self.frames.append(frame)
 
 class Frame:
     """

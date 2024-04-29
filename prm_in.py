@@ -25,14 +25,14 @@ if "bpy" in locals():
     importlib.reload(rvstruct)
     importlib.reload(img_in)
 
-def import_file(filepath, scene):
+def import_file(filepath, context, scene):
     """
     Imports a .prm/.m file and links it to the scene as a Blender object.
     It also imports all LoDs of a PRM file, which can be sequentially written
     to the file. There is no indicator for it, the file end has to be checked.
     """
     # Resets the index of the current env color
-    scene.envidx = 0
+    scene = context.scene
     meshes = []
 
     # common.TEXTURES = {}
@@ -53,7 +53,7 @@ def import_file(filepath, scene):
     print("Imported {} ({} meshes)".format(filename, len(meshes)))
 
     for prm in meshes:
-        me = import_mesh(prm, scene, filepath)
+        me = import_mesh(prm, filepath, context, scene, envlist=None)
 
         if len(meshes) > 1:
             # Fake user if there are multiple LoDs so they're kept when saving
@@ -73,7 +73,7 @@ def import_file(filepath, scene):
     return ob
 
 
-def import_mesh(prm, scene, filepath, envlist=None):
+def import_mesh(prm, filepath, context, scene, envlist=None):
     filename = os.path.basename(filepath)
     
     # Create a new mesh
@@ -82,7 +82,7 @@ def import_mesh(prm, scene, filepath, envlist=None):
     # Create a new bmesh
     bm = bmesh.new()
     
-    add_rvmesh_to_bmesh(prm, bm, me, filepath, scene, envlist)
+    add_rvmesh_to_bmesh(prm, bm, me, filepath, context, scene, envlist=None)
 
     # Convert the bmesh back to a mesh and free resources
     bm.normal_update()
@@ -116,11 +116,11 @@ def get_or_create_material(texture_path):
 
     return mat
 
-def add_rvmesh_to_bmesh(prm, bm, me, filepath, scene, envlist=None):
+def add_rvmesh_to_bmesh(prm, bm, me, filepath, context, scene, envlist=None):
     """
     Adds PRM data to an existing bmesh. Returns the resulting bmesh.
     """
-    scene = bpy.context.scene
+    scene = context.scene
     uv_layer = bm.loops.layers.uv.new("UVMap")
     vc_layer = bm.loops.layers.color.new("Col")
     env_layer = bm.loops.layers.color.new("Env")
@@ -130,6 +130,12 @@ def add_rvmesh_to_bmesh(prm, bm, me, filepath, scene, envlist=None):
     type_layer = bm.faces.layers.int.new("Type")
     material_dict = {}
     created_faces = []
+
+    if not envlist:
+        print("Warning: envlist is empty.")
+    elif scene.envidx >= len(envlist):
+        print(f"Error: 'scene.envidx' ({scene.envidx}) is out of range for 'envlist' ({len(envlist)}). Resetting to 0.")
+        scene.envidx = 0  # Optionally reset to 0 or handle as needed
 
     for vert in prm.vertices:
         position = to_blender_coord(vert.position.data)
@@ -170,6 +176,12 @@ def add_rvmesh_to_bmesh(prm, bm, me, filepath, scene, envlist=None):
         
         bm.verts.ensure_lookup_table()
         bm.faces.ensure_lookup_table()
+
+        # Assigns env alpha to face. Colors are on a vcol layer
+        if (poly.type & FACE_ENV) and envlist:
+            env_col_alpha = envlist[scene.envidx % len(envlist)].alpha
+            face[env_alpha_layer] = float(env_col_alpha) / 255
+            scene.envidx = (scene.envidx + 1) % len(envlist)  # Safely increment index
         
         # Assign UVs and colors
         for l, loop in enumerate(face.loops):
@@ -196,6 +208,8 @@ def add_rvmesh_to_bmesh(prm, bm, me, filepath, scene, envlist=None):
                 
             # Enables smooth shading for that face
             face.smooth = True
+            if envlist and (poly.type & FACE_ENV):
+                scene.envidx = (scene.envidx + 1) % len(envlist)
     
         # Assign the material to the face
     for face, poly in zip(created_faces, prm.polygons):
@@ -210,11 +224,4 @@ def add_rvmesh_to_bmesh(prm, bm, me, filepath, scene, envlist=None):
         # Assigns the face properties (bit field, one int per face)
         face[type_layer] = poly.type
         face[texnum_layer] = poly.texture
-
-        # Assigns env alpha to face. Colors are on a vcol layer
-        if envlist and (poly.type & FACE_ENV):
-            env_col_alpha = envlist[scene.envidx].alpha
-            face[env_alpha_layer] = float(env_col_alpha) / 255
-            
-    scene.envidx += 1  # Increment index for environment colors
 

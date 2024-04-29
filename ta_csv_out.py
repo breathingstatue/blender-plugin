@@ -16,11 +16,11 @@ if "common" in locals():
 from . import common
 from . import texanim
 
-from .common import TA_CSV_HEADER
+from .common import *
 
 def export_file(filepath, scene):
 
-    ta = json.loads(scene.texture_animations)
+    ta = eval(scene.texture_animations)
     lines = [TA_CSV_HEADER]
 
     for a in range(scene.ta_max_slots):

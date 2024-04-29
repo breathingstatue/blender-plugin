@@ -17,7 +17,6 @@ if "bpy" in locals():
 import os
 import bpy
 import bmesh
-import json
 from mathutils import Color, Vector
 from . import (
     common,
@@ -69,16 +68,12 @@ def export_file(filepath, scene):
     world.generate_bigcubes()
 
     # Exports the texture animation
-    animations = json.loads(scene.texture_animations)
-    print("Exporting texture animations...")
+    animations = eval(scene.texture_animations)
     for animdict in animations:
         anim = rvstruct.TexAnimation()
         anim.from_dict(animdict)
-        if not all(frame is not None for frame in anim.frames):
-            print("Warning: Found a None frame in texture animation.")
         world.animations.append(anim)
     world.animation_count = scene.ta_max_slots
-    scene.texture_animations = json.dumps(animations)
 
     # Writes the world to a file
     with open(filepath, "wb") as file:

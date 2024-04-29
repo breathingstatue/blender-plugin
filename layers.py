@@ -13,7 +13,7 @@ behavior.
 import bpy
 import bmesh
 import mathutils
-from .common import NCP_PROP_MASK, FACE_PROP_MASK, objects_to_bmesh, get_edit_bmesh, msg_box
+from .common import NCP_PROP_MASK, FACE_PROP_MASK, objects_to_bmesh, get_edit_bmesh, msg_box, COLORS, MATERIALS
 from .prm_in import add_rvmesh_to_bmesh
 
 def color_from_face(context):
@@ -205,7 +205,7 @@ def set_face_material(self, value):
                 loop[vc_layer][0] = COLORS[value][0]
                 loop[vc_layer][1] = COLORS[value][1]
                 loop[vc_layer][2] = COLORS[value][2]
-    bmesh.update_edit_mesh(mesh, tessface=False, destructive=False)
+    bmesh.update_edit_mesh(mesh, destructive=False)
  
 
 def get_face_texture(self):

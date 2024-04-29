@@ -10,7 +10,6 @@ World files contain meshes, optimization data and texture animations.
 import os
 import bpy
 import bmesh
-import json
 from mathutils import Color, Vector
 from . import common
 from . import rvstruct
@@ -54,7 +53,7 @@ def import_file(filepath, context, scene):
         bpy.context.scene.collection.objects.link(main_w)
     for rvmesh in meshes:
         # Creates a mesh from rv data and links it to the scene as an object
-        me = import_mesh(rvmesh, scene, filepath, world.env_list)
+        me = import_mesh(rvmesh, filepath, context, scene, world.env_list)
         ob = bpy.data.objects.new(filename, me)
         bpy.context.collection.objects.link(ob)
         bpy.context.view_layer.objects.active = ob
@@ -93,9 +92,8 @@ def import_file(filepath, context, scene):
     for animation in world.animations:
         texture_animations.append(animation.as_dict())
 
-    # Store the processed texture animations back to the scene
-    scene.texture_animations = json.dumps(texture_animations)
-    scene.ta_max_slots = len(texture_animations)
+    scene.texture_animations = str([a.as_dict() for a in world.animations])
+    scene.ta_max_slots = world.animation_count
 
 def create_bound_box(scene, bbox, filename):
     # Creates a new mesh and bmesh

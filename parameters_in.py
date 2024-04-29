@@ -25,7 +25,7 @@ if "bpy" in locals():
 # Add specific imports from common as needed
 from .common import PARAMETERS, to_blender_coord
 
-def import_file(filepath, scene):
+def import_file(filepath, context, scene):
     """
     Imports a parameters.txt file and loads car body and wheels.
     """
@@ -33,13 +33,13 @@ def import_file(filepath, scene):
     PARAMETERS[filepath] = carinfo.read_parameters(filepath)
 
     # Imports the car with all supported files
-    import_car(scene, PARAMETERS[filepath], filepath)
+    import_car(context, scene, PARAMETERS[filepath], filepath)
 
     # Removes parameters from dict so they can be reloaded next time
     PARAMETERS.pop(filepath)
 
 
-def import_car(scene, params, filepath):
+def import_car(context, scene, params, filepath):
     body = params["model"][params["body"]["modelnum"]]
     body_loc = to_blender_coord(params["body"]["offset"])
     wheel0loc = to_blender_coord(params["wheel"][0]["offset1"])
@@ -87,12 +87,12 @@ def import_car(scene, params, filepath):
         bodypath = os.sep.join([folder, body.split(os.sep)[-1]])
 
     # Creates the car body and sets the offset
-    body_obj = prm_in.import_file(bodypath, scene)
+    body_obj = prm_in.import_file(bodypath, context, scene)
     body_obj.location = body_loc
 
     # Creates the wheel objects or an empty if the wheel file is not present
     if wheel0:
-        wheel = prm_in.import_file(wheel0path, scene)
+        wheel = prm_in.import_file(wheel0path, context, scene)
     else:
         wheel = bpy.data.objects.new("wheel 0", None)
         scene.objects.link(wheel)
@@ -102,7 +102,7 @@ def import_car(scene, params, filepath):
     wheel.parent = body_obj
 
     if wheel1:
-        wheel = prm_in.import_file(wheel1path, scene)
+        wheel = prm_in.import_file(wheel1path, context, scene)
     else:
         wheel = bpy.data.objects.new("wheel 1", None)
         scene.objects.link(wheel)
@@ -112,7 +112,7 @@ def import_car(scene, params, filepath):
     wheel.parent = body_obj
 
     if wheel2:
-        wheel = prm_in.import_file(wheel2path, scene)
+        wheel = prm_in.import_file(wheel2path, context, scene)
     else:
         wheel = bpy.data.objects.new("wheel 2", None)
         scene.objects.link(wheel)
@@ -122,7 +122,7 @@ def import_car(scene, params, filepath):
     wheel.parent = body_obj
 
     if wheel3:
-        wheel = prm_in.import_file(wheel3path, scene)
+        wheel = prm_in.import_file(wheel3path, context, scene)
     else:
         wheel = bpy.data.objects.new("wheel 3", None)
         scene.objects.link(wheel)
