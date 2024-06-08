@@ -38,6 +38,7 @@ class RVIO_PT_RevoltSettingsPanel(bpy.types.Panel):
 
         # General export settings
         layout.label(text="Export:")
+        layout.prop(scene, "export_as_cubes", text="Export World as Cubes (.w)")
         layout.prop(scene, "triangulate_ngons", text="Triangluate Ngons")
         layout.prop(scene, "use_tex_num", text="Export w/o Texture")
         layout.prop(scene, "apply_scale", text="Apply Scale")
