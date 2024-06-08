@@ -128,7 +128,7 @@ from .layers import set_face_ncp_property, get_face_ncp_property, get_face_env, 
 from .layers import alpha_values, update_vertex_color_picker, update_vertex_alpha
 from .operators import ImportRV, ExportRV, RVIO_OT_ReadCarParameters, RVIO_OT_SelectRevoltDirectory, ButtonReExport
 from .operators import VertexColorRemove, SetVertexColor, BakeShadow, InstanceColor
-from .operators import VertexColorCreateLayer, TexAnimDirection, SetEnvironmentMapColor
+from .operators import TexAnimDirection, SetEnvironmentMapColor
 from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, UseTextureNumber
 from .operators import SetInstanceProperty, RemoveInstanceProperty, LaunchRV, TexturesSave
 from .operators import TexturesRename, CarParametersExport, ButtonZoneHide, AddTrackZone
@@ -154,7 +154,7 @@ from .ui.zone import RVIO_PT_RevoltZonePanel
 bl_info = {
 "name": "Re-Volt",
 "author": "Marvin Thiel & Theman",
-"version": (20, 24, 4),
+"version": (20, 24, 6),
 "blender": (4, 1, 0),
 "location": "File > Import-Export",
 "description": "Import and export Re-Volt file formats.",
@@ -792,6 +792,12 @@ def register():
 
     bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
 
+    bpy.types.Scene.export_as_cubes = bpy.props.BoolProperty(
+        name="Export as Cubes",
+        description="Export the world as separate Cubes (.w)",
+        default=False
+    )
+
     #Unused
     #bpy.types.Scene.batch_bake_model_rgb = bpy.props.BoolProperty(
     #    name = "Bake to Model RGB",
@@ -853,7 +859,6 @@ def register():
     bpy.utils.register_class(ExportRV)
     bpy.utils.register_class(RVIO_OT_ReadCarParameters)
     bpy.utils.register_class(ButtonReExport)
-    bpy.utils.register_class(VertexColorCreateLayer)
     bpy.utils.register_class(VertexColorRemove)
     bpy.utils.register_class(SetVertexColor)
     bpy.utils.register_class(TexAnimDirection)
@@ -942,7 +947,6 @@ def unregister():
     bpy.utils.unregister_class(TexAnimDirection)
     bpy.utils.unregister_class(VertexColorRemove)
     bpy.utils.unregister_class(SetVertexColor)
-    bpy.utils.unregister_class(VertexColorCreateLayer)
     bpy.utils.unregister_class(ButtonReExport)
     bpy.utils.unregister_class(RVIO_OT_ReadCarParameters)
     bpy.utils.unregister_class(ExportRV)
@@ -957,6 +961,8 @@ def unregister():
     #del bpy.types.Scene.light1
     #del bpy.types.Scene.batch_bake_model_env
     #del bpy.types.Scene.batch_bake_model_rgb
+
+    del bpy.types.Scene.export_as_cubes
 
     bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
 

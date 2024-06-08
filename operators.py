@@ -252,7 +252,7 @@ def exec_export(filepath, format_type, context):
 
     elif frmt == 'W':
         from . import w_out
-        w_out.export_file(filepath, context.scene)
+        w_out.export_file(filepath, context.scene, context)
 
     elif frmt == 'RIM':
         from . import rim_out
