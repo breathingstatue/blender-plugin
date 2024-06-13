@@ -38,7 +38,10 @@ class RVIO_PT_RevoltSettingsPanel(bpy.types.Panel):
 
         # General export settings
         layout.label(text="Export:")
-        layout.prop(scene, "export_as_cubes", text="Export World as Cubes (.w)")
+        layout.prop(scene, "export_worldcut", text="Export WorldCut (.w)")
+        if scene.export_worldcut:
+            layout.prop(scene, "split_size_faces", slider=True)
+            layout.label(text="Actual Split Size: {}".format(scene.actual_split_size))
         layout.prop(scene, "triangulate_ngons", text="Triangluate Ngons")
         layout.prop(scene, "use_tex_num", text="Export w/o Texture")
         layout.prop(scene, "apply_scale", text="Apply Scale")
@@ -64,3 +67,8 @@ class RVIO_PT_RevoltSettingsPanel(bpy.types.Panel):
         layout.prop(scene, "ncp_export_collgrid", text="ncp_export_collgrid")
         layout.prop(scene, "ncp_collgrid_size", text="ncp_collgrid_size")
 
+def update_actual_split_size(self, context):
+    self["actual_split_size"] = self.split_size_faces * 2
+
+def get_actual_split_size(self):
+    return self.get("actual_split_size", self.split_size_faces * 2)
