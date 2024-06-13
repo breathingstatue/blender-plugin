@@ -127,7 +127,7 @@ from .layers import select_ncp_material, get_face_material, set_face_material, s
 from .layers import set_face_ncp_property, get_face_ncp_property, get_face_env, set_face_env, get_face_property, set_face_property
 from .layers import alpha_values, update_vertex_color_picker, update_vertex_alpha
 from .operators import ImportRV, ExportRV, RVIO_OT_ReadCarParameters, RVIO_OT_SelectRevoltDirectory, ButtonReExport
-from .operators import VertexColorRemove, SetVertexColor, BakeShadow, InstanceColor
+from .operators import VertexColorCreateLayer, VertexColorRemove, SetVertexColor, BakeShadow, InstanceColor
 from .operators import TexAnimDirection, SetEnvironmentMapColor
 from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, UseTextureNumber
 from .operators import SetInstanceProperty, RemoveInstanceProperty, LaunchRV, TexturesSave
@@ -140,6 +140,7 @@ from .rvstruct import Frame, Color, Instances, Instance, PosNodes, PosNode, NCP,
 from .rvstruct import LookupList, Hull, ConvexHull, Edge, Interior, Sphere, RIM, MirrorPlane, TrackZones, Zone
 from .texanim import update_ta_max_frames, update_ta_current_slot, update_ta_current_frame, update_ta_current_frame_uv
 from .texanim import update_ta_current_frame_delay, update_ta_current_frame_tex, get_texture_items, update_ta_max_slots
+from .w_out import update_split_size
 from .ui.faceprops import RVIO_PT_RevoltFacePropertiesPanel
 from .ui.headers import RVIO_PT_RevoltIOToolPanel
 from .ui.helpers import RVIO_PT_RevoltHelpersPanelMesh
@@ -147,14 +148,14 @@ from .ui.instances import RVIO_PT_RevoltInstancesPanel
 from .ui.light import RVIO_PT_RevoltLightPanel
 from .ui.texanim import RVIO_PT_AnimModesPanel
 from .ui.objectpanel import RVIO_PT_RevoltObjectPanel
-from .ui.settings import RVIO_PT_RevoltSettingsPanel
+from .ui.settings import RVIO_PT_RevoltSettingsPanel, update_actual_split_size, get_actual_split_size
 from .ui.vertex import RVIO_PT_VertexPanel
 from .ui.zone import RVIO_PT_RevoltZonePanel
 
 bl_info = {
 "name": "Re-Volt",
 "author": "Marvin Thiel & Theman",
-"version": (20, 24, 6),
+"version": (20, 24, 5),
 "blender": (4, 1, 0),
 "location": "File > Import-Export",
 "description": "Import and export Re-Volt file formats.",
@@ -792,11 +793,28 @@ def register():
 
     bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
 
-    bpy.types.Scene.export_as_cubes = bpy.props.BoolProperty(
-        name="Export as Cubes",
-        description="Export the world as separate Cubes (.w)",
+    bpy.types.Scene.export_worldcut = bpy.props.BoolProperty(
+        name="Export WorldCut",
+        description="Export world as split meshes (.w)",
         default=False
     )
+
+    bpy.types.Scene.split_size_faces = bpy.props.IntProperty(
+        name="Split Size Faces",
+        description="Number of faces per split",
+        min=1,
+        max=100,
+        default=16,  # Set your default value
+        update=update_actual_split_size  # Update actual_split_size when split_size_faces changes
+    )
+
+    bpy.types.Scene.actual_split_size = bpy.props.IntProperty(
+        name="Actual Split Size",
+        description="Calculated number of faces per split based on split_size_faces.",
+        get=get_actual_split_size,
+        options={'HIDDEN'}  # Hide this property in the UI as it will be displayed differently
+    )
+
 
     #Unused
     #bpy.types.Scene.batch_bake_model_rgb = bpy.props.BoolProperty(
@@ -859,6 +877,7 @@ def register():
     bpy.utils.register_class(ExportRV)
     bpy.utils.register_class(RVIO_OT_ReadCarParameters)
     bpy.utils.register_class(ButtonReExport)
+    bpy.utils.register_class(VertexColorCreateLayer)
     bpy.utils.register_class(VertexColorRemove)
     bpy.utils.register_class(SetVertexColor)
     bpy.utils.register_class(TexAnimDirection)
@@ -945,6 +964,7 @@ def unregister():
     bpy.utils.unregister_class(SelectByName)
     bpy.utils.unregister_class(ButtonRenameAllObjects)
     bpy.utils.unregister_class(TexAnimDirection)
+    bpy.utils.unregister_class(VertexColorCreateLayer)
     bpy.utils.unregister_class(VertexColorRemove)
     bpy.utils.unregister_class(SetVertexColor)
     bpy.utils.unregister_class(ButtonReExport)
@@ -962,7 +982,9 @@ def unregister():
     #del bpy.types.Scene.batch_bake_model_env
     #del bpy.types.Scene.batch_bake_model_rgb
 
-    del bpy.types.Scene.export_as_cubes
+    del bpy.types.Scene.split_size_faces
+    del bpy.types.Scene.actual_split_size
+    del bpy.types.Scene.export_worldcut
 
     bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
 

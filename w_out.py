@@ -15,9 +15,9 @@ if "bpy" in locals():
 
 import os
 import bpy
-import bmesh
 import struct
 from mathutils import Vector
+from collections import deque
 from . import (
 	common,
 	rvstruct,
@@ -25,161 +25,190 @@ from . import (
 	prm_out
 )
 from .common import *
-from .prm_out import export_mesh
+from .prm_out import (
+	export_mesh,
+	get_texture_from_material
+)
 
-def get_context_override():
-    for window in bpy.context.window_manager.windows:
-        screen = window.screen
-        for area in screen.areas:
-            if area.type == 'VIEW_3D':
-                for region in area.regions:
-                    if region.type == 'WINDOW':
-                        # Only include necessary context components
-                        override = {
-                            'window': window,
-                            'screen': screen,
-                            'area': area,
-                            'region': region,
-                            'scene': bpy.context.scene,
-                            'view_layer': bpy.context.view_layer
-                        }
-                        return override
-    return None
+def update_split_size(self, context):
+	value = self.split_size_faces  # Assuming this is correctly set somewhere
+	self.actual_split_size = value * 2
 
-def create_cubes_from_objects(objects):
-    cubes = []
-    for obj in objects:
-        if obj.type == 'MESH':
-            # Transform mesh vertices to world coordinates
-            world_vertices = [obj.matrix_world @ vertex.co for vertex in obj.data.vertices]
+def get_connected_faces(bm, start_face, max_faces):
+    """Collect connected faces sharing the same material, starting from start_face."""
+    material_index = start_face.material_index
+    visited = set()  # Use set to keep track of visited faces
+    queue = deque([start_face])
+    connected_faces = []
 
-            # Calculate the min and max extents in each direction
-            min_coords = Vector((min(v.x for v in world_vertices), min(v.y for v in world_vertices), min(v.z for v in world_vertices)))
-            max_coords = Vector((max(v.x for v in world_vertices), max(v.y for v in world_vertices), max(v.z for v in world_vertices)))
+    while queue and len(connected_faces) < max_faces:
+        face = queue.popleft()
+        if face.index not in visited:
+            visited.add(face.index)
+            connected_faces.append(face.index)
+            if face.material_index == material_index:
+                for edge in face.edges:
+                    for linked_face in edge.link_faces:
+                        if linked_face.index not in visited and linked_face.material_index == material_index:
+                            queue.append(linked_face)
 
-            # Calculate the center and dimensions
-            dimensions = max_coords - min_coords
-            center = (min_coords + max_coords) / 2
+    return connected_faces
 
-            # Use the largest dimension to ensure the cube covers everything
-            cube_edge_length = max(dimensions.x, dimensions.y, dimensions.z)
+def create_split_mesh(original_mesh, face_indices):
+    new_mesh = bpy.data.meshes.new(name="split_mesh")
+    original_bm = bmesh.new()
+    original_bm.from_mesh(original_mesh)
+    original_bm.verts.ensure_lookup_table()
+    original_bm.faces.ensure_lookup_table()
 
-            print(f"Object: {obj.name}, Center: {center}, Cube Edge Length: {cube_edge_length}")
+    split_bm = bmesh.new()
 
-            cubes.append((obj.name, center, cube_edge_length))
-    return cubes
+    vert_map = {}
+    used_materials = set()
 
-def batch_create_cubes(cubes_data):
-    created_cubes = []
-    context_override = get_context_override()
-    
-    if not context_override:
-        print("Could not get context override")
+    # Identify all materials used by the subset of faces
+    for face_index in face_indices:
+        face = original_bm.faces[face_index]
+        used_materials.add(face.material_index)
+
+    # Map old material indices to new indices
+    material_map = {old_idx: idx for idx, old_idx in enumerate(used_materials)}
+    new_mesh.materials.clear()
+    for old_idx in used_materials:
+        new_mesh.materials.append(original_mesh.materials[old_idx])
+
+    uv_layers = {layer.name: split_bm.loops.layers.uv.new(layer.name) for layer in original_bm.loops.layers.uv}
+    vc_layers = {layer.name: split_bm.loops.layers.color.new(layer.name) for layer in original_bm.loops.layers.color} if original_bm.loops.layers.color else {}
+
+    # Create new vertices and faces in split_bm
+    for face_index in face_indices:
+        face = original_bm.faces[face_index]
+        new_verts = []
+        for vert in face.verts:
+            if vert not in vert_map:
+                new_vert = split_bm.verts.new(vert.co)
+                vert_map[vert] = new_vert
+            new_verts.append(vert_map[vert])
+
+        new_face = split_bm.faces.new(new_verts)
+        new_face.material_index = material_map[face.material_index]  # Remap material index
+
+        # Copy UV and vertex color data
+        for l, loop in enumerate(face.loops):
+            new_loop = new_face.loops[l]
+            for layer_name, layer in uv_layers.items():
+                new_loop[layer].uv = loop[original_bm.loops.layers.uv[layer_name]].uv
+            for color_name, color_layer in vc_layers.items():
+                new_loop[color_layer] = loop[original_bm.loops.layers.color[color_name]]
+
+    split_bm.to_mesh(new_mesh)
+    split_bm.free()  # Free the bmesh used for splitting
+
+    return new_mesh
+
+def split_mesh(obj, split_size):
+    print(f"Checking if object {obj.name} should be split.")
+    if '_split_' in obj.name:
+        print(f"Skipping already split object: {obj.name}")
         return []
+
+    mesh = obj.data
+    bm = bmesh.new()
+    bm.from_mesh(mesh)
+    bm.faces.ensure_lookup_table()
     
-    for name, center, cube_edge_length in cubes_data:
-        # Create the cube at the calculated center with the specified size
-        bpy.ops.mesh.primitive_cube_add(size=cube_edge_length, location=center, align='WORLD')
-        cube = bpy.context.active_object
-        if cube:
-            cube.name = name + '_cube'
-            created_cubes.append(cube)
-            print(f"Cube created for {name}, Center: {center}, Edge Length: {cube_edge_length}")
+    split_meshes = []
+    visited_faces = set()
 
-    # Apply transformations to ensure the cubes are correctly scaled
-    bpy.ops.object.select_all(action='DESELECT')
-    for cube in created_cubes:
-        cube.select_set(True)
-    bpy.context.view_layer.objects.active = created_cubes[0] if created_cubes else None
-    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    for face in bm.faces:
+        if face.index not in visited_faces:
+            face_indices = get_connected_faces(bm, face, split_size)
+            visited_faces.update(face_indices)
+            if face_indices:
+                new_mesh = create_split_mesh(mesh, face_indices)
+                new_obj_name = f"{obj.name}_split_{len(split_meshes)}"
+                new_obj = bpy.data.objects.new(name=new_obj_name, object_data=new_mesh)
+                bpy.context.collection.objects.link(new_obj)
+                split_meshes.append(new_obj)
 
-    return created_cubes
+    bm.free()
+    return split_meshes
 
-def delete_cubes(cubes):
-    bpy.ops.object.select_all(action='DESELECT')
-    for cube in cubes:
-        cube.select_set(True)
-    bpy.ops.object.delete()
+def split_meshes(scene_objects, split_size):
+    split_meshes_list = []
 
-def export_world_as_cubes(filepath, context):
+    # Iterate over all objects in the scene
+    for obj in scene_objects:
+        if obj.type == 'MESH' and not obj.hide_render:
+            # Apply the split_mesh function to split the mesh
+            split_objs = split_mesh(obj, split_size)
+            split_meshes_list.extend(split_objs)  # Collect all new split objects
+
+            # Optional: Print to track which objects are being split
+            print(f"Split {obj.name} into {len(split_objs)} parts.")
+
+    return split_meshes_list
+
+def export_split_world(filepath, context, split_size):
     scene = context.scene
     world = rvstruct.World()
+    split_meshes_list = []  # Initialize at the beginning of the function
 
-    # Create cubes from mesh objects
-    mesh_objects = [obj for obj in scene.objects if obj.type == 'MESH']
-    cubes_data = create_cubes_from_objects(mesh_objects)
-    cubes = batch_create_cubes(cubes_data)
+    if not world:
+        print("Failed to instantiate world object.")
+        return
 
-    # Export each cube
-    for cube in cubes:
-        print(f"Exporting cube for {cube.name}")
-        mesh = export_mesh(cube.data, cube, scene, filepath, world=world)
-        if mesh:
-            world.meshes.append(mesh)
-        else:
-            queue_error("exporting World as Cubes", "A cube could not be exported.")
+    try:
+        split_meshes_list = split_meshes(scene.objects, split_size)
+        for split_obj in split_meshes_list:
+            converted_mesh = export_mesh(split_obj.data, split_obj, scene, filepath, world=world)
+            if converted_mesh:
+                world.meshes.append(converted_mesh)
 
-    world.mesh_count = len(world.meshes)
-    world.generate_bigcubes()
+        world.mesh_count = len(world.meshes)
+        world.generate_bigcubes()
 
-    with open(filepath, "wb") as file:
-        world.write(file)
+        with open(filepath, "wb") as file:
+            world.write(file)
+        print("Export successful!")
+    except Exception as e:
+        print(f"Failed to export due to an error: {e}")
+    finally:
+        for obj in split_meshes_list:
+            bpy.data.objects.remove(obj, do_unlink=True)
+        print("Cleanup completed, all temporary objects removed.")
 
-    # Delete the cubes after exporting
-    delete_cubes(cubes)
+def export_standard_world(filepath, context, world):
+	scene = context.scene
+	world = rvstruct.World()
+	objs = [obj for obj in scene.objects if obj_conditions(obj)]
+	try:
+		for obj in objs:
+			me = obj.data
+			print(f"Exporting mesh for {obj.name}")
+			mesh = export_mesh(me, obj, scene, filepath, world=world)
+			if mesh:
+				world.meshes.append(mesh)
 
-def export_standard_world(filepath, context):
-    # Creates an empty world object to put the scene into
-    scene = context.scene
-    world = rvstruct.World()
-    objs = []
-    # Goes through all objects and adds the exportable ones to the list
-    for obj in scene.objects:
-        conditions = (
-            obj.data and
-            obj.type == "MESH" and
-            not obj.get("is_instance") and
-            not obj.get("is_cube") and
-            not obj.get("is_bcube") and
-            not obj.get("is_bbox") and
-            not obj.get("is_mirror_plane") and
-            not obj.get("is_hull_sphere") and
-            not obj.get("is_hull_convex") and
-            not obj.get("is_track_zone")
-        )
-        if conditions:
-            objs.append(obj)
+		world.mesh_count = len(world.meshes)
+		world.generate_bigcubes()
 
-    # Goes through all objects from the scene and exports them to PRM/Mesh
-    for obj in objs:
-        me = obj.data
-        print(f"Exporting mesh for {obj.name}")
-        mesh = export_mesh(me, obj, scene, filepath, world=world)
-        if mesh:
-            world.meshes.append(mesh)
-        else:
-            queue_error("exporting World", "A mesh could not be exported.")
+		with open(filepath, "wb") as file:
+			world.write(file)
+		print("Export successful!")
+	except Exception as e:
+		print(f"Failed to export due to an error: {e}")
 
-    world.mesh_count = len(world.meshes)
-    # Generates one big cube (sphere) around the scene
-    world.generate_bigcubes()
-
-    # Exports the texture animation
-    #animations = eval(scene.texture_animations)
-    #for animdict in animations:
-    #    anim = rvstruct.TexAnimation()
-    #    anim.from_dict(animdict)
-    #    world.animations.append(anim)
-    #world.animation_count = scene.ta_max_slots
-
-    # Writes the world to a file
-    with open(filepath, "wb") as file:
-        world.write(file)
+def obj_conditions(obj):
+	return (obj.data and
+			obj.type == "MESH" and
+			not any(obj.get(attr) for attr in ["is_instance", "is_cube", "is_bcube", "is_bbox", "is_mirror_plane", "is_hull_sphere", "is_hull_convex", "is_track_zone"]))
 
 def export_file(filepath, scene, context):
-    if getattr(context.scene, 'export_as_cubes', False):
-        print("Exporting World as cubes.")
-        export_world_as_cubes(filepath, context)
-    else:
-        print("Exporting World.")
-        export_standard_world(filepath, context)
+	if getattr(context.scene, 'export_worldcut', False):
+		split_size = getattr(context.scene, 'actual_split_size', 100)  # Use the actual_split_size for calculations.
+		print(f"Exporting World as split meshes with {split_size} faces per segment.")
+		export_split_world(filepath, context, split_size)
+	else:
+		print("Exporting World.")
+		export_standard_world(filepath, context)
