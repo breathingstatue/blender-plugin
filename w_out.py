@@ -195,7 +195,7 @@ def export_split_world(filepath, context, split_size):
         cleanup_split_objects(created_objects)
         print("Cleanup completed, all temporary objects removed.")
 
-def export_standard_world(filepath, context, world):
+def export_standard_world(filepath, context):
     scene = context.scene
     world = rvstruct.World()
     objs = [obj for obj in scene.objects if obj_conditions(obj)]
