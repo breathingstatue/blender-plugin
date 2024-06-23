@@ -330,31 +330,25 @@ class BoundingBox:
         }
         return dic
 
-
 class Vector:
     """
     A very simple vector class
     """
     def __init__(self, file=None, data=None):
-        # Default initialization
-        self.data = [0.0, 0.0, 0.0]
+        if data:
+            self.data = [data[0], data[1], data[2]]
+        else:
+            self.data = [0, 0, 0]
 
-        # If a file is provided, read the vector data from the file
         if file:
             self.read(file)
-        # Else if data is provided, use it to set the vector
-        elif data:
-            if len(data) == 3:
-                self.data = list(data)
-            else:
-                raise ValueError("Data for Vector initialization must have three elements.")
 
     def read(self, file):
-        # Reads the coordinates from the file
-        self.data = list(struct.unpack("<3f", file.read(12)))
+        # Reads the coordinates
+        self.data = [c for c in struct.unpack("<3f", file.read(12))]
 
     def write(self, file):
-        # Writes all coordinates to a file
+        # Writes all coordinates
         file.write(struct.pack("<3f", *self.data))
 
     def get_distance_to(self, v):

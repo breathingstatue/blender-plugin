@@ -644,71 +644,71 @@ def register():
     
     bpy.types.Mesh.face_double_sided = bpy.props.BoolProperty(
         name = "Double sided",
-        get = lambda s: bool(get_face_property(s) & FACE_DOUBLE),
-        set = lambda s, v: set_face_property(s, v, FACE_DOUBLE),
-        description = "The polygon will be visible from both sides in-game"
+        description = "The polygon will be visible from both sides in-game",
+        get=lambda self: bool(get_face_property(self, FACE_DOUBLE)),
+        set=lambda self, value: set_face_property(self, value, FACE_DOUBLE)
     )
     
     bpy.types.Mesh.face_translucent = bpy.props.BoolProperty(
         name = "Translucent",
-        get = lambda s: bool(get_face_property(s) & FACE_TRANSLUCENT),
-        set = lambda s, v: set_face_property(s, v, FACE_TRANSLUCENT),
         description = "Renders the polyon transparent\n(takes transparency "
                       "from the \"Alpha\" vertex color layer or the alpha "
-                      "layer of the texture"
+                      "layer of the texture",
+        get=lambda self: bool(get_face_property(self, FACE_TRANSLUCENT)),
+        set=lambda self, value: set_face_property(self, value, FACE_TRANSLUCENT)
     )
     
     bpy.types.Mesh.face_mirror = bpy.props.BoolProperty(
         name = "Mirror",
-        get = lambda s: bool(get_face_property(s) & FACE_MIRROR),
-        set = lambda s, v: set_face_property(s, v, FACE_MIRROR),
-        description = "This polygon covers a mirror area. (?)"
+        description = "This polygon covers a mirror area. (?)",
+        get=lambda self: bool(get_face_property(self, FACE_MIRROR)),
+        set=lambda self, value: set_face_property(self, value, FACE_MIRROR)
     )
     
     bpy.types.Mesh.face_additive = bpy.props.BoolProperty(
         name = "Additive blending",
-        get = lambda s: bool(get_face_property(s) & FACE_TRANSL_TYPE),
-        set = lambda s, v: set_face_property(s, v, FACE_TRANSL_TYPE),
         description = "Renders the polygon with additive blending (black "
                       "becomes transparent, bright colors are added to colors "
-                      "beneath)"
+                      "beneath)",
+        get=lambda self: bool(get_face_property(self, FACE_TRANSL_TYPE)),
+        set=lambda self, value: set_face_property(self, value, FACE_TRANSL_TYPE)
     )
     
     bpy.types.Mesh.face_texture_animation = bpy.props.BoolProperty(
         name = "Animated",
-        get = lambda s: bool(get_face_property(s) & FACE_TEXANIM),
-        set = lambda s, v: set_face_property(s, v, FACE_TEXANIM),
-        description = "Uses texture animation for this poly (only in .w files)"
+        description = "Uses texture animation for this poly (only in .w files)",
+        get=lambda self: bool(get_face_property(self, FACE_TEXANIM)),
+        set=lambda self, value: set_face_property(self, value, FACE_TEXANIM)
     )
     
     bpy.types.Mesh.face_no_envmapping = bpy.props.BoolProperty(
         name = "No EnvMap (.prm)",
-        get = lambda s: bool(get_face_property(s) & FACE_NOENV),
-        set = lambda s, v: set_face_property(s, v, FACE_NOENV),
-        description = "Disables the environment map for this poly (.prm only)"
+        description = "Disables the environment map for this poly (.prm only)",
+        get=lambda self: bool(get_face_property(self, FACE_NOENV)),
+        set=lambda self, value: set_face_property(self, value, FACE_NOENV)
     )
     
     bpy.types.Mesh.face_envmapping = bpy.props.BoolProperty(
         name = "EnvMapping (.w)",
-        get = lambda s: bool(get_face_property(s) & FACE_ENV),
-        set = lambda s, v: set_face_property(s, v, FACE_ENV),
-        description = "Enables the environment map for this poly (.w only).\n\n"
-                      "If enabled on pickup.m, sparks will appear"
-                      "around the poly"
+        description = "Enables the environment map for this poly (.w only).\n"
+                      "If enabled on pickup.m, sparks will appear \n"
+                      "around the poly",
+        get=lambda self: bool(get_face_property(self, FACE_ENV)),
+        set=lambda self, value: set_face_property(self, value, FACE_ENV)
     )
     
     bpy.types.Mesh.face_cloth = bpy.props.BoolProperty(
         name = "Cloth effect (.prm)",
-        get = lambda s: bool(get_face_property(s) & FACE_CLOTH),
-        set = lambda s, v: set_face_property(s, v, FACE_CLOTH),
-        description = "Enables the cloth effect used on the Mystery car"
+        description = "Enables the cloth effect used on the Mystery car",
+        get=lambda self: bool(get_face_property(self, FACE_CLOTH)),
+        set=lambda self, value: set_face_property(self, value, FACE_CLOTH)
     )
     
     bpy.types.Mesh.face_skip = bpy.props.BoolProperty(
         name = "Do not export",
-        get = lambda s: bool(get_face_property(s) & FACE_SKIP),
-        set = lambda s, v: set_face_property(s, v, FACE_SKIP),
-        description = "Skips the polygon when exporting (not Re-Volt related)"
+        description = "Skips the polygon when exporting (not Re-Volt related)",
+        get=lambda self: bool(get_face_property(self, FACE_SKIP)),
+        set=lambda self, value: set_face_property(self, value, FACE_SKIP)
     )
     
     bpy.types.Mesh.face_env = bpy.props.FloatVectorProperty(
@@ -726,51 +726,51 @@ def register():
     
     bpy.types.Mesh.face_ncp_double = bpy.props.BoolProperty(
         name = "Double-sided",
-        get=lambda s: bool(get_face_ncp_property(s) & NCP_DOUBLE),
-        set=lambda s, v: set_face_ncp_property(s, v, NCP_DOUBLE),
-        description="Enables double-sided collision"
+        description="Enables double-sided collision",
+        get=lambda self: bool(get_face_ncp_property(self, NCP_DOUBLE)),
+        set=lambda self, value: set_face_ncp_property(self, value, NCP_DOUBLE)
     )
     
     bpy.types.Mesh.face_ncp_object_only = bpy.props.BoolProperty(
         name = "Object Only",
-        get=lambda s: bool(get_face_ncp_property(s) & NCP_OBJECT_ONLY),
-        set=lambda s, v: set_face_ncp_property(s, v, NCP_OBJECT_ONLY),
-        description="Enable collision for objects only (ignores camera)"
+        description="Enable collision for objects only (ignores camera)",
+        get=lambda self: bool(get_face_ncp_property(self, NCP_OBJECT_ONLY)),
+        set=lambda self, value: set_face_ncp_property(self, value, NCP_OBJECT_ONLY)
     )
     
     bpy.types.Mesh.face_ncp_camera_only = bpy.props.BoolProperty(
         name = "Camera Only",
-        get=lambda s: bool(get_face_ncp_property(s) & NCP_CAMERA_ONLY),
-        set=lambda s, v: set_face_ncp_property(s, v, NCP_CAMERA_ONLY),
-        description="Enable collision for camera only"
+        description="Enable collision for camera only",
+        get=lambda self: bool(get_face_ncp_property(self, NCP_CAMERA_ONLY)),
+        set=lambda self, value: set_face_ncp_property(self, value, NCP_CAMERA_ONLY)
     )
     
     bpy.types.Mesh.face_ncp_non_planar = bpy.props.BoolProperty(
         name = "Non-planar",
-        get=lambda s: bool(get_face_ncp_property(s) & NCP_NON_PLANAR),
-        set=lambda s, v: set_face_ncp_property(s, v, NCP_NON_PLANAR),
-        description="Face is non-planar"
+        description="Face is non-planar",
+        get=lambda self: bool(get_face_ncp_property(self, NCP_NON_PLANAR)),
+        set=lambda self, value: set_face_ncp_property(self, value, NCP_NON_PLANAR)
     )
     
     bpy.types.Mesh.face_ncp_no_skid = bpy.props.BoolProperty(
         name = "No Skid Marks",
-        get=lambda s: bool(get_face_ncp_property(s) & NCP_NO_SKID),
-        set=lambda s, v: set_face_ncp_property(s, v, NCP_NO_SKID),
-        description="Disable skid marks"
+        description="Disable skid marks",
+        get=lambda self: bool(get_face_ncp_property(self, NCP_NO_SKID)),
+        set=lambda self, value: set_face_ncp_property(self, value, NCP_NO_SKID)
     )
     
     bpy.types.Mesh.face_ncp_oil = bpy.props.BoolProperty(
         name = "Oil",
-        get=lambda s: bool(get_face_ncp_property(s) & NCP_OIL),
-        set=lambda s, v: set_face_ncp_property(s, v, NCP_OIL),
-        description="Ground is oil"
+        description="Ground is oil",
+        get=lambda self: bool(get_face_ncp_property(self, NCP_OIL)),
+        set=lambda self, value: set_face_ncp_property(self, value, NCP_OIL)
     )
     
     bpy.types.Mesh.face_ncp_nocoll = bpy.props.BoolProperty(
         name = "No Collision",
-        get=lambda s: bool(get_face_ncp_property(s) & NCP_NOCOLL),
-        set=lambda s, v: set_face_ncp_property(s, v, NCP_NOCOLL),
-        description="Face will be ignored when exporting"
+        description="Face will be ignored when exporting",
+        get=lambda self: bool(get_face_ncp_property(self, NCP_NOCOLL)),
+        set=lambda self, value: set_face_ncp_property(self, value, NCP_NOCOLL)
     )    
     
     bpy.types.Scene.vertex_color_picker = bpy.props.FloatVectorProperty(

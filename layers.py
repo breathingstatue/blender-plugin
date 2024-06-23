@@ -165,49 +165,6 @@ def update_vertex_alpha(self, context):
         # Update the edit mesh
         bmesh.update_edit_mesh(active_object.data)
 
-def get_face_material(self):
-    eo = bpy.context.edit_object
-    bm = get_edit_bmesh(eo)
-    
-    if eo is None or eo.type != 'MESH' or not eo.mode == 'EDIT':
-        return 0
-    
-    if not bm or not hasattr(bm, 'faces'):
-        return 0
-    
-    layer = (bm.faces.layers.int.get("Material") or
-             bm.faces.layers.int.new("Material"))
-
-    selected_faces = [face for face in bm.faces if face.select]
-
-    materials_differ = any(
-        [face[layer] != selected_faces[0][layer] for face in selected_faces]
-    )
-    if len(selected_faces) == 0 or materials_differ:
-        return -1
-    else:
-        return selected_faces[0][layer]
-
-
-def set_face_material(self, value):
-    eo = bpy.context.edit_object
-    bm = get_edit_bmesh(eo)
-    mesh = eo.data
-    layer = (bm.faces.layers.int.get("Material") or
-             bm.faces.layers.int.new("Material"))
-    vc_layer = (bm.loops.layers.color.get("NCPPreview") or
-                bm.loops.layers.color.new("NCPPreview"))
-
-    for face in bm.faces:
-        if face.select:
-            face[layer] = value
-            for loop in face.loops:
-                loop[vc_layer][0] = COLORS[value][0]
-                loop[vc_layer][1] = COLORS[value][1]
-                loop[vc_layer][2] = COLORS[value][2]
-    bmesh.update_edit_mesh(mesh, destructive=False)
- 
-
 def get_face_texture(self):
     eo = bpy.context.edit_object
     bm = get_edit_bmesh(eo)
@@ -274,104 +231,143 @@ def get_face_env(self):
     return [*col, selected_faces[0][env_alpha_layer]]
 
 
-def get_face_property(self):
-    eo = bpy.context.edit_object
-    
-    if eo is None or eo.type != 'MESH' or not eo.mode == 'EDIT':
-        return 0
+def get_face_property(mesh, prop_mask):
+    obj = bpy.context.object
+    if obj.type != 'MESH' or bpy.context.mode != 'EDIT_MESH':
+        return False  # Check if we are in the correct context and mode
 
-    bm = get_edit_bmesh(eo)
-
-    if not bm or not hasattr(bm, 'faces'):
-        return 0
-
+    bm = bmesh.from_edit_mesh(mesh)  # Access bmesh of the current mesh
     layer = bm.faces.layers.int.get("Type") or bm.faces.layers.int.new("Type")
+
     selected_faces = [face for face in bm.faces if face.select]
     if not selected_faces:
-        return 0
+        return False
 
-    prop = selected_faces[0][layer]
-    for face in selected_faces[1:]:  # Avoid checking the first face again
-        prop = prop & face[layer]
+    return all((face[layer] & prop_mask) == prop_mask for face in selected_faces)
 
-    return prop
+def set_face_property(mesh, value, prop_mask):
+    if bpy.context.mode != 'EDIT_MESH':
+        return  # Ensure we are in edit mode
 
-
-def set_face_property(obj, value, FACE_PROP_MASK):
-    eo = bpy.context.edit_object
-    bm = get_edit_bmesh(eo)
+    bm = bmesh.from_edit_mesh(mesh)  # Access bmesh of the current mesh
     layer = bm.faces.layers.int.get("Type") or bm.faces.layers.int.new("Type")
+    modified = False  # Initialize the modified flag
+
     for face in bm.faces:
         if face.select:
-            print("face[layer] before operation:", face[layer], "type:", type(face[layer]))
-            face[layer] = face[layer] | FACE_PROP_MASK if value else face[layer] & ~FACE_PROP_MASK
-            
+            current = face[layer]
+            new = current | prop_mask if value else current & ~prop_mask
+            if new != current:
+                face[layer] = new
+                modified = True
 
-def get_face_ncp_property(self):
-    eo = bpy.context.edit_object
-    
-    # Ensure we have an edit object
-    if eo is None or eo.type != 'MESH':
-        return 0
+    if modified:
+        bmesh.update_edit_mesh(mesh)  # Update mesh if modifications were made    
 
-    bm = get_edit_bmesh(eo)
-
-    if not bm or not hasattr(bm, 'faces'):
-        return 0
-
+def get_face_ncp_property(mesh, prop_mask):
+    if bpy.context.mode != 'EDIT_MESH':
+        return False
+    bm = bmesh.from_edit_mesh(mesh)
     layer = bm.faces.layers.int.get("NCPType") or bm.faces.layers.int.new("NCPType")
+
     selected_faces = [face for face in bm.faces if face.select]
     if not selected_faces:
-        return 0
+        return False
 
-    prop = selected_faces[0][layer]
-    for face in selected_faces[1:]:  # Skip the first as it's already included in prop
-        prop = prop & face[layer]
+    return all((face[layer] & prop_mask) == prop_mask for face in selected_faces)
 
-    return prop
+def set_face_ncp_property(mesh, value, prop_mask):
+    # Assume mesh is a bpy.types.Mesh
+    if bpy.context.mode != 'EDIT_MESH':
+        return
+    bm = bmesh.from_edit_mesh(mesh)
+    layer = bm.faces.layers.int.get("NCPType") or bm.faces.layers.int.new("NCPType")
 
+    modified = False  # Initialize the modified flag
 
-def set_face_ncp_property(obj, value, NCP_PROP_MASK):
-    eo = bpy.context.edit_object
-    bm = get_edit_bmesh(eo)
-    layer = (bm.faces.layers.int.get("NCPType") or
-             bm.faces.layers.int.new("NCPType"))
     for face in bm.faces:
         if face.select:
-            face[layer] = face[layer] | NCP_PROP_MASK if value else face[layer] & ~NCP_PROP_MASK
+            current = face[layer]
+            new = current | prop_mask if value else current & ~prop_mask
+            if new != current:
+                face[layer] = new
+                modified = True
 
+    if modified:
+        bmesh.update_edit_mesh(mesh)
 
-def select_faces(context, prop):
-    eo = bpy.context.edit_object
-    bm = get_edit_bmesh(eo)
-    flag_layer = (bm.faces.layers.int.get("Type") or
-                  bm.faces.layers.int.new("Type"))
+def get_face_material(self):
+    edit_object = bpy.context.edit_object
+    bm = get_edit_bmesh(edit_object)
+    
+    if edit_object is None or edit_object.type != 'MESH' or not edit_object.mode == 'EDIT':
+        return 0
+    
+    if not bm or not hasattr(bm, 'faces'):
+        return 0
+    
+    material_layer = bm.faces.layers.int.get("Material") or bm.faces.layers.int.new("Material")
+
+    selected_faces = [face for face in bm.faces if face.select]
+
+    if not selected_faces:
+        return -1
+
+    first_material = selected_faces[0][material_layer]
+    materials_differ = any(face[material_layer] != first_material for face in selected_faces)
+    
+    return -1 if materials_differ else first_material
+
+def set_face_material(self, value):
+    edit_object = bpy.context.edit_object
+    if edit_object is None or edit_object.type != 'MESH' or not edit_object.mode == 'EDIT':
+        return
+
+    bm = bmesh.from_edit_mesh(edit_object.data)
+    material_layer = bm.faces.layers.int.get("Material") or bm.faces.layers.int.new("Material")
+
+    # Initialize the dictionary to store materials
+    materials_dict = {}
+
+    for poly in bm.faces:
+        # Fetch color and create material if not already existing
+        color_key = COLORS[value]
+        if color_key not in materials_dict:
+            mat = bpy.data.materials.new(name=f"Material_{color_key}")
+            mat.use_nodes = True
+            bsdf = mat.node_tree.nodes.get('Principled BSDF')
+            bsdf.inputs['Base Color'].default_value = (*color_key, 1.0)  # RGB + alpha
+            materials_dict[color_key] = mat
+            edit_object.data.materials.append(mat)
 
     for face in bm.faces:
-        if face[flag_layer] & prop:
-            face.select = not face.select
+        if face.select:
+            face[material_layer] = value
+            color_key = COLORS[value]
+            mat_name = f"Material_{color_key}"
+            mat_index = edit_object.data.materials.find(mat_name)
+            if mat_index == -1:
+                mat = bpy.data.materials.get(mat_name)
+                if not mat:
+                    mat = bpy.data.materials.new(name=mat_name)
+                    mat.use_nodes = True
+                    bsdf = mat.node_tree.nodes.get('Principled BSDF')
+                    bsdf.inputs['Base Color'].default_value = (*color_key, 1.0)
+                    edit_object.data.materials.append(mat)
+                mat_index = edit_object.data.materials.find(mat_name)
+            face.material_index = mat_index
 
-
-def select_ncp_faces(context, prop):
-    eo = bpy.context.edit_object
-    bm = get_edit_bmesh(eo)
-    flag_layer = (bm.faces.layers.int.get("NCPType") or
-                  bm.faces.layers.int.new("NCPType"))
-
-    for face in bm.faces:
-        if face[flag_layer] & prop:
-            face.select = not face.select
-
+    bmesh.update_edit_mesh(edit_object.data, destructive=False)
 
 def select_ncp_material(self, context):
-    eo = bpy.context.edit_object
-    bm = get_edit_bmesh(eo)
+    edit_object = bpy.context.edit_object
+    bm = get_edit_bmesh(edit_object)
     mat = int(self.select_material)
 
-    material_layer = (bm.faces.layers.int.get("Material") or
-                      bm.faces.layers.int.new("Material"))
+    material_layer = bm.faces.layers.int.get("Material") or bm.faces.layers.int.new("Material")
     count = 0
     count_sel = 0
+
     for face in bm.faces:
         if face[material_layer] == mat:
             count += 1
@@ -381,4 +377,4 @@ def select_ncp_material(self, context):
                 count_sel += 1
 
     if count == 0:
-        msg_box("No {} materials found.".format(MATERIALS[mat+1][1]))    
+        msg_box("No {} materials found.".format(MATERIALS[mat+1][1]))

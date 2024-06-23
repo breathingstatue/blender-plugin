@@ -14,12 +14,10 @@ if "bpy" in locals():
 
 import bpy
 import bmesh
-import mathutils
 
 from . import common
 from . import rvstruct
-
-from .rvstruct import NCP, Vector
+from .rvstruct import NCP, Vector as RVVector, Polyhedron, Plane
 from .common import *
 from mathutils import Color
 
@@ -40,74 +38,79 @@ def intersect(d1, n1, d2, n2, d3, n3):
             d3 * n1.cross(n2)
             ) / det
 
-
 def import_file(filepath, scene):
-
     with open(filepath, 'rb') as file:
         filename = os.path.basename(filepath)
-        ncp = NCP(file)
-        dprint("Imported NCP file.")
+        ncp = NCP(file)  # Assuming NCP is implemented to read file data
+        print("Imported NCP file.")
 
-    filename = os.path.basename(filepath)
-    # Creates a new mesh and bmesh
-    me = bpy.data.meshes.new(filename)
+    # Create a new mesh and bmesh
+    me = bpy.data.meshes.new(name=filename)
     bm = bmesh.new()
 
+    # Initialize the dictionary to store materials
+    materials_dict = {}
+
+    # Add custom layers to faces
     material_layer = bm.faces.layers.int.new("Material")
     type_layer = bm.faces.layers.int.new("NCPType")
-    vc_layer = bm.loops.layers.color.new("NCPPreview")
 
-    # Goes through all polyhedra and creates faces from them
     for poly in ncp.polyhedra:
-        # distances
+        # Calculate distances and normals for intersection points
         ds = [-to_blender_scale(p.distance) for p in poly.planes]
-        # normals
-        ns = [Vector(data=to_blender_axis(p.normal)) for p in poly.planes]
+        ns = [RVVector(data=to_blender_axis(p.normal)) for p in poly.planes]
         verts = []
 
+        # Determine vertex positions by intersecting planes
         if poly.type & NCP_QUAD:
             verts.append(intersect(ds[0], ns[0], ds[1], ns[1], ds[2], ns[2]))
             verts.append(intersect(ds[0], ns[0], ds[2], ns[2], ds[3], ns[3]))
             verts.append(intersect(ds[0], ns[0], ds[3], ns[3], ds[4], ns[4]))
             verts.append(intersect(ds[0], ns[0], ds[4], ns[4], ds[1], ns[1]))
-            face = (0, 3, 2, 1)
+            face_indices = (0, 3, 2, 1)
         else:
             verts.append(intersect(ds[0], ns[0], ds[1], ns[1], ds[2], ns[2]))
             verts.append(intersect(ds[0], ns[0], ds[2], ns[2], ds[3], ns[3]))
             verts.append(intersect(ds[0], ns[0], ds[3], ns[3], ds[1], ns[1]))
-            face = (0, 2, 1)
+            face_indices = (0, 2, 1)
 
-        # Skips the poly if no intersection was found
-        if None in verts:
-            dprint('Skipping polyhedron (no intersection).')
+        # Skip polyhedron if no valid intersection is found
+        if any(v is None for v in verts):
+            print('Skipping polyhedron (no intersection).')
             continue
 
-        # Creates the bmverts and face
-        bmverts = []
-        for x in face:
-            bmverts.append(bm.verts.new(verts[x]))
-        face = bm.faces.new(bmverts)
+        # Create vertices in BMesh
+        bmverts = [bm.verts.new(v) for v in verts if v]
+        
+        try:
+            new_face = bm.faces.new([bmverts[i] for i in face_indices])
+        except ValueError:
+            # Handle possible error in creating faces, e.g., due to duplicate vertices
+            continue
 
-        # Assigns the material and type
-        face[material_layer] = poly.material
-        face[type_layer] = poly.type
+        # Assign the material and type
+        new_face[material_layer] = poly.material
+        new_face[type_layer] = poly.type
 
-        # Sets preview colors
-        for lnum in range(len(face.loops)):
-            face.loops[lnum][vc_layer][0] = COLORS[poly.material][0]
-            face.loops[lnum][vc_layer][1] = COLORS[poly.material][1]
-            face.loops[lnum][vc_layer][2] = COLORS[poly.material][2]
+        # Fetch color and create material if not already existing
+        color_key = COLORS[poly.material]
+        if color_key not in materials_dict:
+            mat = bpy.data.materials.new(name=f"Material_{color_key}")
+            mat.use_nodes = True
+            bsdf = mat.node_tree.nodes.get('Principled BSDF')
+            bsdf.inputs['Base Color'].default_value = (*color_key, 1.0)  # RGB + alpha
+            materials_dict[color_key] = mat
+            me.materials.append(mat)
 
-        bm.verts.ensure_lookup_table()
+        # Assign material to the new face
+        new_face.material_index = me.materials.find(materials_dict[color_key].name)
 
-    # Converts the bmesh back to a mesh and frees resources
-    bm.normal_update()
+    # Finish up and convert to mesh
     bm.to_mesh(me)
     bm.free()
 
-    print("Creating Blender object for {}...".format(filename))
-    ob = bpy.data.objects.new(filename, me)
-    # ob.show_wire = True
-    # ob.show_all_edges = True
+    # Create object and add to the scene
+    ob = bpy.data.objects.new(name=filename, object_data=me)
     bpy.context.collection.objects.link(ob)
     bpy.context.view_layer.objects.active = ob
+    ob.select_set(True)
