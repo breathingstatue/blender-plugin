@@ -23,15 +23,12 @@ class RVIO_PT_RevoltFacePropertiesPanel(bpy.types.Panel):
         col.prop(mesh, "face_mirror", text="Mirror")
         col.prop(mesh, "face_additive", text="Additive blending")
         col.prop(mesh, "face_no_envmapping", text="No EnvMap")
-
-        # Only show env mapping related properties if env mapping is enabled
-        if mesh.get("face_envmapping"):  # Ensure 'face_envmapping' exists on the mesh
+        if mesh.get("face_envmapping"):
             scol = col.column(align=True)
             scol.prop(mesh, "face_envmapping", text="EnvMap")
-            scol.prop(mesh, "face_env", text="Environment Color")
+            scol.prop(mesh, "face_env", text="EnvMap Color")
         else:
             col.prop(mesh, "face_envmapping", text="EnvMap")
-
         col.prop(mesh, "face_cloth", text="Cloth effect")
         col.prop(mesh, "face_skip", text="Do not export")
 
@@ -49,3 +46,8 @@ class RVIO_PT_RevoltFacePropertiesPanel(bpy.types.Panel):
         layout.label(text="Material Settings:")
         layout.prop(mesh, "face_material", text="Set")
         layout.prop(mesh, "select_material", text="Find")
+        
+        box = layout.box()
+        box.label(text="Texture")
+        col = box.column(align=True)
+        col.prop(mesh, "face_texture", text="Texture Number")

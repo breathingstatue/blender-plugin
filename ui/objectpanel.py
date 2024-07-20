@@ -18,25 +18,12 @@ class RVIO_PT_RevoltObjectPanel(bpy.types.Panel):
         layout = self.layout
         obj = context.active_object
 
-        if obj:
-            col = layout.column()
-            col.prop(obj, "fin_env", text="Environment Map On/Off")
-            col.operator("object.set_environment_map_color", text="Set EnvMap Color")
-    
-        # Debug Properties
-        box = layout.box()
-        box.label(text="Debug Properties:")
-        col = box.column(align=True)
-        col.prop(obj, "is_bcube", text="Object is a BigCube")
-        col.prop(obj, "is_cube", text="Object is a Cube")
-        col.prop(obj, "is_bbox", text="Object is a Boundary Box")
-        col.prop(obj, "ignore_ncp", text="Ignore for .ncp")
-        col.operator("object.set_bcube_mesh_indices")
-
         # Instance properties
         box = layout.box()
         box.label(text="Instance Properties:")
         col = box.column(align=True)
+        col.prop(obj, "fin_env", text="EnvMap")
+        col.operator("object.fin_envmap_color", text="EnvMap Color")
         col.prop(obj, "fin_model_rgb", text="Use Model Color")
         col.prop(obj, "fin_hide", text="Hide")
         col.prop(obj, "fin_priority", text="Fin Priority", slider=True)
@@ -57,3 +44,13 @@ class RVIO_PT_RevoltObjectPanel(bpy.types.Panel):
         hull_box.label(text="Hull Properties:")
         hull_col = hull_box.column(align=True)
         hull_col.operator("hull.generate")
+        
+        # Debug properties
+        box = layout.box()
+        box.label(text="Debug Properties:")
+        col = box.column(align=True)
+        col.prop(obj, "is_bcube", text="Object is a BigCube")
+        col.prop(obj, "is_cube", text="Object is a Cube")
+        col.prop(obj, "is_bbox", text="Object is a Boundary Box")
+        col.prop(obj, "ignore_ncp", text="Ignore for .ncp")
+        col.operator("object.set_bcube_mesh_indices")
