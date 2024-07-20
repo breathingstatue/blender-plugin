@@ -128,7 +128,7 @@ from .layers import set_face_ncp_property, get_face_ncp_property, get_face_env, 
 from .layers import alpha_values, update_vertex_color_picker, update_vertex_alpha
 from .operators import ImportRV, ExportRV, RVIO_OT_ReadCarParameters, RVIO_OT_SelectRevoltDirectory, ButtonReExport
 from .operators import VertexColorCreateLayer, VertexColorRemove, SetVertexColor, BakeShadow, InstanceColor
-from .operators import TexAnimDirection, SetEnvironmentMapColor
+from .operators import TexAnimDirection, InstanceEnvMapColor
 from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, UseTextureNumber
 from .operators import SetInstanceProperty, RemoveInstanceProperty, LaunchRV, TexturesSave
 from .operators import TexturesRename, CarParametersExport, ButtonZoneHide, AddTrackZone
@@ -140,7 +140,6 @@ from .rvstruct import Frame, Color, Instances, Instance, PosNodes, PosNode, NCP,
 from .rvstruct import LookupList, Hull, ConvexHull, Edge, Interior, Sphere, RIM, MirrorPlane, TrackZones, Zone
 from .texanim import update_ta_max_frames, update_ta_current_slot, update_ta_current_frame, update_ta_current_frame_uv
 from .texanim import update_ta_current_frame_delay, update_ta_current_frame_tex, get_texture_items, update_ta_max_slots
-from .w_out import update_split_size
 from .ui.faceprops import RVIO_PT_RevoltFacePropertiesPanel
 from .ui.headers import RVIO_PT_RevoltIOToolPanel
 from .ui.helpers import RVIO_PT_RevoltHelpersPanelMesh
@@ -155,7 +154,7 @@ from .ui.zone import RVIO_PT_RevoltZonePanel
 bl_info = {
 "name": "Re-Volt",
 "author": "Marvin Thiel & Theman",
-"version": (20, 24, 5),
+"version": (20, 24, 7),
 "blender": (4, 1, 0),
 "location": "File > Import-Export",
 "description": "Import and export Re-Volt file formats.",
@@ -198,32 +197,37 @@ def register():
     bpy.types.Object.is_instance = bpy.props.BoolProperty(
         name = "Is Instance",
         default = False,
-        description = "Object is an instanced mesh"
+        description = "Object is an instanced mesh."
     )
     
     bpy.types.Object.fin_env = bpy.props.BoolProperty(
-        name="Use Environment Map",
-        default=True
+        name = "Use Environment Map",
+        default = True,
+        description = "If set on, instance is EnvMapped."
     )
     
     bpy.types.Object.fin_no_mirror = bpy.props.BoolProperty(
-        name="Don't show in Mirror Mode",
-        default=False
+        name = "Don't show in Mirror Mode",
+        default = False,
+        description = "If set on, instance doesn't show up in Mirror Mode."
     )
     
     bpy.types.Object.fin_no_lights = bpy.props.BoolProperty(
-        name="Is affected by Light",
-        default=False
+        name = "Is affected by Light",
+        default = False,
+        description = "If set on, instance is not affected by Light."
     )
     
     bpy.types.Object.fin_no_cam_coll = bpy.props.BoolProperty(
-        name="No Camera Collision",
-        default=False
+        name = "No Camera Collision",
+        default = False,
+        description = "If set on, instace has no camera collision."
     )
     
     bpy.types.Object.fin_no_obj_coll = bpy.props.BoolProperty(
-        name="No Object Collision",
-        default=False
+        name = "No Object Collision",
+        default = False,
+        description = "If set on, instance has no object collision."
     )
 
     bpy.types.Scene.envidx = bpy.props.IntProperty(
@@ -248,7 +252,7 @@ def register():
         subtype='COLOR',
         default=(1.0, 1.0, 1.0, 1.0),
         min=0.0, max=1.0,
-        description="Color of the EnvMap",
+        description="Instance EnvMap Color",
         size=4
     )
     
@@ -902,7 +906,7 @@ def register():
     bpy.utils.register_class(ButtonZoneHide)
     bpy.utils.register_class(AddTrackZone)
     bpy.utils.register_class(SetBCubeMeshIndices)
-    bpy.utils.register_class(SetEnvironmentMapColor)
+    bpy.utils.register_class(InstanceEnvMapColor)
     bpy.utils.register_class(InstanceColor)
     bpy.utils.register_class(RVIO_OT_SelectRevoltDirectory)
     
@@ -941,7 +945,7 @@ def unregister():
     # Unregister Operators
     bpy.utils.unregister_class(RVIO_OT_SelectRevoltDirectory)
     bpy.utils.unregister_class(InstanceColor)
-    bpy.utils.unregister_class(SetEnvironmentMapColor)
+    bpy.utils.unregister_class(InstanceEnvMapColor)
     bpy.utils.unregister_class(SetBCubeMeshIndices)
     bpy.utils.unregister_class(AddTrackZone)
     bpy.utils.unregister_class(ButtonZoneHide)

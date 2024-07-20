@@ -695,9 +695,9 @@ class InstanceColor(bpy.types.Operator):
 OBJECTS -----------------------------------------------------------------------
 """
 	
-class SetEnvironmentMapColor(bpy.types.Operator):
-	bl_idname = "object.set_environment_map_color"
-	bl_label = "Set Environment Map Color"
+class InstanceEnvMapColor(bpy.types.Operator):
+	bl_idname = "object.fin_envmap_color"
+	bl_label = "Instance EnvMap Color"
 	bl_options = {'REGISTER', 'UNDO'}
 
 	fin_envcol: bpy.props.FloatVectorProperty(
