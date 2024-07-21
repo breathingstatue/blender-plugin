@@ -18,7 +18,6 @@ import bpy
 import bmesh
 import struct
 from mathutils import Vector
-from collections import deque
 from . import (
     common,
     rvstruct,
@@ -128,46 +127,66 @@ def create_split_mesh(original_mesh, face_indices, original_obj_name, created_ob
     print(f"Created and linked new mesh with {len(face_indices)} faces.")
     return new_obj
 
-def balanced_splits(face_indices, split_size):
-    if len(face_indices) <= split_size:
-        return [face_indices]
+def calculate_bounding_box(mesh):
+    min_x = min_y = min_z = float('inf')
+    max_x = max_y = max_z = float('-inf')
 
-    num_splits = (len(face_indices) + split_size - 1) // split_size
-    balanced_size = len(face_indices) // num_splits
-    extra_faces = len(face_indices) % num_splits
+    for vert in mesh.vertices:
+        min_x = min(min_x, vert.co.x)
+        max_x = max(max_x, vert.co.x)
+        min_y = min(min_y, vert.co.y)
+        max_y = max(max_y, vert.co.y)
+        min_z = min(min_z, vert.co.z)
+        max_z = max(max_z, vert.co.z)
 
-    splits, start = [], 0
-    for _ in range(num_splits):
-        end = start + balanced_size + (1 if extra_faces > 0 else 0)
-        splits.append(face_indices[start:end])
-        start = end
-        if extra_faces > 0:
-            extra_faces -= 1
+    return (min_x, max_x), (min_y, max_y), (min_z, max_z)
 
-    return splits
-
-def split_mesh(obj, split_size_faces, created_objects):
-    split_size = split_size_faces * 2
-    print(f"Starting to split mesh: {obj.name}")
-    if "_split_" in obj.name:
-        return []
-
+def simple_split_mesh_by_grid(obj, split_size_faces):
     bm = bmesh.new()
     bm.from_mesh(obj.data)
     bm.faces.ensure_lookup_table()
 
-    face_indices = [face.index for face in bm.faces]
-    all_splits = balanced_splits(face_indices, split_size)
-    split_objects = []
+    # Calculate the bounding box
+    (min_x, max_x), (min_y, max_y), (min_z, max_z) = calculate_bounding_box(obj.data)
 
-    for split in all_splits:
-        new_obj = create_split_mesh(obj.data, split, obj.name, created_objects)
-        if new_obj:
-            split_objects.append(new_obj)
+    # Determine grid size based on the desired number of faces
+    num_faces = len(bm.faces)
+    num_splits = max(1, num_faces // split_size_faces)
+    grid_size = int(num_splits ** (1/3)) + 1  # Ensure we have enough splits
+
+    # Calculate grid cell dimensions
+    cell_width = (max_x - min_x) / grid_size
+    cell_height = (max_y - min_y) / grid_size
+    cell_depth = (max_z - min_z) / grid_size
+
+    # Create face batches
+    face_batches = []
+    cell_faces = {}
+
+    for face in bm.faces:
+        # Determine the grid cell for the face
+        centroid = face.calc_center_median()
+        cell_x = int((centroid.x - min_x) / cell_width)
+        cell_y = int((centroid.y - min_y) / cell_height)
+        cell_z = int((centroid.z - min_z) / cell_depth)
+        cell_key = (cell_x, cell_y, cell_z)
+
+        if cell_key not in cell_faces:
+            cell_faces[cell_key] = []
+        cell_faces[cell_key].append(face.index)
+
+        # Split batches if they exceed the split size
+        if len(cell_faces[cell_key]) >= split_size_faces:
+            face_batches.append(cell_faces[cell_key])
+            cell_faces[cell_key] = []
+
+    # Add remaining faces
+    for faces in cell_faces.values():
+        if faces:
+            face_batches.append(faces)
 
     bm.free()
-    print(f"Finished splitting mesh: {obj.name}")
-    return split_objects
+    return face_batches
 
 def export_split_world(filepath, context, split_size_faces):
     world = rvstruct.World()
@@ -176,33 +195,30 @@ def export_split_world(filepath, context, split_size_faces):
 
     for obj in context.scene.objects:
         if obj.type == 'MESH' and not obj.hide_render and '_split_' not in obj.name:
-            result = split_mesh(obj, split_size_faces, created_objects)
-            split_meshes_list.extend(result)
+            face_batches = simple_split_mesh_by_grid(obj, split_size_faces)
+            for batch in face_batches:
+                new_obj = create_split_mesh(obj.data, batch, f"{obj.name}_split", created_objects)
+                if new_obj:
+                    split_meshes_list.append(new_obj)
 
     if not split_meshes_list:
         print("No valid meshes to export.")
         return
-
-    print(f"Total meshes prepared for export: {len(split_meshes_list)}")
 
     for split_obj in split_meshes_list:
         if split_obj and split_obj.data:
             converted_mesh = export_mesh(split_obj.data, split_obj, context.scene, filepath, world=world)
             if converted_mesh:
                 world.meshes.append(converted_mesh)
-        else:
-            print(f"Skipping invalid mesh object or missing data for {split_obj}")
 
     world.mesh_count = len(world.meshes)
     world.generate_bigcubes()
 
     with open(filepath, "wb") as file:
         world.write(file)
-    print(f"Export to {filepath} done.")
 
     for obj in created_objects:
         bpy.data.objects.remove(obj, do_unlink=True)
-    print("Cleanup completed, all temporary objects removed.")
 
 def export_standard_world(filepath, context):
     world = rvstruct.World()
@@ -214,10 +230,10 @@ def export_standard_world(filepath, context):
         world.write(file)
 
 def obj_conditions(obj):
-    return obj.data and obj.type == "MESH" and not any(obj.get(attr) for attr in ["is_instance", "is_cube", "is_bcube", "is_bbox", "is_mirror_plane", "is_hull_sphere", "is_hull_convex", "is_track_zone"])
+    return obj.type == "MESH" and obj.data and not any(obj.get(attr) for attr in ["is_instance", "is_cube", "is_bcube", "is_bbox", "is_mirror_plane", "is_hull_sphere", "is_hull_convex", "is_track_zone"])
 
 def export_file(filepath, scene, context):
-    split_size_faces = getattr(context.scene, 'split_size_faces', 100)
+    split_size_faces = getattr(context.scene, 'split_size_faces', 100) * 2
     if getattr(context.scene, 'export_worldcut', False):
         export_split_world(filepath, context, split_size_faces)
     else:

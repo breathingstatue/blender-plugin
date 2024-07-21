@@ -136,7 +136,7 @@ def export_mesh(me, obj, scene, filepath, world=None):
 
     if scene.triangulate_ngons:
         num_ngons = triangulate_ngons(bm)
-        if scene.triangulate_ngons > 0:
+        if num_ngons > 0:  # Check if the number of n-gons is greater than zero
             print("Triangulated {} n-gons".format(num_ngons))
 
     # Gets layers
