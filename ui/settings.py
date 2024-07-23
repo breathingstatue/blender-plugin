@@ -14,28 +14,6 @@ class RVIO_PT_RevoltSettingsPanel(bpy.types.Panel):
         layout = self.layout
         scene = context.scene
         
-        # Directory selection
-        layout.label(text="Select RVGL Directory:")
-        box = layout.box()
-        box.operator("rvio.select_rvgl_dir", text="Browse")
-        # Tagging the area for a redraw
-        for area in context.screen.areas:
-            if area.type == 'PROPERTIES':
-                area.tag_redraw()
-
-        # Display current directory
-        rvgl_dir = context.scene.rvgl_dir
-        directory = rvgl_dir
-        if directory:
-            box.label(text=f"Current Directory: {directory}")
-        else:
-            box.label(text="No directory selected")
-        
-        # General import settings
-        layout.label(text="Import:")
-        layout.operator("rvio.read_car_parameters", text="Read Car Parameters")
-        layout.separator()
-
         # General export settings
         layout.label(text="Export:")
         layout.prop(scene, "export_worldcut", text="Export WorldCut (.w)")
