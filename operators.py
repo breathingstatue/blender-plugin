@@ -594,22 +594,8 @@ class TexturesRename(bpy.types.Operator):
 		
 		return name + suffix2 + suffix1 + ".bmp"
 	
-class UseTextureNumber(bpy.types.Operator):
-	"""Toggle Use Texture Number"""
-	bl_idname = "helpers.use_texture_number"
-	bl_label = "Use Texture Number"
-	bl_description = "Toggle the use of texture number for the active object"
-
-	def execute(self, context):
-		context.scene.use_tex_num = not context.scene.use_tex_num
-		if context.scene.use_tex_num:
-			self.report({'INFO'}, "Uses Texture number")
-		else:
-			self.report({'INFO'}, "Doesn't Use Texture Number")
-		return {'FINISHED'}
-
 class CarParametersExport(bpy.types.Operator):
-	bl_idname = "helpers.car_parameters_export"
+	bl_idname = "headers.car_parameters_export"
 	bl_label = "Car parameters to clipboard"
 	bl_description = (
 		"Copies most important parameters into clipboard"
@@ -1372,3 +1358,6 @@ class SetVertexColor(bpy.types.Operator):
 
 def menu_func_import(self, context):
 	self.layout.operator(ImportRV.bl_idname, text="Re-Volt (.prm, .w, .ncp, .fin, .rim., .hul, .taz, parameters.txt)")
+
+def menu_func_export(self, context):
+	self.layout.operator(ExportRV.bl_idname, text="Re-Volt (.prm, .fin, .ncp, .hul, .w, .rim, .taz)")
