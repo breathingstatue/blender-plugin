@@ -226,24 +226,8 @@ FORMATS = {
 
 
 """
-Constants for the tool shelf functions
+Texture Animation Header.
 """
-
-BAKE_LIGHTS = [
-	("None", "None", "", -1),
-	("HEMI", "Soft", "", 0),
-	("SUN", "Hard", "", 1)
-]
-
-BAKE_LIGHT_ORIENTATIONS = [
-	("X", "X (Horizontal)", "", 0),
-	("Y", "Y (Horizontal)", "", 1),
-	("Z", "Z (Vertical)", "", 2)
-]
-BAKE_SHADOW_METHODS = [
-	("ADAPTIVE_QMC", "Default (fast)", "", "ALIASED", 0),
-	("CONSTANT_QMC", "Nicer (slow)", "", "ANTIALIASED", 1)
-]
 
 TA_CSV_HEADER = "Slot,Frame,Texture,Delay,U0,V0,U1,V1,U2,V2,U3,V3"
 

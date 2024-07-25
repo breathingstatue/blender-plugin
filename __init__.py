@@ -120,7 +120,7 @@ if "rim_in" in locals():
 if "rim_out" in locals():
 	importlib.reload(rim_out)
 
-from .common import DialogOperator, TEX_ANIM_MAX, TEX_PAGES_MAX, BAKE_LIGHTS, BAKE_LIGHT_ORIENTATIONS, BAKE_SHADOW_METHODS
+from .common import DialogOperator, TEX_ANIM_MAX, TEX_PAGES_MAX
 from .common import FACE_DOUBLE, FACE_TRANSLUCENT, FACE_MIRROR, FACE_TRANSL_TYPE, FACE_TEXANIM, FACE_NOENV, FACE_ENV, FACE_CLOTH, FACE_SKIP
 from .common import NCP_DOUBLE, NCP_NO_SKID, NCP_OIL, NCP_OBJECT_ONLY, NCP_CAMERA_ONLY, NCP_NOCOLL, MATERIALS
 from .layers import select_ncp_material, get_face_material, set_face_material, set_face_texture, get_face_texture
@@ -835,46 +835,6 @@ def register():
 	#    description = "Bake scene lighting to Instance model environment color"
 	#)
 	
-	#Unused
-	#bpy.types.Scene.light1 = bpy.props.EnumProperty(
-	#    name = "Light 1",
-	#    items = BAKE_LIGHTS,
-	#    default = "SUN",
-	#    description = "Type of light"
-	#)
-	
-	#Unused
-	#bpy.types.Scene.light2 = bpy.props.EnumProperty(
-	#    name = "Light 2",
-	#    items = BAKE_LIGHTS,
-	#    default = "AO",
-	#    description = "Type of light"
-	#)
-	
-	#Unused
-	#bpy.types.Scene.light_intensity1 = bpy.props.FloatProperty(
-	#    name = "Intensity 1",
-	#    min = 0.0,
-	#    default = 1.5,
-	#    description = "Intensity of Light 1"
-	#)
-	
-	#Unused
-	#bpy.types.Scene.light_intensity2 = bpy.props.FloatProperty(
-	#    name = "Intensity 2",
-	#    min = 0.0,
-	#    default = .05,
-	#    description = "Intensity of Light 2"
-	#)
-	
-	#Unused
-	#bpy.types.Scene.light_orientation = bpy.props.EnumProperty(
-	#    name = "Orientation",
-	#    items = BAKE_LIGHT_ORIENTATIONS,
-	#    default = "Z",
-	#    description = "Directions of the lights"
-	#)
-
 	
 	#Register Operators
 	bpy.utils.register_class(DialogOperator)

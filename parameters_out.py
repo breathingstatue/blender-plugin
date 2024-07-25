@@ -8,11 +8,13 @@ Prints most valuable car parameters into clipboard.
 """
 
 import bpy
+import bmesh
 import importlib
-from mathutils import Vector, Matrix
+from mathutils import Vector, Matrix, Euler
 import numpy as np
 from . import common
 from .common import to_revolt_coord, to_revolt_scale
+from .layers import get_average_vcol2
 
 # Check if 'bpy' is already in locals to determine if this is a reload scenario
 if "bpy" in locals():
@@ -20,47 +22,69 @@ if "bpy" in locals():
 
 from .common import to_revolt_coord  # Assuming to_revolt_coord exists in common and converts Blender to Re-Volt coordinates
 
-def append_model_info(params):
-    params += f"MODEL\t0\t\"cars\\car\\body.prm\"\n"
-    params += f"MODEL\t1\t\"cars\\car\\wheelfl.prm\"\n"
-    params += f"MODEL\t2\t\"cars\\car\\wheelfr.prm\"\n"
-    params += f"MODEL\t3\t\"cars\\car\\wheelbl.prm\"\n"
-    params += f"MODEL\t4\t\"cars\\car\\wheelbr.prm\"\n"
+def append_model_info(params, car_name):
+    params += f"MODEL\t0\t\"cars\\{car_name}\\body.prm\"\n"
+    params += f"MODEL\t1\t\"cars\\{car_name}\\wheelfl.prm\"\n"
+    params += f"MODEL\t2\t\"cars\\{car_name}\\wheelfr.prm\"\n"
+    params += f"MODEL\t3\t\"cars\\{car_name}\\wheelbl.prm\"\n"
+    params += f"MODEL\t4\t\"cars\\{car_name}\\wheelbr.prm\"\n"
 
-    # Append "NONE" for models 5 to 16
-    for i in range(5, 17):
+    spring_found = False
+    for obj in bpy.data.objects:
+        if obj.name.startswith(("spring")):
+            params += f"MODEL\t5\t\"cars\\{car_name}\\spring.prm\"\n"
+            spring_found = True
+            break
+
+    # Append "NONE" for models 6 to 8
+    for i in range(6, 8):
+        params += f"MODEL\t{i}\t\"NONE\"\n"
+        
+    axle_found = False
+    for obj in bpy.data.objects:
+        if obj.name.startswith(("axle")):
+            params += f"MODEL\t9\t\"cars\\{car_name}\\axle.prm\"\n"
+            axle_found = True
+            break
+        
+    # Append "NONE" for models 10 to 16
+    for i in range(10, 16):
         params += f"MODEL\t{i}\t\"NONE\"\n"
 
     # Append models 17 and 18
     params += f"MODEL\t17\t\"cars\\misc\\Aerial.m\"\n"
     params += f"MODEL\t18\t\"cars\\misc\\AerialT.m\"\n"
 
-    # Append TPAGE, COLL, and EnvRGB
-    params += f"TPAGE\t\"cars\\car\\car.bmp\"\n"
-    params += f"COLL\t\"cars\\car\\hull.hul\"\n"
-    params += f"EnvRGB\t000 000 000\n\n"
+    # Append TPAGE, COLL
+    params += f"TPAGE\t\"cars\\{car_name}\\car.bmp\"\n"
+    params += f"COLL\t\"cars\\{car_name}\\hull.hul\"\n"
+    
+    # Fetch the EnvRGB color
+    env_rgb = copy_average_vcol_to_clipboard()
+    
+    params += f"EnvRGB\t{env_rgb}\n\n"
             
     return params
             
 def append_additional_params(params):
     params += f"BestTime\tTRUE\n"
     params += f"Selectable\tTRUE\n"
-    params += f"Class\t\t0\t; Engine type (0 = Elec, 1 = Glow, 2 = Other)\n"
-    params += f"Obtain\t\t0\t; Obtain method\n"
-    params += f"Rating\t\t0\t; Skill level (rookie, amateur, ...)\n"
-    params += f"TopEnd\t\t1000.000000\t; Actual top speed (mph) for frontend bars\n"
-    params += f"Acc\t\t1.000000\t; Acceleration rating (empirical)\n"
-    params += f"Weight\t\t1.000000\t; Scaled weight (for frontend bars)\n"
-    params += f"Handling\t50.000000\t; Handling ability (empirical and totally subjective)\n"
-    params += f"Trans\t\t0\t; Transmission type (calculate in-game anyway...)\n"
-    params += f"MaxRevs\t\t0.500000\t; Max Revs (for rev counter)\n\n"
-    params += f"SteerRate\t3.000000\t; Rate at which steer angle approaches value from input\n"
-    params += f"SteerMod\t0.400000\t; Additional steering modulation\n"
-    params += f"EngineRate\t4.500000\t; Rate at which Engine voltage approaches set value\n"
-    params += f"TopSpeed\t10.000000\t; Car's theoretical top speed (not including friction...)\n"
-    params += f"DownForceMod\t2.000000\t; Downforce modifier when car on floor\n"
-    params += f"CoM\t\t0.000000 0.000000 0.000000\t; Centre of mass relative to model centre\n"
-    params += f"Weapon\t\t0.000000 -32.000000 64.000000\t; Weapon generation offset\n\n"
+    params += f"Class\t\t0\t\t; Engine type (0 = Elec, 1 = Glow, 2 = Other)\n"
+    params += f"Obtain\t\t0\t\t; Obtain method\n"
+    params += f"Rating\t\t0\t\t; Skill level (rookie, amateur, ...)\n"
+    params += f"TopEnd\t\t3000.000000\t\t; Actual top speed (mph) for frontend bars\n"
+    params += f"Acc\t\t5.000000\t\t; Acceleration rating (empirical)\n"
+    params += f"Weight\t\t1.000000\t\t; Scaled weight (for frontend bars)\n"
+    params += f"Handling\t50.000000\t\t; Handling ability (empirical and totally subjective)\n"
+    params += f"Trans\t\t0\t\t; Transmission type (calculate in-game anyway...)\n"
+    params += f"MaxRevs\t\t0.500000\t\t; Max Revs (for rev counter)\n\n"
+    params += f"SteerRate\t3.000000\t\t; Rate at which steer angle approaches value from input\n"
+    params += f"SteerMod\t0.400000\t\t; Additional steering modulation\n"
+    params += f"EngineRate\t4.500000\t\t; Rate at which Engine voltage approaches set value\n"
+    params += f"TopSpeed\t32.000000\t\t; Car's theoretical top speed (not including friction...)\n"
+    params += f"DownForceMod\t2.000000\t\t; Downforce modifier when car on floor\n"
+    params += f"CoM\t\t0.000000 2.000000 -4.000000\t\t; Centre of mass relative to model centre\n"
+    params += f"Weapon\t\t0.000000 -32.000000 64.000000\t\t; Weapon generation offset\n\n"
 
     return params
     
@@ -70,77 +94,175 @@ def append_body_info(params):
     params += f"ModelNum\t0\n"
     params += f"Offset\t\t0, 0, 0\n"
     params += f"Mass\t\t1.000000\n"
-    params += f"Inertia\t\t1000.000000 0.000000 0.000000\n"
-    params += f"\t\t0.000000 2000.000000 0.000000\n"
+    params += f"Inertia\t\t800.000000 0.000000 0.000000\n"
+    params += f"\t\t0.000000 1000.000000 0.000000\n"
     params += f"\t\t0.000000 0.000000 500.000000\n"
-    params += f"Gravity\t\t2000\n"
+    params += f"Gravity\t\t2200\n"
     params += f"Hardness\t0.000000\n"
-    params += f"Resistance\t0.001000\n"
-    params += f"AngRes\t\t0.001000\n"
-    params += f"ResMod\t\t25.000000\n"
-    params += f"Grip\t\t0.010000\n"
+    params += f"Resistance\t0.001000\t\t; Linear air resistance\n"
+    params += f"AngRes\t\t0.001000\t\t; Angular air resistance\n"
+    params += f"ResMod\t\t25.000000\t\t; Ang air resistance scale when in air\n"
+    params += f"Grip\t\t0.010000\t\t; Converts downforce to friction value\n"
     params += f"StaticFriction\t0.800000\n"
     params += f"KineticFriction\t0.400000\n"
     params += "}\t\t; End Body\n\n"
     
     return params
 
-def append_wheel_info(params, body, processed):
-    # Mapping wheel suffixes to their model numbers
-    wheel_mapping = {
-        "fl": 1,  # Front Left
-        "fr": 2,  # Front Right
-        "bl": 3,  # Back Left
-        "br": 4,  # Back Right
-    }
+def append_front_left_wheel(params, body, processed):
+    wheel_names = [
+        ("wheelfl", "wheelfl.prm", "wheell.prm")
+    ]
+    wheels = get_objects_by_exact_names(wheel_names, parent_object=body)
 
-    for suffix, model_num in wheel_mapping.items():
-        wheel_name = f"wheel{suffix}"
-        wheel_found = False
-        for child in body.children:
-            if wheel_name in child.name.lower() and child.name not in processed:
-                location = to_revolt_coord(child.location)
-                params += f"\nWHEEL {model_num - 1} {{\t; Start Wheel\n"
-                params += f"ModelNum\t{model_num}\n"
-                params += f"Offset1\t\t{location[0]:.6f} {location[1]:.6f} {location[2]:.6f}\n"
-                params += f"Offset2\t\t-2.000000 0.000000 0.000000\n"
-                params += f"IsPresent\tTRUE\nIsPowered\tTRUE\nIsTurnable\tTRUE\n"
-                params += f"SteerRatio\t-0.500000\nEngineRatio\t10000.000000\n"
-                params += f"Radius\t\t10.000000\n"
-                params += f"Mass\t\t0.150000\n"
-                params += f"Gravity\t\t2000.000000\n"
-                params += f"MaxPos\t\t3.000000\n"
-                params += f"SkidWidth\t10.000000\n"
-                params += f"ToeIn\t\t0.000000\n"
-                params += f"AxleFriction\t0.020000\n"
-                params += f"Grip\t\t0.015000\n"
-                params += f"StaticFriction\t1.800000\nKineticFriction\t1.650000\n"
-                params += "}\t\t; End Wheel\n\n"
-                processed.add(child.name)
-                wheel_found = True
-                break
+    # Check for any of the matching keys
+    child = wheels.get("wheelfl") or wheels.get("wheelfl.prm") or wheels.get("wheell.prm")
+    if child and child.name not in processed:
+        location = to_revolt_coord(child.location)
+        params += f"\nWHEEL 0 {{\t; Start Wheel\n"
+        params += f"ModelNum\t1\n"
+        params += f"Offset1\t\t{location[0]:.6f} {location[1]:.6f} {location[2]:.6f}\n"
+        params += f"Offset2\t\t-0.000000 0.000000 0.000000\n"
+        params += f"IsPresent\tTRUE\nIsPowered\tTRUE\nIsTurnable\tTRUE\n"
+        params += f"SteerRatio\t-0.500000\nEngineRatio\t12000.000000\n"
+        params += f"Radius\t\t12.000000\n"
+        params += f"Mass\t\t0.150000\n"
+        params += f"Gravity\t\t2200.000000\n"
+        params += f"MaxPos\t\t5.000000\n"
+        params += f"SkidWidth\t10.000000\n"
+        params += f"ToeIn\t\t0.000000\n"
+        params += f"AxleFriction\t0.020000\n"
+        params += f"Grip\t\t0.014000\n"
+        params += f"StaticFriction\t1.500000\nKineticFriction\t1.500000\n"
+        params += "}\t\t; End Wheel\n\n"
+        processed.add(child.name)
+    else:
+        print(f"Warning: wheelfl  not found in the scene.")
+    
+    return params
 
-        if not wheel_found:
-            print(f"Warning: {wheel_name} not found in the scene.")
-            
+def append_front_right_wheel(params, body, processed):
+    wheel_names = [
+        ("wheelfr", "wheelfr.prm", "wheelr.prm")
+    ]
+    wheels = get_objects_by_exact_names(wheel_names, parent_object=body)
+
+    # Check for any of the matching keys
+    child = wheels.get("wheelfr") or wheels.get("wheelfr.prm") or wheels.get("wheelr.prm")
+    if child and child.name not in processed:
+        location = to_revolt_coord(child.location)
+        params += f"\nWHEEL 1 {{\t; Start Wheel\n"
+        params += f"ModelNum\t2\n"
+        params += f"Offset1\t\t{location[0]:.6f} {location[1]:.6f} {location[2]:.6f}\n"
+        params += f"Offset2\t\t0.000000 0.000000 0.000000\n"
+        params += f"IsPresent\tTRUE\nIsPowered\tTRUE\nIsTurnable\tTRUE\n"
+        params += f"SteerRatio\t-0.500000\nEngineRatio\t12000.000000\n"
+        params += f"Radius\t\t12.000000\n"
+        params += f"Mass\t\t0.150000\n"
+        params += f"Gravity\t\t2200.000000\n"
+        params += f"MaxPos\t\t5.000000\n"
+        params += f"SkidWidth\t10.000000\n"
+        params += f"ToeIn\t\t0.000000\n"
+        params += f"AxleFriction\t0.020000\n"
+        params += f"Grip\t\t0.014000\n"
+        params += f"StaticFriction\t1.500000\nKineticFriction\t1.500000\n"
+        params += "}\t\t; End Wheel\n\n"
+        processed.add(child.name)
+    else:
+        print(f"Warning: wheelfr not found in the scene.")
+    
+    return params
+
+def append_back_left_wheel(params, body, processed):
+    wheel_names = [
+        ("wheelbl", "wheelbl.prm", "wheelfl.prm.001", "wheell.prm.001")
+    ]
+    wheels = get_objects_by_exact_names(wheel_names, parent_object=body)
+
+    # Check for any of the matching keys
+    child = wheels.get("wheelbl") or wheels.get("wheelbl.prm") or wheels.get("wheell.prm.001")
+    if child and child.name not in processed:
+        location = to_revolt_coord(child.location)
+        params += f"\nWHEEL 2 {{\t; Start Wheel\n"
+        params += f"ModelNum\t3\n"
+        params += f"Offset1\t\t{location[0]:.6f} {location[1]:.6f} {location[2]:.6f}\n"
+        params += f"Offset2\t\t-0.000000 0.000000 0.000000\n"
+        params += f"IsPresent\tTRUE\nIsPowered\tTRUE\nIsTurnable\tFALSE\n"
+        params += f"SteerRatio\t0.100000\nEngineRatio\t12000.000000\n"
+        params += f"Radius\t\t13.000000\n"
+        params += f"Mass\t\t0.150000\n"
+        params += f"Gravity\t\t2200.000000\n"
+        params += f"MaxPos\t\t5.000000\n"
+        params += f"SkidWidth\t10.000000\n"
+        params += f"ToeIn\t\t0.000000\n"
+        params += f"AxleFriction\t0.050000\n"
+        params += f"Grip\t\t0.014000\n"
+        params += f"StaticFriction\t1.500000\nKineticFriction\t1.500000\n"
+        params += "}\t\t; End Wheel\n\n"
+        processed.add(child.name)
+    else:
+        print(f"Warning: wheelbl not found in the scene.")
+    
+    return params
+
+def append_back_right_wheel(params, body, processed):
+    wheel_names = [
+        ("wheelbr", "wheelbr.prm", "wheelfr.prm.001", "wheelr.prm.001")
+    ]
+    wheels = get_objects_by_exact_names(wheel_names, parent_object=body)
+
+    # Check for any of the matching keys
+    child = wheels.get("wheelbr") or wheels.get("wheelbr.prm") or wheels.get("wheelr.prm.001")
+    if child and child.name not in processed:
+        location = to_revolt_coord(child.location)
+        params += f"\nWHEEL 3 {{\t; Start Wheel\n"
+        params += f"ModelNum\t4\n"
+        params += f"Offset1\t\t{location[0]:.6f} {location[1]:.6f} {location[2]:.6f}\n"
+        params += f"Offset2\t\t0.000000 0.000000 0.000000\n"
+        params += f"IsPresent\tTRUE\nIsPowered\tTRUE\nIsTurnable\tFALSE\n"
+        params += f"SteerRatio\t0.100000\nEngineRatio\t12000.000000\n"
+        params += f"Radius\t\t13.000000\n"
+        params += f"Mass\t\t0.150000\n"
+        params += f"Gravity\t\t2200.000000\n"
+        params += f"MaxPos\t\t5.000000\n"
+        params += f"SkidWidth\t10.000000\n"
+        params += f"ToeIn\t\t0.000000\n"
+        params += f"AxleFriction\t0.050000\n"
+        params += f"Grip\t\t0.014000\n"
+        params += f"StaticFriction\t1.500000\nKineticFriction\t1.500000\n"
+        params += "}\t\t; End Wheel\n\n"
+        processed.add(child.name)
+    else:
+        print(f"Warning: wheelbr not found in the scene.")
+    
     return params
 
 def append_spring_info(params, body, processed):
-    # Define prefixes and fetch objects
-    spring_prefixes = [("spring", "spring.prm", "spring.prm.001", "spring.prm.002", "spring.prm.003")]
-    springs = get_objects_by_prefixes(spring_prefixes, parent_object=body)
-    wheel_prefixes = [("wheelfl", "wheelfl.prm"), ("wheelfr", "wheelfr.prm"), ("wheelbl", "wheelbl.prm"), ("wheelbr", "wheelbr.prm")]
-    wheels = get_objects_by_prefixes(wheel_prefixes, parent_object=body)
+    spring_names = [
+        ("spring0", "spring.prm", "springl.prm"),
+        ("spring1", "spring.prm.001", "springr.prm"),
+        ("spring2", "spring.prm.002", "springl.prm.001"),
+        ("spring3", "spring.prm.003", "springr.prm.001")
+    ]
+    springs = get_objects_by_exact_names(spring_names, parent_object=body)
 
-    # Processing each spring and its corresponding wheel
-    for i in range(4):
-        spring_key = f"spring{i}"  # Key as defined by get_objects_by_prefixes
-        wheel_key = f"wheel{['fl', 'fr', 'bl', 'br'][i]}0"  # Wheel keys based on prefix indexing
-        
+    wheel_names = [
+        ("wheelfl", "wheelfl.prm", "wheell.prm"),
+        ("wheelfr", "wheelfr.prm", "wheelr.prm"),
+        ("wheelbl", "wheelbl.prm", "wheelfl.prm.001", "wheell.prm.001"),
+        ("wheelbr", "wheelbr.prm", "wheelfr.prm.001", "wheelr.prm.001")
+    ]
+    wheels = get_objects_by_exact_names(wheel_names, parent_object=body)
+
+    for i, (spring_group, wheel_group) in enumerate(zip(spring_names, wheel_names)):
+        spring_key = spring_group[0]
+        wheel_key = wheel_group[0]
+
         spring_obj = springs.get(spring_key)
         wheel_obj = wheels.get(wheel_key)
+
         if not spring_obj or not wheel_obj:
-            print(f"Warning: Spring or wheel not found for index {i}.")
+            print(f"Warning: Spring or wheel not found for index {i} ({spring_key}, {wheel_key}).")
             continue
 
         # Store original rotation
@@ -172,7 +294,7 @@ def append_spring_info(params, body, processed):
         params += f"ModelNum\t5\n"
         params += f"Offset\t\t{x:.6f} {y:.6f} {z:.6f}\n"
         params += f"Length\t\t{spring_length_revolt:.6f}\n"
-        params += f"Stiffness\t500.000000\n"
+        params += f"Stiffness\t400.000000\n"
         params += f"Damping\t\t9.000000\n"
         params += f"Restitution\t-0.950000\n"
         params += f"}}\t\t; End Spring\n\n"
@@ -184,117 +306,75 @@ def append_spring_info(params, body, processed):
     return params
 
 def append_axle_info(params, body, processed):
-    # Define axle prefixes and fetch objects
-    axle_prefixes = [("axle", "axle.prm", "axle.prm.001", "axle.prm.002", "axle.prm.003")]
-    axles = get_objects_by_prefixes(axle_prefixes, parent_object=body)
+    axle_names = [
+        ("axle0", "axle.prm", "axlel.prm"),
+        ("axle1", "axle.prm.001", "axler.prm"),
+        ("axle2", "axle.prm.002", "axlel.prm.001"),
+        ("axle3", "axle.prm.003", "axler.prm.001")
+    ]
+    axles = get_objects_by_exact_names(axle_names, parent_object=body)
+    correction_factor = 0.82979745  # Corrective scaling to apply to measured
 
-    # Processing each axle
-    for i in range(4):
-        axle_key = f"axle{i}"  # Assuming axle naming follows a consistent pattern
+    for i, axle_group in enumerate(axle_names):
+        axle_key = axle_group[0]
         axle_obj = axles.get(axle_key)
+
         if not axle_obj:
-            print(f"Warning: Axle '{axle_key}' not found.")
+            print(f"Warning: Axle not found for index {i} ({axle_key}).")
             continue
+        
+        original_rotation = axle_obj.rotation_euler.copy()
 
-def append_axle_info(params, body, processed):
-    # Define axle prefixes and fetch objects
-    axle_prefixes = [("axle", "axle.prm", "axle.prm.001", "axle.prm.002", "axle.prm.003")]
-    axles = get_objects_by_prefixes(axle_prefixes, parent_object=body)
+        # First align to the principal axis
+        align_axle_to_principal_axis(axle_obj)
+        bpy.context.view_layer.update()  # Ensure the update is applied
 
-    # Processing each axle
-    for i in range(4):
-        axle_key = f"axle{i}"
-        axle_obj = axles.get(axle_key)
-        if not axle_obj:
-            print(f"Warning: Axle '{axle_key}' not found.")
-            continue
-
-        # Update scene to ensure the bounding box is accurate
-        bpy.context.view_layer.update()
-        bbox_corners = [axle_obj.matrix_world @ Vector(corner) for corner in axle_obj.bound_box]
-
-        # Calculate the axle length from the bounding box diagonals
-        diagonal_distances = [Vector(bbox_corners[j]) - Vector(bbox_corners[i]) for i in range(len(bbox_corners)) for j in range(i + 1, len(bbox_corners))]
-        axle_length_blender = max(v.length for v in diagonal_distances)
+        # Assuming axle is already aligned such that the y-axis is the length axis
+        verts = [axle_obj.matrix_world @ vert.co for vert in axle_obj.data.vertices]
+    
+        # Direct calculation of y-axis distance
+        y_min = min(vert.y for vert in verts)
+        y_max = max(vert.y for vert in verts)
+        axle_length_blender = (y_max - y_min) * correction_factor
         axle_length_revolt = to_revolt_scale(axle_length_blender)
 
-        # Calculate the median of the z coordinates of the bounding box
-        z_median = np.median([corner.z for corner in bbox_corners])
+        # Using the axle's current position for x and z
+        axle_position_revolt = to_revolt_coord(Vector((axle_obj.location.x, axle_obj.location.y, axle_obj.location.z)))
+        x, y, z = axle_position_revolt
         
-        # Identify the highest face oriented mostly along the z-axis
-        tolerance = 0.001
-        vertical_edges = []
-        for j in range(len(bbox_corners)):
-            for k in range(j + 1, len(bbox_corners)):
-                if abs(bbox_corners[j].z - bbox_corners[k].z) < tolerance:
-                    vertical_edges.append((bbox_corners[j], bbox_corners[k]))
-
-        if not vertical_edges:
-            print(f"No vertical edges found for axle '{axle_key}'.")
-            continue
-
-        # Find the highest edge
-        highest_edge = max(vertical_edges, key=lambda edge: max(edge[0].z, edge[1].z))
-        highest_edge_mid_z = (highest_edge[0].z + highest_edge[1].z) / 2
-
-        # Collect corners that are on the highest face
-        upper_face_corners = [corner for corner in bbox_corners if abs(corner.z - highest_edge_mid_z) < tolerance]
-
-        if not upper_face_corners:
-            print(f"No upper face corners found for axle '{axle_key}'.")
-            continue
-
-        x_mid = sum(corner.x for corner in upper_face_corners) / len(upper_face_corners)
-        y_mid = sum(corner.y for corner in upper_face_corners) / len(upper_face_corners)
-
-        # Convert to Re-Volt coordinates
-        axle_position_revolt = to_revolt_coord(Vector((x_mid, y_mid, z_median)))
-        _, y, z = axle_position_revolt  # Ignore x_mid and use 0.0 instead
-
-        x = 0.000000  # Explicitly set x to 0.000000
-
         params += f"\nAXLE {i} {{\t; Start Axle\n"
         params += f"ModelNum\t9\n"
         params += f"Offset\t\t{x:.6f} {y:.6f} {z:.6f}\n"
         params += f"Length\t\t{axle_length_revolt:.6f}\n"
         params += "}\t\t; End Axle\n\n"
         processed.add(axle_obj.name)
-
-    return params
-
-def append_aerial_info(params, body, processed):
-    # Append aerial info, fetching dynamic offset
-    for child in body.children:
-        if "aerial" in child.name.lower() and child.name not in processed:
-            location = to_revolt_coord(child.location)
-            params += f"\nAERIAL {{\t; Start Aerial\n"
-            params += f"SecModelNum\t17\n"
-            params += f"TopModelNum\t18\n"
-            params += f"Offset\t\t{location[0]:.6f} {location[1]:.6f} {location[2]:.6f}\n"
-            params += f"Direction\t0.000000 -1.000000 0.000000\n"
-            params += f"Length\t\t20.000000\n"
-            params += f"Stiffness\t2000.000000\n"
-            params += f"Damping\t\t5.500000\n"
-            params += "}\t\t; End Aerial\n"
-            processed.add(child.name)
-            break
         
+        axle_obj.rotation_euler = original_rotation
+    
     return params
 
-def export_file(filepath=None, scene=None):
-    params = "Name\tcar\n\n"
-    body = bpy.data.objects.get("body.prm", None)
-    processed = set()
+def append_aerial_info(params, body_obj, processed):
+    # Find the aerial object, checking both name and parent
+    aerial = next((obj for obj in bpy.data.objects if "aerial" in obj.name.lower() and obj.name not in processed and obj.parent == body_obj), None)
 
-    params = append_model_info(params)
-    params = append_additional_params(params)
-    params = append_body_info(params)
-    params = append_wheel_info(params, body, processed)
-    params = append_spring_info(params, body, processed)
-    params = append_axle_info(params, body, processed)
-    params = append_aerial_info(params, body, processed)
+    if aerial:
+        location = to_revolt_coord(aerial.location)
+        params += f"\nAERIAL {{\t; Start Aerial\n"
+        params += f"SecModelNum\t17\n"
+        params += f"TopModelNum\t18\n"
+        params += f"Offset\t\t{location[0]:.6f} {location[1]:.6f} {location[2]:.6f}\n"
+        params += f"Direction\t0.000000 -1.000000 0.000000\n"
+        params += f"Length\t\t35.000000\n"
+        params += f"Stiffness\t2000.000000\n"
+        params += f"Damping\t\t5.500000\n"
+        params += "}\t\t; End Aerial\n"
+        processed.add(aerial.name)
+    else:
+        print("No aerial found in the scene or not parented to body.")
+        if params is None:  # Ensure params is not None
+            params = ""
 
-    bpy.context.window_manager.clipboard = params
+    return params
 
 def align_spring_to_wheel(spring, wheel):
     direction = (wheel.location.xy - spring.location.xy).normalized()
@@ -322,31 +402,110 @@ def align_spring_to_upwards(spring_obj):
 
     # Update the scene to apply changes
     bpy.context.view_layer.update()
-
-def get_objects_by_prefixes(prefix_tuples, parent_object=None):
     
+def align_axle_to_principal_axis(axle_obj):
+    # Reset rotation to original or neutral
+    axle_obj.rotation_euler = Euler((0, 0, 0), 'XYZ')
+    bpy.context.view_layer.update()
+
+    # Calculate the principal axis (longest side of the bounding box)
+    bbox = [axle_obj.matrix_world @ Vector(corner) for corner in axle_obj.bound_box]
+    lengths = {
+        'x': (max(bbox, key=lambda v: v.x).x - min(bbox, key=lambda v: v.x).x),
+        'y': (max(bbox, key=lambda v: v.y).y - min(bbox, key=lambda v: v.y).y),
+        'z': (max(bbox, key=lambda v: v.z).z - min(bbox, key=lambda v: v.z).z)
+    }
+    principal_axis = max(lengths, key=lengths.get)
+    
+    # Align this axis with the global Y-axis
+    axis_vectors = {'x': Vector((1, 0, 0)), 'y': Vector((0, 1, 0)), 'z': Vector((0, 0, 1))}
+    target_axis = Vector((0, 1, 0))  # Y-axis
+    rotation_axis = axis_vectors[principal_axis].cross(target_axis)
+    angle = axis_vectors[principal_axis].angle(target_axis)
+
+    if rotation_axis.length != 0:
+        rotation_matrix = Matrix.Rotation(angle, 4, rotation_axis)
+        axle_obj.matrix_world = axle_obj.matrix_world @ rotation_matrix
+    
+    bpy.context.view_layer.update()
+
+def get_wheels_by_prefixes(prefix_tuples, parent_object=None):
     """
-    Retrieves objects matching any of the given prefixes provided in tuples,
-    and checks if they are children of a specified parent object.
+    Retrieves objects matching any of the given prefixes provided in tuples.
+    If a parent object is specified, it also checks if they are children of that parent object.
     Assumes objects follow a naming convention that includes a base name followed by an optional numerical suffix.
     """
     found_objects = {}
-    object_counter = {}  # To keep track of how many objects with the same base name have been found
 
     for obj in bpy.data.objects:
-        if parent_object and obj.parent != parent_object:
-            continue  # Skip objects that are not children of the specified parent
         for prefixes in prefix_tuples:
             for prefix in prefixes:
                 if obj.name.startswith(prefix):
-                    base_name = prefix.split('.')[0]  # Get the base name without any suffix
-                    if base_name not in object_counter:
-                        object_counter[base_name] = 0
-                    else:
-                        object_counter[base_name] += 1
-
-                    key = f"{base_name}{object_counter[base_name]}"  # Create a unique key by appending a counter
-                    found_objects[key] = obj
-                    print(f"Found {obj.name} as {key}, parent: {obj.parent.name if obj.parent else 'None'}")
-                    break  # Once matched, no need to check further prefixes for this object
+                    if parent_object is None or obj.parent == parent_object:
+                        found_objects[obj.name] = obj
+                        print(f"Found {obj.name} with prefix {prefix}, parent: {obj.parent.name if obj.parent else 'None'}")
+                        break  # Once matched, no need to check further prefixes for this object
     return found_objects
+
+def get_objects_by_exact_names(name_tuples, parent_object=None):
+    """
+    Retrieves objects matching any of the given exact names provided in tuples.
+    If a parent object is specified, it also checks if they are children of that parent object.
+    """
+    found_objects = {}
+    object_set = set()  # This set will hold all exact names to be matched
+
+    # Flatten the list of tuples and populate the set with exact names
+    for names in name_tuples:
+        object_set.update(names)
+
+    for obj in bpy.data.objects:
+        if obj.name in object_set:
+            if parent_object is None or obj.parent == parent_object:
+                # Assign the object to all possible keys it matches
+                for names in name_tuples:
+                    if obj.name in names:
+                        base_key = names[0]  # Use the first item as the key
+                        found_objects[base_key] = obj
+                        print(f"Found {obj.name} as {base_key}, parent: {obj.parent.name if obj.parent else 'None'}")
+
+    return found_objects
+
+def copy_average_vcol_to_clipboard():
+    obj = bpy.context.active_object
+    if obj and obj.type == 'MESH':
+        bm = bmesh.new()
+        bm.from_mesh(obj.data)
+
+        vc_layer = bm.loops.layers.color.get("Col")
+        if not vc_layer:
+            print("No active vertex color layer found.")
+            bm.free()
+            return "000 000 000"
+
+        avg_color = get_average_vcol2(bm.faces, vc_layer)
+        env_rgb = f"{int(avg_color[0] * 255):03d} {int(avg_color[1] * 255):03d} {int(avg_color[2] * 255):03d}"
+        
+        bm.free()
+        return env_rgb
+    else:
+        print("No active mesh object found.")
+        return "000 000 000"
+    
+def export_file(car_name="car", filepath=None, scene=None):
+    params = f"Name\t{car_name}\n\n"
+    body = bpy.data.objects.get("body.prm", None)
+    processed = set()
+
+    params = append_model_info(params, car_name)
+    params = append_additional_params(params)
+    params = append_body_info(params)
+    params = append_front_left_wheel(params, body, processed)
+    params = append_front_right_wheel(params, body, processed)
+    params = append_back_left_wheel(params, body, processed)
+    params = append_back_right_wheel(params, body, processed)
+    params = append_spring_info(params, body, processed)
+    params = append_axle_info(params, body, processed)
+    params = append_aerial_info(params, processed)
+
+    bpy.context.window_manager.clipboard = params

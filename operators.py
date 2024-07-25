@@ -595,16 +595,25 @@ class TexturesRename(bpy.types.Operator):
 		return name + suffix2 + suffix1 + ".bmp"
 	
 class CarParametersExport(bpy.types.Operator):
-	bl_idname = "headers.car_parameters_export"
-	bl_label = "Car parameters to clipboard"
-	bl_description = (
-		"Copies most important parameters into clipboard"
-	)
+    bl_idname = "headers.car_parameters_export"
+    bl_label = "Car parameters to clipboard"
+    bl_description = "Copies most important parameters into clipboard"
 
-	def execute(self, context):
-		from . import parameters_out
-		parameters_out.export_file()
-		return{"FINISHED"}
+    car_name: bpy.props.StringProperty(
+        name="Car Name",
+        description="Name of the car",
+        default="car"
+    )
+
+    def execute(self, context):
+        car_name = self.car_name.strip() if self.car_name.strip() else "car"
+        from . import parameters_out
+        parameters_out.export_file(car_name)
+        return {"FINISHED"}
+
+    def invoke(self, context, event):
+        wm = context.window_manager
+        return wm.invoke_props_dialog(self)
 	
 """
 INSTANCES -----------------------------------------------------------------------
