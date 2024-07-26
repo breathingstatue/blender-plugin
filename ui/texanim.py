@@ -10,17 +10,19 @@ class RVIO_PT_AnimModesPanel(bpy.types.Panel):
     
     def draw(self, context):
         pass
-        # layout = self.layout
-        # scene = context.scene
+        layout = self.layout
+        scene = context.scene
         
-        # box = layout.box()
-        # col = box.column(align=True)
-        # col.prop(scene, "ta_current_slot")
-        # col.prop(scene, "ta_max_frames", slider=True)
-        # col.prop(scene, "ta_delay")
-        # col.prop(scene, "rvio_frame_start")
-        # col.prop(scene, "rvio_frame_end")
-        # col.prop(scene, "ta_current_frame", text="Current Frame")
+        box = layout.box()
+        col = box.column(align=True)
+        col.prop(scene, "ta_max_frames")
+        col.prop(scene, "ta_max_slots")
+        col.prop(scene, "ta_current_slot")
+        col.prop(scene, "ta_max_frames", slider=True)
+        col.prop(scene, "ta_delay")
+        col.prop(scene, "rvio_frame_start")
+        col.prop(scene, "rvio_frame_end")
+        col.prop(scene, "ta_current_frame", text="Current Frame")
         
         # layout.operator("object.add_texanim_uv", text="Add Animation UV Layer")
         # layout.prop(scene, "texture", icon="TEXTURE")
