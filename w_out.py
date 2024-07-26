@@ -213,6 +213,14 @@ def export_split_world(filepath, context, split_size_faces):
 
     world.mesh_count = len(world.meshes)
     world.generate_bigcubes()
+    
+    # Exports the texture animation
+    animations = eval(context.scene.texture_animations)
+    for animdict in animations:
+        anim = rvstruct.TexAnimation()
+        anim.from_dict(animdict)
+        world.animations.append(anim)
+    world.animation_count = context.scene.ta_max_slots
 
     with open(filepath, "wb") as file:
         world.write(file)
@@ -226,6 +234,15 @@ def export_standard_world(filepath, context):
     world.meshes.extend(meshes)
     world.mesh_count = len(world.meshes)
     world.generate_bigcubes()
+    
+    # Exports the texture animation
+    animations = eval(context.scene.texture_animations)
+    for animdict in animations:
+        anim = rvstruct.TexAnimation()
+        anim.from_dict(animdict)
+        world.animations.append(anim)
+    world.animation_count = context.scene.ta_max_slots
+
     with open(filepath, "wb") as file:
         world.write(file)
 

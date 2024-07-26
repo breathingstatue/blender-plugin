@@ -128,7 +128,7 @@ from .layers import set_face_ncp_property, get_face_ncp_property, get_face_env, 
 from .layers import alpha_values, update_vertex_color_picker, update_vertex_alpha
 from .operators import ImportRV, ExportRV, RVIO_OT_ReadCarParameters, RVIO_OT_SelectRevoltDirectory, ButtonReExport
 from .operators import VertexColorCreateLayer, VertexColorRemove, SetVertexColor, BakeShadow, InstanceColor
-from .operators import TexAnimDirection, InstanceEnvMapColor
+from .operators import TexAnimDirection, InstanceEnvMapColor, SetVertexAlpha
 from .operators import ButtonRenameAllObjects, SelectByName, SelectByData
 from .operators import SetInstanceProperty, RemoveInstanceProperty, LaunchRV, TexturesSave
 from .operators import TexturesRename, CarParametersExport, ButtonZoneHide, AddTrackZone
@@ -286,140 +286,6 @@ def register():
 		soft_max=8192,
 		subtype='UNSIGNED'
 	)
-	
-	bpy.types.Scene.texture_animations = bpy.props.StringProperty(
-		name="Texture Animations",
-		default="[]",
-		description="Storage for Texture animations. Should not be changed by hand"
-	)
-	
-	bpy.types.Scene.ta_max_frames = bpy.props.IntProperty(
-		name = "Max Frames",
-		min = 1,
-		max = TEX_PAGES_MAX,
-		default = 2,
-		description = "Total number of frames of the current slot. "
-					  "All higher frames will be ignored on export"
-	)
-	
-	bpy.types.Scene.ta_max_slots = bpy.props.IntProperty(
-		name="Max Used Slots",
-		min=1,
-		max=TEX_PAGES_MAX,
-		default=1,
-		description="Total number of texture animation slots. All higher slots will be ignored on export"
-	)
-	
-	bpy.types.Scene.rvio_frame_start = bpy.props.IntProperty(
-		name="Start Frame",
-		description="Start frame of the animation",
-		default=1,
-		min=0,
-		max=TEX_PAGES_MAX-1
-	)
-
-	bpy.types.Scene.rvio_frame_end = bpy.props.IntProperty(
-		name="End Frame",
-		description="End frame of the animation",
-		default=2,
-		min=0,
-		max=TEX_PAGES_MAX-1
-	)
-
-	bpy.types.Scene.ta_delay = bpy.props.FloatProperty(
-		name="Frame Duration",
-		description="Duration of every frame",
-		default=0.02,
-		min=0.0,
-		max=2.0
-	)
-
-	bpy.types.Scene.texture = bpy.props.EnumProperty(
-		name="",
-		description="Choose a texture",
-		items=get_texture_items
-	)
-	
-	bpy.types.Scene.ta_current_slot = bpy.props.IntProperty(
-		name = "Texture Slot",
-		default = 1,
-		min = 0,
-		max = TEX_ANIM_MAX-1,
-		update = update_ta_current_slot,
-		description = "Texture animation slot"
-	)
-	
-	bpy.types.Scene.ta_current_frame_tex = bpy.props.IntProperty(
-		name = "Texture",
-		default = 0,
-		min = -1,
-		max = TEX_PAGES_MAX-1,
-		update = update_ta_current_frame_tex,
-		description = "Texture of the current frame"
-	)
-	
-	bpy.types.Scene.ta_current_frame_delay = bpy.props.FloatProperty(
-		name = "Duration",
-		default = 0.02,
-		min = 0,
-		update = update_ta_current_frame_delay,
-		description = "Duration of the current frame"
-	)
-	
-	bpy.types.Scene.ta_current_frame = bpy.props.IntProperty(
-		name = "Frame",
-		default = 1,
-		min = 0,
-		update = update_ta_current_frame,
-		description = "Current frame"
-	)
-		
-	bpy.types.Scene.ta_current_frame_uv0 = bpy.props.FloatVectorProperty(
-		name = "UV 0",
-		size = 2,
-		default = (0, 0),
-		update = lambda self, context: update_ta_current_frame_uv(context, 0),
-		description = "UV coordinate of the first vertex"
-	)
-	
-	bpy.types.Scene.ta_current_frame_uv1 = bpy.props.FloatVectorProperty(
-		name = "UV 1",
-		size = 2,
-		default = (0, 0),
-		update = lambda self, context: update_ta_current_frame_uv(context, 1),
-		description = "UV coordinate of the second vertex"
-	)
-	
-	bpy.types.Scene.ta_current_frame_uv2 = bpy.props.FloatVectorProperty(
-		name = "UV 2",
-		size = 2,
-		default = (0, 0),
-		update = lambda self, context: update_ta_current_frame_uv(context, 2),
-		description = "UV coordinate of the third vertex"
-	)
-	
-	bpy.types.Scene.ta_current_frame_uv3 = bpy.props.FloatVectorProperty(
-		name = "UV 3",
-		size = 2,
-		default = (0, 0),
-		update = lambda self, context: update_ta_current_frame_uv(context, 3),
-		description = "UV coordinate of the fourth vertex"
-	)
-	
-	bpy.types.Scene.grid_x = bpy.props.IntProperty(
-		name="X Resolution",
-		min=1,
-		default=2,
-		max= 256,
-		description="Amount of frames along the X axis"
-	)
-	bpy.types.Scene.grid_y = bpy.props.IntProperty(
-		name="Y Resolution",
-		min=1,
-		default=2,
-		max = 256,
-		description="Amount of frames along the Y axis"
-	)    
 	
 	bpy.types.Scene.w_parent_meshes = bpy.props.BoolProperty(
 		name="Toggle Parent Meshes",
@@ -605,6 +471,140 @@ def register():
 					  "Click to select all, then CTRL C to copy"
 	)
 	
+	bpy.types.Scene.texture_animations = bpy.props.StringProperty(
+		name="Texture Animations",
+		default="[]",
+		description="Storage for Texture animations. Should not be changed by hand"
+	)
+	
+	bpy.types.Scene.ta_max_frames = bpy.props.IntProperty(
+		name = "Max Frames",
+		min = 1,
+		max = TEX_PAGES_MAX,
+		default = 2,
+		description = "Total number of frames of the current slot. "
+					  "All higher frames will be ignored on export"
+	)
+	
+	bpy.types.Scene.ta_max_slots = bpy.props.IntProperty(
+		name="Max Used Slots",
+		min=1,
+		max=TEX_PAGES_MAX,
+		default=1,
+		description="Total number of texture animation slots. All higher slots will be ignored on export"
+	)
+	
+	bpy.types.Scene.rvio_frame_start = bpy.props.IntProperty(
+		name="Start Frame",
+		description="Start frame of the animation",
+		default=1,
+		min=0,
+		max=TEX_PAGES_MAX-1
+	)
+
+	bpy.types.Scene.rvio_frame_end = bpy.props.IntProperty(
+		name="End Frame",
+		description="End frame of the animation",
+		default=2,
+		min=0,
+		max=TEX_PAGES_MAX-1
+	)
+
+	bpy.types.Scene.ta_delay = bpy.props.FloatProperty(
+		name="Frame Duration",
+		description="Duration of every frame",
+		default=0.02,
+		min=0.0,
+		max=2.0
+	)
+
+	bpy.types.Scene.texture = bpy.props.EnumProperty(
+		name="",
+		description="Choose a texture",
+		items=get_texture_items
+	)
+	
+	bpy.types.Scene.ta_current_slot = bpy.props.IntProperty(
+		name = "Texture Slot",
+		default = 1,
+		min = 0,
+		max = TEX_ANIM_MAX-1,
+		update = update_ta_current_slot,
+		description = "Texture animation slot"
+	)
+	
+	bpy.types.Scene.ta_current_frame_tex = bpy.props.IntProperty(
+		name = "Texture",
+		default = 0,
+		min = -1,
+		max = TEX_PAGES_MAX-1,
+		update = update_ta_current_frame_tex,
+		description = "Texture of the current frame"
+	)
+	
+	bpy.types.Scene.ta_current_frame_delay = bpy.props.FloatProperty(
+		name = "Duration",
+		default = 0.02,
+		min = 0,
+		update = update_ta_current_frame_delay,
+		description = "Duration of the current frame"
+	)
+	
+	bpy.types.Scene.ta_current_frame = bpy.props.IntProperty(
+		name = "Frame",
+		default = 1,
+		min = 0,
+		update = update_ta_current_frame,
+		description = "Current frame"
+	)
+		
+	bpy.types.Scene.ta_current_frame_uv0 = bpy.props.FloatVectorProperty(
+		name = "UV 0",
+		size = 2,
+		default = (0, 0),
+		update = lambda self, context: update_ta_current_frame_uv(context, 0),
+		description = "UV coordinate of the first vertex"
+	)
+	
+	bpy.types.Scene.ta_current_frame_uv1 = bpy.props.FloatVectorProperty(
+		name = "UV 1",
+		size = 2,
+		default = (0, 0),
+		update = lambda self, context: update_ta_current_frame_uv(context, 1),
+		description = "UV coordinate of the second vertex"
+	)
+	
+	bpy.types.Scene.ta_current_frame_uv2 = bpy.props.FloatVectorProperty(
+		name = "UV 2",
+		size = 2,
+		default = (0, 0),
+		update = lambda self, context: update_ta_current_frame_uv(context, 2),
+		description = "UV coordinate of the third vertex"
+	)
+	
+	bpy.types.Scene.ta_current_frame_uv3 = bpy.props.FloatVectorProperty(
+		name = "UV 3",
+		size = 2,
+		default = (0, 0),
+		update = lambda self, context: update_ta_current_frame_uv(context, 3),
+		description = "UV coordinate of the fourth vertex"
+	)
+	
+	bpy.types.Scene.grid_x = bpy.props.IntProperty(
+		name="X Resolution",
+		min=1,
+		default=2,
+		max= 256,
+		description="Amount of frames along the X axis"
+	)
+	bpy.types.Scene.grid_y = bpy.props.IntProperty(
+		name="Y Resolution",
+		min=1,
+		default=2,
+		max = 256,
+		description="Amount of frames along the Y axis"
+	)    
+
 	bpy.types.Scene.texanim_delta_u = bpy.props.FloatProperty(name="TexAnim Delta U")
 	bpy.types.Scene.texanim_delta_v = bpy.props.FloatProperty(name="TexAnim Delta V")
 	
@@ -867,6 +867,7 @@ def register():
 	bpy.utils.register_class(AddTrackZone)
 	bpy.utils.register_class(SetBCubeMeshIndices)
 	bpy.utils.register_class(InstanceEnvMapColor)
+	bpy.utils.register_class(SetVertexAlpha)
 	bpy.utils.register_class(InstanceColor)
 	bpy.utils.register_class(RVIO_OT_SelectRevoltDirectory)
 	
@@ -905,6 +906,7 @@ def unregister():
 	# Unregister Operators
 	bpy.utils.unregister_class(RVIO_OT_SelectRevoltDirectory)
 	bpy.utils.unregister_class(InstanceColor)
+	bpy.utils.unregister_class(SetVertexAlpha)
 	bpy.utils.unregister_class(InstanceEnvMapColor)
 	bpy.utils.unregister_class(SetBCubeMeshIndices)
 	bpy.utils.unregister_class(AddTrackZone)
@@ -937,11 +939,6 @@ def unregister():
 	bpy.utils.unregister_class(DialogOperator)
 	
 	# Unregister Custom Properties
-	#del bpy.types.Scene.light_orientation
-	#del bpy.types.Scene.light_intensity2
-	#del bpy.types.Scene.light_intensity1
-	#del bpy.types.Scene.light2
-	#del bpy.types.Scene.light1
 	#del bpy.types.Scene.batch_bake_model_env
 	#del bpy.types.Scene.batch_bake_model_rgb
 
@@ -976,6 +973,23 @@ def unregister():
 	del bpy.types.Mesh.select_material
 	del bpy.types.Scene.texanim_delta_v
 	del bpy.types.Scene.texanim_delta_u
+	del bpy.types.Scene.grid_y
+	del bpy.types.Scene.grid_x
+	del bpy.types.Scene.ta_current_frame_uv3
+	del bpy.types.Scene.ta_current_frame_uv2
+	del bpy.types.Scene.ta_current_frame_uv1
+	del bpy.types.Scene.ta_current_frame_uv0
+	del bpy.types.Scene.ta_current_frame
+	del bpy.types.Scene.ta_current_frame_delay
+	del bpy.types.Scene.ta_current_frame_tex
+	del bpy.types.Scene.ta_current_slot
+	del bpy.types.Scene.texture    
+	del bpy.types.Scene.ta_delay
+	del bpy.types.Scene.rvio_frame_end
+	del bpy.types.Scene.rvio_frame_start
+	del bpy.types.Scene.ta_max_frames
+	del bpy.types.Scene.ta_max_slots
+	del bpy.types.Scene.texture_animations
 	del bpy.types.Scene.shadow_table
 	del bpy.types.Scene.shadow_softness
 	del bpy.types.Scene.shadow_resolution
@@ -1005,23 +1019,6 @@ def unregister():
 	del bpy.types.Scene.w_import_bound_boxes
 	del bpy.types.Scene.w_parent_meshes
 	
-	del bpy.types.Scene.grid_y
-	del bpy.types.Scene.grid_x
-	del bpy.types.Scene.ta_current_frame_uv3
-	del bpy.types.Scene.ta_current_frame_uv2
-	del bpy.types.Scene.ta_current_frame_uv1
-	del bpy.types.Scene.ta_current_frame_uv0
-	del bpy.types.Scene.ta_current_frame
-	del bpy.types.Scene.ta_current_frame_delay
-	del bpy.types.Scene.ta_current_frame_tex
-	del bpy.types.Scene.ta_current_slot
-	del bpy.types.Scene.texture    
-	del bpy.types.Scene.ta_delay
-	del bpy.types.Scene.rvio_frame_end
-	del bpy.types.Scene.rvio_frame_start
-	del bpy.types.Scene.ta_max_frames
-	del bpy.types.Scene.ta_max_slots
-	del bpy.types.Scene.texture_animations
 	del bpy.types.Object.fin_lod_bias
 	del bpy.types.Object.fin_priority
 	del bpy.types.Object.fin_hide

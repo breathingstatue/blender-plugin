@@ -87,13 +87,13 @@ def import_file(filepath, context, scene):
             if scene.w_parent_meshes:
                 bcube.parent = main_w
 
-    #texture_animations = []
+    texture_animations = []
 
-    #for animation in world.animations:
-    #    texture_animations.append(animation.as_dict())
+    for animation in world.animations:
+        texture_animations.append(animation.as_dict())
 
-    #scene.texture_animations = str([a.as_dict() for a in world.animations])
-    #scene.ta_max_slots = world.animation_count
+    scene.texture_animations = str([a.as_dict() for a in world.animations])
+    scene.ta_max_slots = world.animation_count
 
 def create_bound_box(scene, bbox, filename):
     # Creates a new mesh and bmesh

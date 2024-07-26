@@ -1364,6 +1364,42 @@ class SetVertexColor(bpy.types.Operator):
 		bmesh.update_edit_mesh(eo.data, destructive=False)
 		self.report({'INFO'}, "Vertex color set.")
 		return {'FINISHED'}
+	
+class SetVertexAlpha(bpy.types.Operator):
+    bl_idname = "vertexcolor.set_alpha"
+    bl_label = "Set Vertex Alpha"
+    bl_description = "Adjusts alpha on a specified vertex color layer for selected faces"
+
+    @classmethod
+    def poll(cls, context):
+        return (context.active_object is not None and
+                context.active_object.type == 'MESH' and
+                context.active_object.mode == 'EDIT')
+
+    def execute(self, context):
+        eo = context.edit_object
+        bm = bmesh.from_edit_mesh(eo.data)
+
+        # Fetch all layers that might contain 'Alpha' and let the user choose or set a rule for choosing
+        alpha_layers = [layer for layer in bm.loops.layers.color if 'Alpha' in layer.name]
+        if not alpha_layers:
+            self.report({'WARNING'}, "No vertex color layer with 'Alpha' in its name found.")
+            return {'CANCELLED'}
+
+        # Example: Use the first alpha layer or implement a selection mechanism
+        va_layer = alpha_layers[0]  # Simplified selection for example purposes
+
+        alpha_percentage = float(context.scene.vertex_alpha)  # Assume this is from 0 to 1
+
+        # Apply the alpha value only to selected faces
+        for face in bm.faces:
+            if face.select:  # Apply only to selected faces
+                for loop in face.loops:
+                    loop[va_layer] = (alpha_percentage, alpha_percentage, alpha_percentage, alpha_percentage)
+
+        bmesh.update_edit_mesh(eo.data, destructive=False)
+        self.report({'INFO'}, "Alpha adjusted for selected faces on the chosen layer.")
+        return {'FINISHED'}
 
 def menu_func_import(self, context):
 	self.layout.operator(ImportRV.bl_idname, text="Re-Volt (.prm, .w, .ncp, .fin, .rim., .hul, .taz, parameters.txt)")
