@@ -292,5 +292,3 @@ def apply_env_data(mesh_data, world, polygons, envlist, obj_name):
     bm.to_mesh(mesh_data)
     mesh_data.update()
     bm.free()
-
-    print(f"Environmental settings successfully applied to {mesh_data.name}.")

@@ -188,12 +188,13 @@ def simple_split_mesh_by_grid(obj, split_size_faces):
     bm.free()
     return face_batches
 
-def export_split_world(filepath, context, split_size_faces):
+def export_split_world(filepath, scene, split_size_faces):
     world = rvstruct.World()
     created_objects = []
     split_meshes_list = []
+    scene = bpy.context.scene
 
-    for obj in context.scene.objects:
+    for obj in scene.objects:
         if obj.type == 'MESH' and not obj.hide_render and '_split_' not in obj.name:
             face_batches = simple_split_mesh_by_grid(obj, split_size_faces)
             for batch in face_batches:
@@ -207,7 +208,7 @@ def export_split_world(filepath, context, split_size_faces):
 
     for split_obj in split_meshes_list:
         if split_obj and split_obj.data:
-            converted_mesh = export_mesh(split_obj.data, split_obj, context.scene, filepath, world=world)
+            converted_mesh = export_mesh(split_obj.data, split_obj, scene, filepath, world=world)
             if converted_mesh:
                 world.meshes.append(converted_mesh)
 
@@ -215,12 +216,12 @@ def export_split_world(filepath, context, split_size_faces):
     world.generate_bigcubes()
     
     # Exports the texture animation
-    animations = eval(context.scene.texture_animations)
+    animations = eval(scene.texture_animations)
     for animdict in animations:
         anim = rvstruct.TexAnimation()
         anim.from_dict(animdict)
         world.animations.append(anim)
-    world.animation_count = context.scene.ta_max_slots
+    world.animation_count = scene.ta_max_slots
 
     with open(filepath, "wb") as file:
         world.write(file)
@@ -228,20 +229,21 @@ def export_split_world(filepath, context, split_size_faces):
     for obj in created_objects:
         bpy.data.objects.remove(obj, do_unlink=True)
 
-def export_standard_world(filepath, context):
+def export_standard_world(filepath, scene):
+    scene = bpy.context.scene
     world = rvstruct.World()
-    meshes = [export_mesh(obj.data, obj, context.scene, filepath, world=world) for obj in context.scene.objects if obj_conditions(obj)]
+    meshes = [export_mesh(obj.data, obj, scene, filepath, world=world) for obj in scene.objects if obj_conditions(obj)]
     world.meshes.extend(meshes)
     world.mesh_count = len(world.meshes)
     world.generate_bigcubes()
     
     # Exports the texture animation
-    animations = eval(context.scene.texture_animations)
+    animations = eval(scene.texture_animations)
     for animdict in animations:
         anim = rvstruct.TexAnimation()
         anim.from_dict(animdict)
         world.animations.append(anim)
-    world.animation_count = context.scene.ta_max_slots
+    world.animation_count = scene.ta_max_slots
 
     with open(filepath, "wb") as file:
         world.write(file)
@@ -249,9 +251,9 @@ def export_standard_world(filepath, context):
 def obj_conditions(obj):
     return obj.type == "MESH" and obj.data and not any(obj.get(attr) for attr in ["is_instance", "is_cube", "is_bcube", "is_bbox", "is_mirror_plane", "is_hull_sphere", "is_hull_convex", "is_track_zone"])
 
-def export_file(filepath, scene, context):
-    split_size_faces = getattr(context.scene, 'split_size_faces', 100) * 2
-    if getattr(context.scene, 'export_worldcut', False):
-        export_split_world(filepath, context, split_size_faces)
+def export_file(filepath, scene):
+    split_size_faces = getattr(scene, 'split_size_faces', 100) * 2
+    if getattr(scene, 'export_worldcut', False):
+        export_split_world(filepath, scene, split_size_faces)
     else:
-        export_standard_world(filepath, context)
+        export_standard_world(filepath, scene)
