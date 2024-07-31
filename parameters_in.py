@@ -26,7 +26,7 @@ if "bpy" in locals():
     importlib.reload(carinfo)
     importlib.reload(prm_in)
 
-def import_file(filepath, context, scene):
+def import_file(filepath, scene):
     """
     Imports a parameters.txt file and loads car body and wheels.
     """
@@ -34,21 +34,12 @@ def import_file(filepath, context, scene):
     PARAMETERS[filepath] = carinfo.read_parameters(filepath)
 
     # Imports the car with all supported files
-    import_car(context, scene, PARAMETERS[filepath], filepath)
+    import_car(PARAMETERS[filepath], filepath, scene)
     
     # Removes parameters from dict so they can be reloaded next time
     PARAMETERS.pop(filepath)
 
-
-def import_file(filepath, context, scene):
-    """
-    Imports a parameters.txt file and loads car body and wheels.
-    """
-    PARAMETERS[filepath] = carinfo.read_parameters(filepath)
-    import_car(context, scene, PARAMETERS[filepath], filepath)
-    PARAMETERS.pop(filepath)
-
-def import_car(context, scene, params, filepath):
+def import_car(params, filepath, scene):
     body = params["model"][params["body"]["modelnum"]]
     body_loc = to_blender_coord(params["body"]["offset"])
     wheel0loc = to_blender_coord(params["wheel"][0]["offset1"])
@@ -88,7 +79,7 @@ def import_car(context, scene, params, filepath):
     def import_or_placeholder(path, name, obj_location):
         """Local helper to import an object or create a placeholder with a specific name."""
         if path:
-            obj = prm_in.import_file(path, bpy.context, bpy.context.scene)
+            obj = prm_in.import_file(path, bpy.context.scene)
         else:
             obj = create_placeholder(name)
     

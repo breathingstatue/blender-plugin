@@ -344,7 +344,6 @@ def texture_to_int(string):
 	else:
 		return -1
 
-
 def int_to_texture(tex_num, name=""):
 	# The first suffix cycles through a-z repeatedly
 	suffix1 = chr(tex_num % 26 + 97)
@@ -625,7 +624,6 @@ def check_for_export(obj):
 Non-Blender helper functions
 """
 
-
 def get_texture_path(filepath, tex_num, scene):
 	""" Gets the full texture path when given a file and its
 		polygon texture number. """
@@ -644,7 +642,7 @@ def get_texture_path(filepath, tex_num, scene):
 		return None
 
 	# The file is part of a car
-	if scene.prm_check_parameters and "parameters.txt" in os.listdir(path):
+	if "parameters.txt" in os.listdir(path):
 		filepath = os.path.join(path, "parameters.txt")
 		if not filepath in PARAMETERS:
 			PARAMETERS[filepath] = read_parameters(filepath)

@@ -28,8 +28,8 @@ from .common import *
 from .layers import *
 
 
-def export_file(filepath, scene, context):
-    obj = context.view_layer.objects.active
+def export_file(filepath, scene):
+    obj = bpy.context.view_layer.objects.active
     print("Exporting PRM for {}...".format(obj.name))
     meshes = []
 
@@ -56,17 +56,17 @@ def export_file(filepath, scene, context):
 def get_texture_from_material(face, obj):
     # Check if the object has materials
     if obj.material_slots:
-        # Get the material from the first slot as a starting point
-        # You might need to modify this logic if your object uses multiple materials
-        mat = obj.material_slots[face.material_index].material
-        if mat and mat.node_tree:
-            # Iterate over all nodes in the material
-            for node in mat.node_tree.nodes:
-                # Check if the node is an image texture node
-                if node.type == 'TEX_IMAGE':
-                    # Return the first image texture found
-                    # You might want to extend this logic based on your needs
-                    return node.image
+        # Ensure the material index is within the valid range
+        if face.material_index < len(obj.material_slots):
+            # Get the material from the corresponding slot
+            mat = obj.material_slots[face.material_index].material
+            if mat and mat.node_tree:
+                # Iterate over all nodes in the material
+                for node in mat.node_tree.nodes:
+                    # Check if the node is an image texture node
+                    if node.type == 'TEX_IMAGE':
+                        # Return the first image texture found
+                        return node.image
     return None
 
 def export_mesh(me, obj, scene, filepath, world=None):

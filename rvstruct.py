@@ -163,7 +163,6 @@ class World:
         }
         return dic
 
-
 class PRM:
     """
     Similar to Mesh, reads, stores and writes PRM files

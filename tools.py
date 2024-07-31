@@ -8,12 +8,14 @@ Some functions that are called by operators
 
 """
 
+import os
 import bpy
 import bmesh
 import mathutils
+import re
 from math import pi
 import time
-from .common import create_material, COL_HULL
+from .common import create_material, COL_HULL, int_to_texture, texture_to_int, get_texture_path
 import importlib
 
 from bpy.props import (
@@ -157,7 +159,6 @@ def bake_vertex(self, context):
 
 
 def batch_bake(self, context):
-
     rd = context.scene.render
 
     # Saves old render settings

@@ -31,7 +31,7 @@ from mathutils import Color
 # Example: from .common import function_name, ClassName
 
 
-def import_file(filepath, context, scene):
+def import_file(filepath, scene):
 
     with open(filepath, 'rb') as file:
         filename = os.path.basename(filepath)
@@ -39,10 +39,10 @@ def import_file(filepath, context, scene):
         print("Imported FIN file.")
 
     for instance in fin.instances:
-        import_instance(filepath, context, scene, instance)
+        import_instance(filepath, scene, instance)
 
 
-def import_instance(filepath, context, scene, instance):
+def import_instance(filepath, scene, instance):
     folder = os.sep.join(filepath.split(os.sep)[:-1])
 
     prm_fname = "{}.prm".format(instance.name).lower()
@@ -67,7 +67,7 @@ def import_instance(filepath, context, scene, instance):
         print("Found prm in dir.")
         prm_path = os.path.join(folder, prm_fname)
         # Creates the object and links it to the scene
-        instance_obj = prm_in.import_file(prm_path, context, scene)
+        instance_obj = prm_in.import_file(prm_path, bpy.context.scene)
 
     else:
         print("Could not find instance {} at {}".format(prm_fname, folder))
