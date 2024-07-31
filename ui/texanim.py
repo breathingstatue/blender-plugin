@@ -25,8 +25,6 @@ class RVIO_PT_AnimModesPanel(bpy.types.Panel):
         col.prop(scene, "ta_current_frame", text="Current Frame")
         
         # layout.operator("object.add_texanim_uv", text="Add Animation UV Layer")
-        # layout.prop(scene, "texture", icon="TEXTURE")
-        
         # layout.operator("uv.texanim_direction", text="Animation Direction")
         # layout.operator("texanim.transform", icon="UV", text="Transform Animation")
         
