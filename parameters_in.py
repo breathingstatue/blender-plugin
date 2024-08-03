@@ -1,12 +1,3 @@
-"""
-Name:    parameters_in
-Purpose: Importing cars using the parameters.txt file
-
-Description:
-Imports entire cars using the carinfo module.
-
-"""
-
 import os
 from re import S
 import bpy
@@ -30,13 +21,8 @@ def import_file(filepath, scene):
     """
     Imports a parameters.txt file and loads car body and wheels.
     """
-
     PARAMETERS[filepath] = carinfo.read_parameters(filepath)
-
-    # Imports the car with all supported files
     import_car(PARAMETERS[filepath], filepath, scene)
-    
-    # Removes parameters from dict so they can be reloaded next time
     PARAMETERS.pop(filepath)
 
 def import_car(params, filepath, scene):
@@ -66,8 +52,14 @@ def import_car(params, filepath, scene):
 
     folder = os.sep.join(filepath.split(os.sep)[:-1])
     
-    # Helper function to safely fetch model paths
-    def get_path(model_num):
+    def get_single_file_with_keyword(keyword):
+        files = [f for f in os.listdir(folder) if keyword in f.lower() and f.lower().endswith('.prm')]
+        return files[0] if len(files) == 1 else None
+
+    def get_path(model_num, keyword):
+        model_path = get_single_file_with_keyword(keyword)
+        if model_path:
+            return os.path.join(folder, model_path)
         if model_num >= 0:
             model_file = params['model'][model_num]
             model_path = os.path.join(folder, model_file.split(os.sep)[-1])
@@ -75,27 +67,21 @@ def import_car(params, filepath, scene):
                 return model_path
         return None
 
-    # Helper function to import or create a placeholder object
     def import_or_placeholder(path, name, obj_location):
-        """Local helper to import an object or create a placeholder with a specific name."""
         if path:
             obj = prm_in.import_file(path, bpy.context.scene)
         else:
             obj = create_placeholder(name)
     
-        # Set location after import to ensure it overrides any imported transformation
         obj.location = obj_location
         bpy.context.collection.objects.link(obj)
-        # Set the name of the object based on its intended role in the car's model
         obj.name = name
         return obj
 
-    # Body
-    body_path = get_path(params['body']['modelnum'])
+    body_path = get_path(params['body']['modelnum'], 'body')
     body_obj = import_or_placeholder(body_path, "body", to_blender_coord(params["body"]["offset"]))
     body_obj.name = "body"
     
-    # Naming convention mapping
     wheel_names = ['wheelfl', 'wheelfr', 'wheelbl', 'wheelbr']
     spring_names = ['spring0', 'spring1', 'spring2', 'spring3']
     axle_names = ['axle0', 'axle1', 'axle2', 'axle3']
@@ -104,31 +90,28 @@ def import_car(params, filepath, scene):
     spring_lengths = [spring0length, spring1length, spring2length, spring3length]
     axle_lengths = [axle0length, axle1length, axle2length, axle3length]
     
-    # Wheels
     for i in range(4):
-        wheel_path = get_path(params['wheel'][i]['modelnum'])
+        wheel_path = get_path(params['wheel'][i]['modelnum'], 'wheel')
         wheel = import_or_placeholder(wheel_path, wheel_names[i], to_blender_coord(params['wheel'][i]['offset1']))
         wheel.parent = body_obj
         
-    # Springs
     springs = []
     for i in range(4):
-        spring_path = get_path(params['spring'][i]['modelnum'])
+        spring_path = get_path(params['spring'][i]['modelnum'], 'spring')
         if spring_path:
             spring = import_or_placeholder(spring_path, spring_names[i], to_blender_coord(params['spring'][i]['offset']))
             spring.parent = body_obj
             spring.location = to_blender_coord(params['spring'][i]['offset'])
             springs.append(spring)
-            align_to_axis(spring, 'Z')  # Ensure alignment before any further operations
+            align_to_axis(spring, 'Z')
             adjust_object_length(spring, spring_lengths[i], 'Z')
             if is_aligned(spring):
                 set_spring_orientation(spring, wheel_locations[i])
             print(f"Imported and aligned {spring.name}")
 
-    # Axles
     axles = []
     for i in range(4):
-        axle_path = get_path(params['axle'][i]['modelnum'])
+        axle_path = get_path(params['axle'][i]['modelnum'], 'axle')
         if axle_path:
             axle = import_or_placeholder(axle_path, axle_names[i], to_blender_coord(params['axle'][i]['offset']))
             axle.parent = body_obj
@@ -139,16 +122,14 @@ def import_car(params, filepath, scene):
             set_orientation(axle, wheel_locations[i])
             print(f"Adjusted length and set orientation for {axle.name}")
     
-    # Aerial
     aerial = bpy.data.objects.new("aerial", None)
     scene.collection.objects.link(aerial)
     aerial.location = aerial_loc
     aerial.empty_display_type = 'PLAIN_AXES'
-    aerial.empty_display_size = 0.1  # This should be the correct attribute
+    aerial.empty_display_size = 0.1
     aerial.parent = body_obj
 
 def create_placeholder(name):
-    """Create a placeholder object for missing model files."""
     obj = bpy.data.objects.new(name, None)
     bpy.context.scene.collection.objects.link(obj)
     obj.empty_display_type = 'PLAIN_AXES'
@@ -173,26 +154,21 @@ def get_extreme_face_vertices(obj):
     return bottom_vertices, top_vertices
 
 def is_close(v1, v2, tolerance):
-    """Check if two vertices are close within a given tolerance."""
     return (v1 - v2).length <= tolerance
 
 def check_vertex_xy_match(vertices1, vertices2, tolerance=0.05):
-    """Check if at least 55% of vertex pairs are close in the XY plane within a tolerance."""
     if not vertices1 or not vertices2:
         return False
 
     matches = [any(is_close(v1.xy, v2.xy, tolerance) for v2 in vertices2) for v1 in vertices1]
     percentage_matched = sum(matches) / len(vertices1) * 100
-    return percentage_matched >= 55  # At least 55% matching
+    return percentage_matched >= 55
 
 def is_aligned(obj, tolerance=0.05):
-    """Check if an object is aligned based on the vertices at its top and bottom faces."""
     bottom_vertices, top_vertices = get_extreme_face_vertices(obj)
     return check_vertex_xy_match(bottom_vertices, top_vertices, tolerance)
 
 def align_to_axis(obj, target_axis='Z'):
-    """Align the object's longest dimension to the specified global target axis."""
-    # Ensure the latest transformations are considered
     bpy.context.view_layer.update()
     bbox = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
     dimensions = {
@@ -204,9 +180,8 @@ def align_to_axis(obj, target_axis='Z'):
 
     if principal_axis.lower() == target_axis.lower():
         print(f"{obj.name} is already aligned to the {target_axis} axis.")
-        return  # No need to align if already aligned
+        return
 
-    # Determine rotation needed to align the longest dimension to the target axis
     axis_map = {
         ('x', 'y'): ('z', 90),
         ('y', 'x'): ('z', -90),
@@ -223,8 +198,6 @@ def align_to_axis(obj, target_axis='Z'):
         print(f"Rotated {obj.name} around {rotation_axis.upper()} by {angle} degrees to align {principal_axis.upper()} with {target_axis.upper()}")
 
 def adjust_object_length(obj, target_length, length_axis='Z'):
-    """Adjust the object's length to match the specified target length."""
-    # Ensure the latest transformations are considered
     bpy.context.view_layer.update()
     bbox = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
     if length_axis == 'Y':
@@ -245,10 +218,9 @@ def adjust_object_length(obj, target_length, length_axis='Z'):
         elif length_axis == 'X':
             obj.scale.x *= scale_factor
 
-        bpy.context.view_layer.update()  # Apply the scaling immediately
+        bpy.context.view_layer.update()
         print(f"Scaled {obj.name} along {length_axis} to target length {target_length}. Scale factor applied: {scale_factor}")
 
-        # After scaling, verify the new length
         bpy.context.view_layer.update()
         bbox = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
         new_length = max(getattr(v, length_axis.lower()) for v in bbox) - min(getattr(v, length_axis.lower()) for v in bbox)
@@ -261,46 +233,30 @@ def check_alignment_and_orient(obj, wheel_loc):
         pass
     
 def set_spring_orientation(spring, wheel_loc, outward=True):
-    """
-    Set the orientation of the spring relative to its corresponding wheel.
-    Only adjust if the spring's rotation is neutral.
-    """
     direction = Vector(wheel_loc) - spring.location
     if outward:
-        direction = -direction  # Invert direction to point outward
+        direction = -direction
     direction.normalize()
 
-    # Assuming Z is up in Blender
     up = Vector((0, 0, 1))
     rot_quat = direction.to_track_quat('Z', 'Y')
-
-    # Apply the calculated rotation
     spring.rotation_euler = rot_quat.to_euler()
     print(f"Applied rotation to {spring.name}")
 
 def set_orientation(obj, target_pos, flip=False):
-    """ Orient an object so its local Y-axis points towards target_pos, optionally flipped 180 degrees. """
     if obj is None:
         print("Attempted to set orientation on a None object.")
         return
 
-    # Ensure the target position and object location are both vectors
     obj_location = Vector(obj.location)
     target_vector = Vector(target_pos)
 
-    # Calculate the directional vector from the object to the target position
     direction = (target_vector - obj_location).normalized()
-
-    # Determine the correct axis for the forward direction; 'Y' axis should point towards the target
     up_axis = 'Z'
-
-    # Calculate the quaternion to align the object's Y-axis to the direction vector
     quat = direction.to_track_quat('Y', up_axis)
 
-    # If flipping is needed, apply a 180-degree rotation around the up_axis
     if flip:
         flip_quat = Quaternion((0, 0, 1), radians(180))
         quat = quat @ flip_quat
 
-    # Apply the calculated rotation
     obj.rotation_euler = quat.to_euler()

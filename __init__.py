@@ -123,12 +123,13 @@ if "rim_out" in locals():
 from .common import DialogOperator, TEX_ANIM_MAX, TEX_PAGES_MAX
 from .common import FACE_DOUBLE, FACE_TRANSLUCENT, FACE_MIRROR, FACE_TRANSL_TYPE, FACE_TEXANIM, FACE_NOENV, FACE_ENV, FACE_CLOTH, FACE_SKIP
 from .common import NCP_DOUBLE, NCP_NO_SKID, NCP_OIL, NCP_OBJECT_ONLY, NCP_CAMERA_ONLY, NCP_NOCOLL, MATERIALS
-from .layers import select_ncp_material, get_face_material, set_face_material, set_face_texture, get_face_texture
+from .layers import select_ncp_material, get_face_material, set_face_material, set_face_texture, get_face_texture, update_envmapping, update_no_envmapping
 from .layers import set_face_ncp_property, get_face_ncp_property, get_face_env, set_face_env, update_face_env, get_face_property
-from .layers import set_face_property, alpha_values, update_vertex_alpha
+from .layers import set_face_property, update_vertex_alpha, update_fin_env, set_rgb, get_rgb, update_rgb, get_alpha_items
+from .layers import update_fin_env_map, update_model_rgb, update_no_envmapping, update_envmapping
 from .operators import ImportRV, ExportRV, RVIO_OT_ReadCarParameters, RVIO_OT_SelectRevoltDirectory, ButtonReExport
-from .operators import VertexColorCreateLayer, VertexColorRemove, SetVertexColor, BakeShadow, InstanceColor
-from .operators import TexAnimDirection, InstanceEnvMapColor, VertexAlphaCreateLayer, SetVertexAlpha
+from .operators import VertexAndAlphaLayer, VertexColorRemove, SetVertexColor, BakeShadow
+from .operators import TexAnimDirection, SetVertexAlpha, CreateRGBModelMaterial
 from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, MaterialAssignment
 from .operators import SetInstanceProperty, RemoveInstanceProperty, LaunchRV, TexturesSave
 from .operators import TexturesRename, CarParametersExport, ButtonZoneHide, AddTrackZone
@@ -138,7 +139,7 @@ from .operators import menu_func_import, menu_func_export
 from .rvstruct import World, PRM, Mesh, BoundingBox, Vector, Matrix, Polygon, Vertex, UV, BigCube, TexAnimation
 from .rvstruct import Frame, Color, Instances, Instance, PosNodes, PosNode, NCP, Polyhedron, Plane, LookupGrid
 from .rvstruct import LookupList, Hull, ConvexHull, Edge, Interior, Sphere, RIM, MirrorPlane, TrackZones, Zone
-from .texanim import update_ta_max_frames, update_ta_current_slot, update_ta_current_frame, update_ta_current_frame_uv
+from .texanim import update_ta_max_frames, update_ta_current_slot, update_ta_current_frame
 from .texanim import update_ta_current_frame_delay, update_ta_current_frame_tex, update_ta_max_slots
 from .ui.faceprops import RVIO_PT_RevoltFacePropertiesPanel
 from .ui.headers import RVIO_PT_RevoltIOToolPanel
@@ -154,7 +155,7 @@ from .ui.zone import RVIO_PT_RevoltZonePanel
 bl_info = {
 "name": "Re-Volt",
 "author": "Marvin Thiel & Theman",
-"version": (20, 24, 7),
+"version": (20, 24, 8),
 "blender": (4, 1, 0),
 "location": "File > Import-Export",
 "description": "Import and export Re-Volt file formats.",
@@ -194,6 +195,13 @@ def register():
     
     #Register Custom Properties
     
+    bpy.types.Scene.envidx = bpy.props.IntProperty(
+        name="envidx",
+        default=0,
+        min=0,
+        description="Current env color index for importing. Internal only"
+    )
+    
     bpy.types.Object.is_instance = bpy.props.BoolProperty(
         name = "Is Instance",
         default = False,
@@ -203,7 +211,8 @@ def register():
     bpy.types.Object.fin_env = bpy.props.BoolProperty(
         name = "Use Environment Map",
         default = True,
-        description = "If set on, instance is EnvMapped."
+        description = "If set on, instance is EnvMapped.",
+        update=update_fin_env_map
     )
     
     bpy.types.Object.fin_no_mirror = bpy.props.BoolProperty(
@@ -230,36 +239,38 @@ def register():
         description = "If set on, instance has no object collision."
     )
 
-    bpy.types.Scene.envidx = bpy.props.IntProperty(
-        name="envidx",
-        default=0,
-        min=0,
-        description="Current env color index for importing. Internal only"
-    )
-
     bpy.types.Object.fin_col = bpy.props.FloatVectorProperty(
         name="Model Color",
         subtype='COLOR',
-        default=(0.5, 0.5, 0.5),
-        min=0.0, max=1.0,
+        size=4,
+        min=0.0,
+        max=1.0,
+        default=(0.5, 0.5, 0.5, 1.0),  # Ensure RGBA is used here
         description="Model RGB color to be added/subtracted:\n1.0: Bright, overrides vertex colors\n"
-            "0.5: Default, leaves vertex colors intact\n"
-            "0.0: Dark"
+                    "0.5: Default, leaves vertex colors intact\n"
+                    "0.0: Dark",
+        get=get_rgb,
+        set=set_rgb,
+        update=update_rgb
     )
     
     bpy.types.Object.fin_envcol = bpy.props.FloatVectorProperty(
         name="Env Color",
         subtype='COLOR',
         default=(1.0, 1.0, 1.0, 1.0),
+        size=4,
         min=0.0, max=1.0,
         description="Instance EnvMap Color",
-        size=4
+        get=get_face_env,
+        set=set_face_env,
+        update=update_fin_env
     )
     
     bpy.types.Object.fin_model_rgb = bpy.props.BoolProperty(
         name="Use Model Color",
         description="Toggle to use the model's color",
-        default=False
+        default=False,
+        update=update_model_rgb
     )
     
     bpy.types.Object.fin_hide = bpy.props.BoolProperty(
@@ -471,20 +482,22 @@ def register():
     )
     
     bpy.types.Scene.ta_max_frames = bpy.props.IntProperty(
-        name = "Max Frames",
-        min = 1,
-        max = TEX_PAGES_MAX,
+        name = "Frames",
+        min = 2,
         default = 2,
+        update = update_ta_max_frames,
         description = "Total number of frames of the current slot. "
                       "All higher frames will be ignored on export"
     )
     
     bpy.types.Scene.ta_max_slots = bpy.props.IntProperty(
-        name="Max Used Slots",
-        min=1,
-        max=TEX_PAGES_MAX,
-        default=1,
-        description="Total number of texture animation slots. All higher slots will be ignored on export"
+        name = "Slots",
+        min = 0,
+        max = TEX_ANIM_MAX,
+        default = 0,
+        update = update_ta_max_slots,
+        description = "Total number of texture animation slots. "
+                      "All higher slots will be ignored on export"
     )
     
     bpy.types.Scene.rvio_frame_start = bpy.props.IntProperty(
@@ -512,8 +525,8 @@ def register():
     )
     
     bpy.types.Scene.ta_current_slot = bpy.props.IntProperty(
-        name = "Texture Slot",
-        default = 1,
+        name = "Animation",
+        default = 0,
         min = 0,
         max = TEX_ANIM_MAX-1,
         update = update_ta_current_slot,
@@ -529,14 +542,6 @@ def register():
         description = "Texture of the current frame"
     )
     
-    bpy.types.Scene.ta_current_frame_delay = bpy.props.FloatProperty(
-        name = "Duration",
-        default = 0.02,
-        min = 0,
-        update = update_ta_current_frame_delay,
-        description = "Duration of the current frame"
-    )
-    
     bpy.types.Scene.ta_current_frame = bpy.props.IntProperty(
         name = "Frame",
         default = 1,
@@ -545,34 +550,42 @@ def register():
         description = "Current frame"
     )
         
-    bpy.types.Scene.ta_current_frame_uv0 = bpy.props.FloatVectorProperty(
+    bpy.types.Scene.ta_frame_uv0 = bpy.props.FloatVectorProperty(
         name = "UV 0",
         size = 2,
         default = (0, 0),
+        #min = 0.0,
+        #max = 1.0,
         update = lambda self, context: update_ta_current_frame_uv(context, 0),
         description = "UV coordinate of the first vertex"
     )
     
-    bpy.types.Scene.ta_current_frame_uv1 = bpy.props.FloatVectorProperty(
+    bpy.types.Scene.ta_frame_uv1 = bpy.props.FloatVectorProperty(
         name = "UV 1",
         size = 2,
         default = (0, 0),
+        #min = 0.0,
+        #max = 1.0,
         update = lambda self, context: update_ta_current_frame_uv(context, 1),
         description = "UV coordinate of the second vertex"
     )
     
-    bpy.types.Scene.ta_current_frame_uv2 = bpy.props.FloatVectorProperty(
+    bpy.types.Scene.ta_frame_uv2 = bpy.props.FloatVectorProperty(
         name = "UV 2",
         size = 2,
         default = (0, 0),
+        #min = 0.0,
+        #max = 1.0,
         update = lambda self, context: update_ta_current_frame_uv(context, 2),
         description = "UV coordinate of the third vertex"
     )
     
-    bpy.types.Scene.ta_current_frame_uv3 = bpy.props.FloatVectorProperty(
+    bpy.types.Scene.ta_frame_uv3 = bpy.props.FloatVectorProperty(
         name = "UV 3",
         size = 2,
         default = (0, 0),
+        #min = 0.0,
+        #max = 1.0,
         update = lambda self, context: update_ta_current_frame_uv(context, 3),
         description = "UV coordinate of the fourth vertex"
     )
@@ -637,9 +650,10 @@ def register():
         name="Material Layer",
         items=[
             ('COL', "Color", "Assign Color Material"),
-            ('ALPHA', "Alpha", "Assign Alpha Material"),
-            ('ENV', "Environment", "Assign Environment Material"),
+            ('ALPHA', "Alpha", "Assign Vertex Alpha Material"),
+            ('ENV', "EnvMap", "Assign Env / EnvAlpha Material"),
             ('UV_TEX', "Texture", "Assign UV Texture"),
+            ('RGB', "Model Color (Instance)", "Assign RGB Model Color")
         ],
     )
     
@@ -686,7 +700,8 @@ def register():
         name = "No EnvMap (.prm)",
         description = "Disables the environment map for this poly (.prm only)",
         get=lambda self: bool(get_face_property(self, FACE_NOENV)),
-        set=lambda self, value: set_face_property(self, value, FACE_NOENV)
+        set=lambda self, value: set_face_property(self, value, FACE_NOENV),
+        update=update_no_envmapping
     )
     
     bpy.types.Mesh.face_envmapping = bpy.props.BoolProperty(
@@ -695,7 +710,8 @@ def register():
                       "If enabled on pickup.m, sparks will appear \n"
                       "around the poly",
         get=lambda self: bool(get_face_property(self, FACE_ENV)),
-        set=lambda self, value: set_face_property(self, value, FACE_ENV)
+        set=lambda self, value: set_face_property(self, value, FACE_ENV),
+        update=update_envmapping
     )
     
     bpy.types.Mesh.face_cloth = bpy.props.BoolProperty(
@@ -792,6 +808,13 @@ def register():
         max=1.0,
         subtype='FACTOR'
     )
+    
+    bpy.types.Scene.vertex_alpha_percentage = bpy.props.EnumProperty(
+        name="Alpha Percentage",
+        description="Choose an alpha percentage for the vertex color layer",
+        items=get_alpha_items(),
+        default='0'
+    )
 
     bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
     bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
@@ -840,7 +863,7 @@ def register():
     bpy.utils.register_class(ExportRV)
     bpy.utils.register_class(RVIO_OT_ReadCarParameters)
     bpy.utils.register_class(ButtonReExport)
-    bpy.utils.register_class(VertexColorCreateLayer)
+    bpy.utils.register_class(VertexAndAlphaLayer)
     bpy.utils.register_class(VertexColorRemove)
     bpy.utils.register_class(SetVertexColor)
     bpy.utils.register_class(TexAnimDirection)
@@ -865,10 +888,8 @@ def register():
     bpy.utils.register_class(ButtonZoneHide)
     bpy.utils.register_class(AddTrackZone)
     bpy.utils.register_class(SetBCubeMeshIndices)
-    bpy.utils.register_class(InstanceEnvMapColor)
-    bpy.utils.register_class(VertexAlphaCreateLayer)
     bpy.utils.register_class(SetVertexAlpha)
-    bpy.utils.register_class(InstanceColor)
+    bpy.utils.register_class(CreateRGBModelMaterial)
     bpy.utils.register_class(RVIO_OT_SelectRevoltDirectory)
     
     # Register UI
@@ -905,10 +926,8 @@ def unregister():
     
     # Unregister Operators
     bpy.utils.unregister_class(RVIO_OT_SelectRevoltDirectory)
-    bpy.utils.unregister_class(InstanceColor)
+    bpy.utils.unregister_class(CreateRGBModelMaterial)
     bpy.utils.unregister_class(SetVertexAlpha)
-    bpy.utils.unregister_class(VertexAlphaCreateLayer)
-    bpy.utils.unregister_class(InstanceEnvMapColor)
     bpy.utils.unregister_class(SetBCubeMeshIndices)
     bpy.utils.unregister_class(AddTrackZone)
     bpy.utils.unregister_class(ButtonZoneHide)
@@ -931,7 +950,7 @@ def unregister():
     bpy.utils.unregister_class(SelectByName)
     bpy.utils.unregister_class(ButtonRenameAllObjects)
     bpy.utils.unregister_class(TexAnimDirection)
-    bpy.utils.unregister_class(VertexColorCreateLayer)
+    bpy.utils.unregister_class(VertexAndAlphaLayer)
     bpy.utils.unregister_class(VertexColorRemove)
     bpy.utils.unregister_class(SetVertexColor)
     bpy.utils.unregister_class(ButtonReExport)
@@ -951,6 +970,7 @@ def unregister():
     bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
     bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
 
+    del bpy.types.Scene.vertex_alpha_percentage
     del bpy.types.Scene.vertex_alpha
     del bpy.types.Scene.vertex_color_picker
     del bpy.types.Mesh.face_ncp_nocoll

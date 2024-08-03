@@ -53,8 +53,8 @@ def set_vcol(faces, layer, color):
             loop[layer][1] = color[1]
             loop[layer][2] = color[2]
 
-# Define the alpha values
-alpha_values = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+def get_alpha_items():
+    return [(f"{i}", f"{i}%", f"Set alpha to {i}%") for i in range(0, 101, 10)]
 
 # Property definition function for vertex alpha
 def update_vertex_alpha(self, context):
@@ -97,7 +97,6 @@ def get_face_texture(self):
     else:
         return selected_faces[0][layer]
 
-
 def set_face_texture(self, value):
     obj = bpy.context.object
     bm = bmesh.from_edit_mesh(obj.data) if obj.mode == 'EDIT' else bmesh.new()
@@ -108,20 +107,19 @@ def set_face_texture(self, value):
             face[layer] = value
 
 def get_face_env(self):
-    eo = bpy.context.edit_object
-    bm = get_edit_bmesh(eo)
-    env_layer = (bm.loops.layers.color.get("Env")
-                 or bm.loops.layers.color.new("Env"))
-    env_alpha_layer = (bm.faces.layers.float.get("EnvAlpha")
-                       or bm.faces.layers.float.new("EnvAlpha"))
+    obj = bpy.context.edit_object
+    bm = bmesh.from_edit_mesh(obj.data)
     
-    if eo is None or eo.type != 'MESH' or not eo.mode == 'EDIT':
-        return 0
+    # Ensure Env and EnvAlpha layers exist
+    env_layer = bm.loops.layers.color.get("Env") or bm.loops.layers.color.new("Env")
+    env_alpha_layer = bm.faces.layers.float.get("EnvAlpha") or bm.faces.layers.float.new("EnvAlpha")
 
     # Gets the average color for all selected faces
     selected_faces = [face for face in bm.faces if face.select]
-    col = get_average_vcol2(selected_faces, env_layer)
+    if not selected_faces:
+        return [1.0, 1.0, 1.0, 1.0]
 
+    col = get_average_vcol2(selected_faces, env_layer)
     return [*col, selected_faces[0][env_alpha_layer]]
 
 def set_face_env(self, value):
@@ -151,8 +149,37 @@ def update_face_env(self, context):
     for face in bm.faces:
         if face.select:
             for loop in face.loops:
-                loop[env_layer][:3] = self.face_env[:3]
-            face[env_alpha_layer] = self.face_env[3]
+                loop[env_layer][:3] = obj.data.face_env[:3]
+            face[env_alpha_layer] = obj.data.face_env[3]
+
+    if obj.mode == 'EDIT':
+        bmesh.update_edit_mesh(obj.data)
+    else:
+        bm.to_mesh(obj.data)
+        bm.free()
+
+    obj.data.update()
+    
+def update_fin_env(self, context):
+    obj = context.object
+    bm = bmesh.from_edit_mesh(obj.data) if obj.mode == 'EDIT' else bmesh.new()
+    if obj.mode != 'EDIT':
+        bm.from_mesh(obj.data)
+        
+    env_layer = bm.loops.layers.color.get("Env") or bm.loops.layers.color.new("Env")
+    env_alpha_layer = bm.faces.layers.float.get("EnvAlpha") or bm.faces.layers.float.new("EnvAlpha")
+    
+    if not env_layer or not env_alpha_layer:
+        print("Env or EnvAlpha layer not found")
+        if obj.mode != 'EDIT':
+            bm.free()
+        return
+
+    for face in bm.faces:
+        if face.select:
+            for loop in face.loops:
+                loop[env_layer][:3] = self.fin_envcol[:3]
+            face[env_alpha_layer] = self.fin_envcol[3]
 
     if obj.mode == 'EDIT':
         bmesh.update_edit_mesh(obj.data)
@@ -162,6 +189,120 @@ def update_face_env(self, context):
 
     obj.data.update()
 
+def get_rgb(self):
+    return self.get("fin_col", (0.5, 0.5, 0.5, 1.0))
+
+def set_rgb(self, value):
+    self["fin_col"] = value
+    update_rgb(self, bpy.context)
+
+def update_rgb(self, context):
+    obj = context.object
+    mat_name = f"{get_base_name_for_layers(obj)}_RGBModelColor"
+    color = obj["fin_col"]
+
+    # Check if all faces are selected
+    if obj.mode == 'EDIT':
+        bm = bmesh.from_edit_mesh(obj.data)
+        all_faces_selected = all(face.select for face in bm.faces)
+    else:
+        all_faces_selected = all(face.select for face in obj.data.polygons)
+
+    if not all_faces_selected:
+        # If not all faces are selected, do not proceed with the color update
+        print("Not all faces are selected. Aborting color update.")
+        return
+
+    if mat_name in bpy.data.materials:
+        mat = bpy.data.materials[mat_name]
+        bsdf = mat.node_tree.nodes.get('Principled BSDF')
+        if bsdf:
+            bsdf.inputs['Base Color'].default_value = color
+
+    obj.data.update()
+
+def update_fin_env_map(self, context):
+    obj = context.object
+    bm = bmesh.from_edit_mesh(obj.data) if obj.mode == 'EDIT' else bmesh.new()
+    if not bm.is_wrapped:
+        bm.from_mesh(obj.data)
+
+    mat_name = f"{obj.name}_Env"
+    material = bpy.data.materials.get(mat_name)
+    if not material:
+        material = bpy.data.materials.new(name=mat_name)
+        material.use_nodes = True
+        nodes = material.node_tree.nodes
+        links = material.node_tree.links
+
+        material_output = nodes.get('Material Output') or nodes.new(type='ShaderNodeOutputMaterial')
+        attr_node = nodes.new(type='ShaderNodeAttribute')
+        attr_node.attribute_name = "Env"
+
+        principled_bsdf = nodes.new(type='ShaderNodeBsdfPrincipled')
+        links.new(attr_node.outputs['Color'], principled_bsdf.inputs['Base Color'])
+        links.new(principled_bsdf.outputs['BSDF'], material_output.inputs['Surface'])
+
+    for face in bm.faces:
+        if face.select:
+            if self.fin_env:
+                if material.name not in obj.data.materials:
+                    obj.data.materials.append(material)
+                face.material_index = obj.data.materials.find(material.name)
+            else:
+                if material.name in obj.data.materials:
+                    obj.data.materials[obj.data.materials.find(material.name)] = None
+
+    if obj.mode == 'EDIT':
+        bmesh.update_edit_mesh(obj.data)
+    else:
+        bm.to_mesh(obj.data)
+        bm.free()
+
+    obj.data.update()
+
+def update_model_rgb(self, context):
+    obj = context.object
+    bm = bmesh.from_edit_mesh(obj.data) if obj.mode == 'EDIT' else bmesh.new()
+    if not bm.is_wrapped:
+        bm.from_mesh(obj.data)
+
+    # Find or create the RGB model material
+    mat_name = f"{obj.name}_RGBModelColor"
+    material = bpy.data.materials.get(mat_name)
+    if not material:
+        material = bpy.data.materials.new(name=mat_name)
+        material.use_nodes = True
+        nodes = material.node_tree.nodes
+        links = material.node_tree.links
+
+        material_output = nodes.get('Material Output') or nodes.new(type='ShaderNodeOutputMaterial')
+        attr_node = nodes.new(type='ShaderNodeAttribute')
+        attr_node.attribute_name = "RGBModelColor"
+
+        principled_bsdf = nodes.new(type='ShaderNodeBsdfPrincipled')
+        links.new(attr_node.outputs['Color'], principled_bsdf.inputs['Base Color'])
+        links.new(principled_bsdf.outputs['BSDF'], material_output.inputs['Surface'])
+
+    # Assign or remove the material based on the property value
+    for face in bm.faces:
+        if face.select:
+            if self.fin_model_rgb:
+                if material.name not in obj.data.materials:
+                    obj.data.materials.append(material)
+                face.material_index = obj.data.materials.find(material.name)
+            else:
+                if material.name in obj.data.materials:
+                    obj.data.materials[obj.data.materials.find(material.name)] = None
+
+    if obj.mode == 'EDIT':
+        bmesh.update_edit_mesh(obj.data)
+    else:
+        bm.to_mesh(obj.data)
+        bm.free()
+
+    obj.data.update()
+        
 def get_face_property(mesh, prop_mask):
     obj = bpy.context.object
     if obj.type != 'MESH' or bpy.context.mode != 'EDIT_MESH':
@@ -194,6 +335,90 @@ def set_face_property(mesh, value, prop_mask):
 
     if modified:
         bmesh.update_edit_mesh(mesh)  # Update mesh if modifications were made    
+        
+def update_no_envmapping(self, context):
+    obj = context.object
+    bm = bmesh.from_edit_mesh(obj.data) if obj.mode == 'EDIT' else bmesh.new()
+    if not bm.is_wrapped:
+        bm.from_mesh(obj.data)
+    
+    # Find or create the _Env material
+    mat_name = f"{obj.name}_Env"
+    material = bpy.data.materials.get(mat_name)
+    if not material:
+        material = bpy.data.materials.new(name=mat_name)
+        material.use_nodes = True
+        nodes = material.node_tree.nodes
+        links = material.node_tree.links
+
+        material_output = nodes.get('Material Output') or nodes.new(type='ShaderNodeOutputMaterial')
+        attr_node = nodes.new(type='ShaderNodeAttribute')
+        attr_node.attribute_name = "Env"
+
+        principled_bsdf = nodes.new(type='ShaderNodeBsdfPrincipled')
+        links.new(attr_node.outputs['Color'], principled_bsdf.inputs['Base Color'])
+        links.new(principled_bsdf.outputs['BSDF'], material_output.inputs['Surface'])
+
+    # Assign or remove the material based on the property value
+    for face in bm.faces:
+        if face.select:
+            if self.face_no_envmapping:
+                if material.name not in obj.data.materials:
+                    obj.data.materials.append(material)
+                face.material_index = obj.data.materials.find(material.name)
+            else:
+                if material.name in obj.data.materials:
+                    obj.data.materials[obj.data.materials.find(material.name)] = None
+    
+    if obj.mode == 'EDIT':
+        bmesh.update_edit_mesh(obj.data)
+    else:
+        bm.to_mesh(obj.data)
+        bm.free()
+
+    obj.data.update()
+
+def update_envmapping(self, context):
+    obj = context.object
+    bm = bmesh.from_edit_mesh(obj.data) if obj.mode == 'EDIT' else bmesh.new()
+    if not bm.is_wrapped:
+        bm.from_mesh(obj.data)
+    
+    # Find or create the _Env material
+    mat_name = f"{obj.name}_Env"
+    material = bpy.data.materials.get(mat_name)
+    if not material:
+        material = bpy.data.materials.new(name=mat_name)
+        material.use_nodes = True
+        nodes = material.node_tree.nodes
+        links = material.node_tree.links
+
+        material_output = nodes.get('Material Output') or nodes.new(type='ShaderNodeOutputMaterial')
+        attr_node = nodes.new(type='ShaderNodeAttribute')
+        attr_node.attribute_name = "Env"
+
+        principled_bsdf = nodes.new(type='ShaderNodeBsdfPrincipled')
+        links.new(attr_node.outputs['Color'], principled_bsdf.inputs['Base Color'])
+        links.new(principled_bsdf.outputs['BSDF'], material_output.inputs['Surface'])
+
+    # Assign or remove the material based on the property value
+    for face in bm.faces:
+        if face.select:
+            if self.face_envmapping:
+                if material.name not in obj.data.materials:
+                    obj.data.materials.append(material)
+                face.material_index = obj.data.materials.find(material.name)
+            else:
+                if material.name in obj.data.materials:
+                    obj.data.materials[obj.data.materials.find(material.name)] = None
+    
+    if obj.mode == 'EDIT':
+        bmesh.update_edit_mesh(obj.data)
+    else:
+        bm.to_mesh(obj.data)
+        bm.free()
+
+    obj.data.update()
 
 def get_face_ncp_property(mesh, prop_mask):
     if bpy.context.mode != 'EDIT_MESH':
@@ -309,3 +534,16 @@ def select_ncp_material(self, context):
 
     if count == 0:
         msg_box("No {} materials found.".format(MATERIALS[mat+1][1]))
+        
+def get_base_name_for_layers(obj):
+    base_name = obj.name.split('.')[0]
+    extension = ""
+
+    specific_parts = ["body", "wheel", "axle", "spring"]
+
+    if ".w" in obj.name:
+        extension = ".w"
+    elif ".prm" in obj.name or any(part in obj.name for part in specific_parts):
+        extension = ".prm"
+
+    return f"{base_name}{extension}"

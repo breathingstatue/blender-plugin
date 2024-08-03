@@ -210,8 +210,6 @@ def assign_uv_tex_material(obj):
         if material_key in bmp_materials:
             material = bmp_materials[material_key]
             face.material_index = obj.data.materials.find(material.name)
-        else:
-            print(f"No material found for texture number {tex_num}")
 
     if obj.mode != 'EDIT':
         bm.to_mesh(obj.data)
@@ -228,28 +226,24 @@ def get_bmp_materials():
                     bmp_materials[node.image.name] = mat
     return bmp_materials
 
+
 def apply_env_data(mesh_data, world, polygons, envlist, obj_name):
     """
     Apply environment settings to a mesh in Blender by setting vertex colors and adjusting the Principled BSDF node's base color and alpha.
     """
     global w_in
 
-    if not envlist or len(envlist) == 0:
-        print("No environmental data available to apply.")
-        return
-
     bm = bmesh.new()
     bm.from_mesh(mesh_data)
 
     # Ensure environment layers are added or retrieved correctly
-    env_layer = bm.loops.layers.color.get("Env")
-    env_alpha_layer = bm.faces.layers.float.get("EnvAlpha")
+    env_layer = bm.loops.layers.color.get("Env") or bm.loops.layers.color.new("Env")
+    env_alpha_layer = bm.faces.layers.float.get("EnvAlpha") or bm.faces.layers.float.new("EnvAlpha")
 
     # Retrieve or create the material with environmental settings
     env_material_name = f"{obj_name}_Env"
     env_material = bpy.data.materials.get(env_material_name)
     if not env_material:
-        print(f"Creating new material: {env_material_name}")
         env_material = bpy.data.materials.new(name=env_material_name)
         env_material.use_nodes = True
         nodes = env_material.node_tree.nodes
@@ -258,36 +252,33 @@ def apply_env_data(mesh_data, world, polygons, envlist, obj_name):
         mat_output = nodes.new('ShaderNodeOutputMaterial')
         links.new(bsdf.outputs['BSDF'], mat_output.inputs['Surface'])
     else:
+        nodes = env_material.node_tree.nodes
+        links = env_material.node_tree.links
         bsdf = env_material.node_tree.nodes.get('Principled BSDF')
         if not bsdf:
-            print("BSDF node missing in existing material, creating new BSDF node.")
             bsdf = env_material.node_tree.nodes.new('ShaderNodeBsdfPrincipled')
 
-    print("Applying environmental data to {} faces.".format(len(bm.faces)))
-
     # Validate the number of faces and polygons
-    if len(bm.faces) != len(polygons):
-        print("Warning: Number of faces and polygons do not match! Faces: {}, Polygons: {}".format(len(bm.faces), len(polygons)))
+    if len(bm.faces) == len(polygons):
+        for face_index, (face, poly) in enumerate(zip(bm.faces, polygons)):
+            if poly.type & FACE_ENV:
+                env_index = w_in.envidx % len(envlist)
+                env_col = envlist[env_index]
+                scaled_color = tuple(c / 255.0 for c in env_col.color)
+                scaled_alpha = env_col.alpha / 255.0
 
-    for face_index, (face, poly) in enumerate(zip(bm.faces, polygons)):
-        if poly.type & FACE_ENV:
-            env_index = w_in.envidx % len(envlist)
-            env_col = envlist[env_index]
-            scaled_color = tuple(c / 255.0 for c in env_col.color)
-            scaled_alpha = env_col.alpha / 255.0
+                full_color = (*scaled_color, scaled_alpha)  # Ensure we have RGBA values
 
-            full_color = (*scaled_color, scaled_alpha)  # Ensure we have RGBA values
+                for loop in face.loops:
+                    loop[env_layer] = full_color  # Assign RGBA to the Env layer
+                face[env_alpha_layer] = scaled_alpha
 
-            for loop in face.loops:
-                loop[env_layer] = full_color  # Assign RGBA to the Env layer
-            face[env_alpha_layer] = scaled_alpha
+                if bsdf:
+                    bsdf.inputs['Base Color'].default_value = (*scaled_color, 1)
+                    bsdf.inputs['Alpha'].default_value = scaled_alpha
 
-            if bsdf:
-                bsdf.inputs['Base Color'].default_value = (*scaled_color, 1)
-                bsdf.inputs['Alpha'].default_value = scaled_alpha
-
-            face.smooth = True
-            w_in.envidx += 1  # Increment the global index after processing each face
+                face.smooth = True
+                w_in.envidx += 1  # Increment the global index after processing each face
 
     bm.to_mesh(mesh_data)
     mesh_data.update()

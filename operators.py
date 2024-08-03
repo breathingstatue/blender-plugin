@@ -20,6 +20,7 @@ from mathutils import Vector as BlenderVector
 from bpy_extras.io_utils import ExportHelper
 from . import common
 from . import tools
+from .fin_in import model_color_material
 from .hul_in import create_sphere
 from .texanim import *
 from .tools import generate_chull
@@ -27,6 +28,7 @@ from .rvstruct import *
 from . import carinfo
 from .common import get_format, FORMAT_PRM, FORMAT_FIN, FORMAT_NCP, FORMAT_HUL, FORMAT_W, FORMAT_RIM, FORMAT_TA_CSV, FORMAT_TAZ, FORMAT_UNK
 from .common import get_errors, msg_box, FORMATS, to_revolt_scale, FORMAT_CAR, TEX_PAGES_MAX, int_to_texture
+from .layers import set_face_env, update_model_rgb
 
 from bpy.props import (
     BoolProperty,
@@ -246,7 +248,7 @@ def exec_export(filepath, format_type, context):
 
     elif frmt == 'FIN':
         from . import fin_out
-        fin_out.export_file(filepath, context)
+        fin_out.export_file(filepath, context.scene)
 
     elif frmt == 'NCP':
         from . import ncp_out
@@ -629,40 +631,6 @@ class RemoveInstanceProperty(bpy.types.Operator):
         self.report({'INFO'}, f"Removed 'is_instance' property from {removed_count} objects")
         return {'FINISHED'}
     
-class InstanceColor(bpy.types.Operator):
-    bl_idname = "object.use_fin_col"
-    bl_label = "Set Instance Color"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    fin_col: bpy.props.FloatVectorProperty(
-        name="Fin Color",
-        subtype='COLOR',
-        default=(0.5, 0.5, 0.5),
-        min=0.0, max=1.0,
-        description="Set the object's color"
-    )
-
-    def execute(self, context):
-        obj = context.active_object
-
-        if obj is None:
-            self.report({'WARNING'}, "No active object")
-            return {'CANCELLED'}
-
-        # Now fin_col comes from the color picker, so we directly update the object's fin_col property
-        obj.fin_col = self.fin_col[:3]  # Update the object's fin_col property
-
-        # Report the new color to the user
-        color_values = tuple(round(val, 3) for val in self.fin_col[:3])
-        self.report({'INFO'}, f"Fin color applied to {obj.name}: {color_values}")
-
-        return {'FINISHED'}
-
-    def invoke(self, context, event):
-        wm = context.window_manager
-        return wm.invoke_props_dialog(self)
-    
-
 """
 MATERIALS & TEXTURES ---------------------------------------------------------
 """
@@ -674,11 +642,19 @@ class MaterialAssignment(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
-        # Determine if UV Texture assignment needs edit mode
-        for obj in context.selected_objects:
-            if obj.type == 'MESH' and obj.data.material_choice == 'UV_TEX' and obj.mode != 'EDIT':
-                self.report({'WARNING'}, "Switch to Edit Mode because of Texture.")
-                return {'CANCELLED'}
+        obj = context.active_object
+
+        if obj is None:
+            self.report({'WARNING'}, "No active object")
+            return {'CANCELLED'}
+
+        if obj.mode != 'EDIT':
+            self.report({'WARNING'}, "Switch to Edit Mode.")
+            return {'CANCELLED'}
+
+        if obj.type != 'MESH':
+            self.report({'WARNING'}, "Active object is not a mesh")
+            return {'CANCELLED'}
 
         # Explicitly set the material choice for all selected objects before updating materials
         active_material_choice = context.active_object.data.material_choice if context.active_object else 'COL'
@@ -689,7 +665,6 @@ class MaterialAssignment(bpy.types.Operator):
         # Update material assignments
         for obj in context.selected_objects:
             if obj.type == 'MESH' and hasattr(obj.data, 'material_choice'):
-                print(f"Updating {obj.name} with material choice {obj.data.material_choice}")
                 self.update_material_assignment(obj)
 
         return {'FINISHED'}
@@ -699,7 +674,8 @@ class MaterialAssignment(bpy.types.Operator):
             'COL': '_Col',
             'ALPHA': '_Alpha',
             'ENV': '_Env',
-            'UV_TEX': '_UVTex'
+            'UV_TEX': '_UVTex',
+            'RGB': '_RGBModelColor'
         }
 
         material_choice = obj.data.material_choice
@@ -708,7 +684,7 @@ class MaterialAssignment(bpy.types.Operator):
         if material_choice == 'UV_TEX':
             base_name = self.get_base_name_for_texture(obj)
             self.assign_uv_textures(obj, base_name)
-        elif material_choice in ['COL', 'ALPHA', 'ENV']:
+        elif material_choice in ['COL', 'ALPHA', 'ENV', 'RGB']:
             base_name = self.get_base_name_for_layers(obj)
             self.assign_regular_materials(obj, material_suffix)
 
@@ -721,27 +697,55 @@ class MaterialAssignment(bpy.types.Operator):
         extension = ""  # Default to no extension
 
         # Check for specific substrings in the object's name
-        specific_parts = ["body", "wheelfl", "wheelfr", "wheelbl", "wheelbr", "wheell", "wheelr", 
-                          "spring", "spring0", "spring1", "spring2", "spring3", "springl", "springr", 
-                          "springfl", "springfr", "springbl","springbr", "axle", "axle0", "axle1",
-                          "axle2", "axle3", "axlefl", "axlefr", "axlebl", "axlebr"]
+        specific_keywords = ["body", "wheel", "axle", "spring"]
+
+        # Filter specific parts containing the keywords
+        filtered_parts = [part for part in obj.name.split('_') if any(keyword in part for keyword in specific_keywords)]
 
         if ".w" in obj.name:
             extension = ".w"
-        elif ".prm" in obj.name or any(part in obj.name for part in specific_parts):
+        elif ".prm" in obj.name or filtered_parts:
             extension = ".prm"
 
         return f"{base_name}{extension}"
+    
+    def get_existing_textures(self):
+        textures = {}
+        for image in bpy.data.images:
+            name_parts = image.name.rsplit('.', 1)
+            if len(name_parts) > 1 and name_parts[-1].isalpha():
+                textures[image.name] = name_parts[0]
+        return textures
+
+    def get_texture_base_name(self, tex_num, existing_textures):
+        suffix1 = chr(tex_num % 26 + 97)
+        suffix2_num = tex_num // 26 - 1
+        suffix2 = chr(suffix2_num % 26 + 97) if suffix2_num >= 0 else ''
+        suffix = suffix2 + suffix1
+        
+        for texture in existing_textures:
+            if texture.endswith(suffix + ".bmp"):
+                return existing_textures[texture].rsplit(suffix, 1)[0]
+        return None
+
+    def get_texture_name(self, base_name, tex_num, existing_textures):
+        texture_base_name = self.get_texture_base_name(tex_num, existing_textures)
+        if texture_base_name:
+            return int_to_texture(tex_num, texture_base_name)
+        return int_to_texture(tex_num, base_name)
 
     def assign_uv_textures(self, obj, base_name):
         bm = bmesh.from_edit_mesh(obj.data)
         if bm is None:
-            self.report({'ERROR'}, "Failed to create a BMesh from object data.")
             return
+
         uv_layer = bm.loops.layers.uv.verify()
         texnum_layer = bm.faces.layers.int.get("Texture Number") or bm.faces.layers.int.new("Texture Number")
 
         special_texture = "car.bmp"  # Define the special texture name
+
+        # Retrieve existing textures in the Blender scene
+        existing_textures = self.get_existing_textures()
 
         for face in bm.faces:
             if face.select:
@@ -749,30 +753,30 @@ class MaterialAssignment(bpy.types.Operator):
                 if tex_num == -1:
                     continue
 
-                # Determine texture name based on texture number or special condition
-                texture_name = int_to_texture(tex_num, base_name) if special_texture not in bpy.data.images else special_texture
-                texture_path = bpy.path.abspath("//" + texture_name)
-            
-                if texture_name in bpy.data.images:
-                    texture = bpy.data.images[texture_name]
+                if obj.get("is_instance", False):
+                    texture_name = self.get_texture_name(base_name, tex_num, existing_textures)
                 else:
-                    try:
-                        texture = bpy.data.images.load(texture_path)
-                    except RuntimeError:
-                        print(f"Failed to load image {texture_path}")
-                        continue
+                    # Map texture number to suffix
+                    texture_suffix = chr(97 + tex_num)  # 97 is the ASCII code for 'a'
+                    texture_name = f"{base_name}{texture_suffix}.bmp" if special_texture not in bpy.data.images else special_texture
 
-                material_name = texture_name
+                if texture_name in bpy.data.images:
+                    material_name = texture_name
+                else:
+                    continue
+
+                # Create or get the material
                 if material_name not in bpy.data.materials:
                     mat = bpy.data.materials.new(name=material_name)
                     mat.use_nodes = True
                     bsdf = mat.node_tree.nodes.get('Principled BSDF')
                     tex_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
-                    tex_node.image = texture
+                    tex_node.image = bpy.data.images[texture_name]
                     mat.node_tree.links.new(bsdf.inputs['Base Color'], tex_node.outputs['Color'])
                 else:
                     mat = bpy.data.materials[material_name]
 
+                # Ensure material is in object material slot
                 if mat.name not in obj.data.materials:
                     obj.data.materials.append(mat)
                 face.material_index = obj.data.materials.find(mat.name)
@@ -784,71 +788,74 @@ class MaterialAssignment(bpy.types.Operator):
         base_name = self.get_base_name_for_layers(obj)
         material_name = f"{base_name}{material_suffix}"
 
-        # Get or create the material
-        mat = bpy.data.materials.get(material_name)
-        if not mat:
-            mat = bpy.data.materials.new(name=material_name)
-            mat.use_nodes = True
-            # Setup nodes or properties for environment materials, if needed
+        # Retrieve the existing material
+        material = bpy.data.materials.get(material_name)
+        if not material:
+            return
 
         # Ensure material is in object material slot
-        if mat.name not in obj.data.materials:
-            obj.data.materials.append(mat)
+        if material.name not in obj.data.materials:
+            obj.data.materials.append(material)
 
-        # Get the index of the material
-        material_index = obj.data.materials.find(mat.name)
-
-        # Set the material for all selected faces
-        if obj.mode != 'EDIT':
-            bpy.ops.object.mode_set(mode='EDIT')
-    
+        # Set the material to all selected faces
         bm = bmesh.from_edit_mesh(obj.data)
+        if bm is None:
+            return
+
+        material_index = obj.data.materials.find(material.name)
         for face in bm.faces:
             if face.select:
                 face.material_index = material_index
 
-        # Update the mesh to reflect the changes
+        # Update the mesh to reflect changes
         bmesh.update_edit_mesh(obj.data)
-                        
+        
+class CreateRGBModelMaterial(bpy.types.Operator):
+    bl_idname = "object.create_rgbmodel_material"
+    bl_label = "Create or Assign RGB Model Material"
+
+    @classmethod
+    def poll(cls, context):
+        return context.object and context.object.type == 'MESH'
+
+    def execute(self, context):
+        obj = context.object
+        mat_name = f"{obj.name}_RGBModelColor"
+        
+        # Check for existing materials with the same suffix in the current scene
+        existing_material = None
+        for mat in bpy.data.materials:
+            if mat.name.endswith("_RGBModelColor"):
+                existing_material = mat
+                break
+        
+        if existing_material:
+            material = existing_material
+        else:
+            material = bpy.data.materials.new(name=mat_name)
+            material.use_nodes = True
+            nodes = material.node_tree.nodes
+            links = material.node_tree.links
+
+            material_output = nodes.get('Material Output') or nodes.new(type='ShaderNodeOutputMaterial')
+            attr_node = nodes.new(type='ShaderNodeAttribute')
+            attr_node.attribute_name = "RGBModelColor"
+
+            principled_bsdf = nodes.new(type='ShaderNodeBsdfPrincipled')
+            links.new(attr_node.outputs['Color'], principled_bsdf.inputs['Base Color'])
+            links.new(principled_bsdf.outputs['BSDF'], material_output.inputs['Surface'])
+        
+        # Assign the material to the object
+        if material.name not in obj.data.materials:
+            obj.data.materials.append(material)
+        obj.active_material = material
+
+        return {'FINISHED'}
+
 """
 OBJECTS -----------------------------------------------------------------------
 """
     
-class InstanceEnvMapColor(bpy.types.Operator):
-    bl_idname = "object.fin_envmap_color"
-    bl_label = "Instance EnvMap Color"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    fin_envcol: bpy.props.FloatVectorProperty(
-        name="EnvMap Color",
-        subtype='COLOR',
-        default=(1.0, 1.0, 1.0, 1.0),
-        size=4,  # Including alpha
-        min=0.0, max=1.0,
-        description="Set the environment map's color and alpha"
-    )
-
-    def execute(self, context):
-        obj = context.active_object
-
-        if obj is None:
-            self.report({'WARNING'}, "No active object")
-            return {'CANCELLED'}
-
-        obj.fin_envcol = self.fin_envcol
-
-        color_values = tuple(round(val, 3) for val in self.fin_envcol)
-        self.report({'INFO'}, f"Environment map color set to {color_values} for {obj.name}")
-
-        # Assign environment color to the selected faces
-        self.set_face_env(context, self.fin_envcol)
-
-        return {'FINISHED'}
-
-    def invoke(self, context, event):
-        wm = context.window_manager
-        return wm.invoke_props_dialog(self)
-
 class SetBCubeMeshIndices(bpy.types.Operator):
     bl_idname = "object.set_bcube_mesh_indices"
     bl_label = "Set BCube Mesh Indices"
@@ -1377,10 +1384,10 @@ class ButtonHullSphere(bpy.types.Operator):
 VERTEX COLORS -----------------------------------------------------------------
 """
 
-class VertexColorCreateLayer(bpy.types.Operator):
-    bl_idname = "vertexcolor.create_layer"
-    bl_label = "Create Vertex Color Layer"
-    bl_description = "Creates a new vertex color layer if it does not exist and initializes its colors."
+class VertexAndAlphaLayer(bpy.types.Operator):
+    bl_idname = "mesh.vertex_color_and_alpha_setup"
+    bl_label = "Setup Vertex Color and Alpha Layers"
+    bl_description = "Creates necessary vertex color layers and materials if they do not exist."
 
     @classmethod
     def poll(cls, context):
@@ -1392,65 +1399,41 @@ class VertexColorCreateLayer(bpy.types.Operator):
         mesh = obj.data
         bm = bmesh.from_edit_mesh(mesh)
 
-        # Attempt to get an existing layer or create a new one if not present
-        vc_layer = bm.loops.layers.color.get("Col")
-        if not vc_layer:
-            vc_layer = bm.loops.layers.color.new("Col")
-            self.report({'INFO'}, "Vertex color layer 'Col' created.")
-        else:
-            self.report({'INFO'}, "'Col' vertex color layer already exists.")
-            return {'CANCELLED'}
+        # Define the layers to be checked or created
+        layers = ['Col', 'Alpha']
 
-        bmesh.update_edit_mesh(mesh)
-        return {'FINISHED'}
+        for layer_name in layers:
+            created_layer = bm.loops.layers.color.get(layer_name)
+            if not created_layer:
+                created_layer = bm.loops.layers.color.new(layer_name)
+                self.report({'INFO'}, f"{layer_name} vertex color layer created.")
+            else:
+                self.report({'INFO'}, f"{layer_name} vertex color layer already exists.")
 
-class VertexAlphaCreateLayer(bpy.types.Operator):
-    bl_idname = "alpha.create_layer"
-    bl_label = "Check Alpha Layer"
-    bl_description = "Checks for an existing alpha layer and notifies the user"
-    
-    @classmethod
-    def poll(cls, context):
-        obj = context.object
-        return obj and obj.type == 'MESH' and obj.mode == 'EDIT'
+        bmesh.update_edit_mesh(mesh, destructive=True)
 
-    def execute(self, context):
-        obj = context.object
-        mesh = obj.data
-        bm = bmesh.from_edit_mesh(mesh)
-
-        # Check if the alpha layer already exists
-        va_layer = bm.loops.layers.color.get("Alpha")
-        if not va_layer:
-            # Create a new alpha layer
-            va_layer = bm.loops.layers.color.new("Alpha")
-            self.report({'INFO'}, "Alpha layer created.")
-        else:
-            # Inform the user that the alpha layer already exists
-            self.report({'INFO'}, "Alpha layer already exists and is ready for use.")
-            return {'CANCELLED'}
-
-        # This does not modify the mesh, just updates the edit mesh to reflect any new layer creation
-        bmesh.update_edit_mesh(mesh)
-
-        # Optionally assign an alpha material here if it doesn't exist
-        # Similar to your previous material assignment logic
-        for sel_obj in context.selected_objects:
-            if sel_obj.type == 'MESH':
-                material_name = f"{sel_obj.name}_Alpha"
-                alpha_material = bpy.data.materials.get(material_name)
-                if not alpha_material:
-                    alpha_material = bpy.data.materials.new(name=material_name)
-                    alpha_material.use_nodes = True
-                    bsdf = alpha_material.node_tree.nodes.get('Principled BSDF')
-                    if bsdf:
-                        bsdf.inputs['Base Color'].default_value = (0.0, 0.0, 0.0, 1.0)  # Default black color with full alpha
-                    self.report({'INFO'}, f"{material_name} material created and assigned.")
-                if alpha_material.name not in sel_obj.data.materials:
-                    sel_obj.data.materials.append(alpha_material)
-                sel_obj.active_material = alpha_material
+        # Ensure materials are set up for the layers
+        self.setup_materials(obj, layers)
 
         return {'FINISHED'}
+
+    def setup_materials(self, obj, attributes):
+        base_name = self.get_base_name_for_layers(obj)
+        for attr_name in attributes:
+            mat_name = f"{base_name}_{attr_name}"
+            material = bpy.data.materials.get(mat_name)
+            if not material:
+                material = bpy.data.materials.new(name=mat_name)
+                material.use_nodes = True
+                bsdf = material.node_tree.nodes.new('ShaderNodeBsdfPrincipled')
+                bsdf.inputs['Base Color'].default_value = (0.0, 0.0, 0.0, 1.0) if attr_name == 'Alpha' else (1.0, 1.0, 1.0, 1.0)
+                self.report({'INFO'}, f"{mat_name} material created.")
+            if mat_name not in obj.data.materials:
+                obj.data.materials.append(material)
+
+    def get_base_name_for_layers(self, obj):
+        base_name = obj.name.split('.')[0]
+        return base_name  # Simplified without specific file extensions or conditions
 
 class VertexColorRemove(bpy.types.Operator):
     bl_idname = "vertexcolor.remove_layer"
@@ -1539,7 +1522,7 @@ class SetVertexAlpha(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         obj = context.object
-        return obj and obj.type == 'MESH' and obj.mode == 'EDIT'
+        return obj and obj.type == 'MESH'
 
     def execute(self, context):
         eo = context.edit_object
@@ -1550,16 +1533,20 @@ class SetVertexAlpha(bpy.types.Operator):
             self.report({'WARNING'}, "No vertex color layer with 'Alpha' in its name found.")
             return {'CANCELLED'}
 
-        alpha = float(context.scene.vertex_alpha)
-        grayscale_value = 1.0 - alpha  # Invert if necessary
+        # Retrieve the alpha percentage from the scene property and update the vertex_alpha
+        alpha_percent = int(context.scene.vertex_alpha_percentage)
+        alpha_value = alpha_percent / 100.0  # Normalize to 0-1
+        context.scene.vertex_alpha = alpha_value  # Update the scene's vertex_alpha property
+
+        grayscale_value = 1.0 - alpha_value  # Set color based on the inverse of alpha value
 
         for face in bm.faces:
             if face.select:
                 for loop in face.loops:
-                    loop[va_layer] = (grayscale_value, grayscale_value, grayscale_value, 1.0)  # Include alpha
+                    loop[va_layer] = (grayscale_value, grayscale_value, grayscale_value, alpha_value)
 
         bmesh.update_edit_mesh(eo.data, destructive=False)
-        self.report({'INFO'}, "Alpha adjusted for selected faces on the chosen layer.")
+        self.report({'INFO'}, f"Alpha adjusted to {alpha_percent}% for selected faces on the chosen layer.")
         return {'FINISHED'}
 
 def menu_func_import(self, context):

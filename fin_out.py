@@ -26,17 +26,22 @@ if "bpy" in locals():
     imp.reload(rvstruct)
 
 
-def export_file(filepath, context):
-    scene = context.scene
+def export_file(filepath, scene):
+    scene = bpy.context.scene
     fin = Instances()
 
     # Gathers list of instance objects
     objs = [obj for obj in scene.objects if obj.get("is_instance", False)]
 
+    # Set to keep track of already exported PRM files
+    exported_prms = set()
+
     for obj in objs:
         instance = Instance()
 
-        instance.name = obj.name.split(".prm")[0][:8].upper()
+        # Use the base mesh name for the instance name
+        base_mesh_name = obj.data.name
+        instance.name = base_mesh_name.split(".prm")[0][:8].upper()
     
         # Access custom properties with a fallback default
         fin_col = obj.get("fin_col", [0.5, 0.5, 0.5])
@@ -68,7 +73,7 @@ def export_file(filepath, context):
         instance.or_matrix.data = to_or_matrix(obj.matrix_world)
     
         # Flags
-        instance.flag = obj.get("FIN_SET_MODEL_RGB", 0)
+        instance.flag = 0
     
         if obj.get("fin_env", False):
             instance.flag |= FIN_ENV
@@ -91,25 +96,23 @@ def export_file(filepath, context):
         if obj.get("fin_no_obj_coll", False):
             instance.flag |= FIN_NO_OBJECT_COLLISION
     
-    
         folder = os.sep.join(filepath.split(os.sep)[:-1])
-
         prm_fname = "{}.prm".format(instance.name).lower()
 
-
         # Searches for files that are longer than 8 chars
-        if not prm_fname in os.listdir(folder):
+        if prm_fname not in exported_prms:
             bpy.context.view_layer.objects.active = obj
             prev_apply_scale = scene.apply_scale
             prev_apply_rotation = scene.apply_rotation
 
             scene.apply_rotation = False
             scene.apply_scale = False
-            prm_out.export_file(os.path.join(folder, prm_fname), scene, context)
+            prm_out.export_file(os.path.join(folder, prm_fname), scene)
 
-            scene.apply_rotation = prev_apply_scale
-            scene.apply_scale = prev_apply_rotation
+            scene.apply_rotation = prev_apply_rotation
+            scene.apply_scale = prev_apply_scale
 
+            exported_prms.add(prm_fname)
 
         instance.name += "\x00"
         fin.instances.append(instance)
@@ -118,5 +121,3 @@ def export_file(filepath, context):
 
     with open(filepath, "wb") as fd:
         fin.write(fd)
-
-

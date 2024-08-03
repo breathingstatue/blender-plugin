@@ -28,21 +28,9 @@ Missing Formats:
 """
 
 import os
-import bmesh
 import struct
 from math import ceil, sqrt
 
-from bpy.props import (
-    BoolProperty,
-    BoolVectorProperty,
-    EnumProperty,
-    FloatProperty,
-    IntProperty,
-    StringProperty,
-    IntVectorProperty,
-    FloatVectorProperty,
-    PointerProperty
-)
 
 class World:
     """
@@ -162,6 +150,7 @@ class World:
                "env_list": self.env_list
         }
         return dic
+
 
 class PRM:
     """
@@ -329,6 +318,7 @@ class BoundingBox:
         }
         return dic
 
+
 class Vector:
     """
     A very simple vector class
@@ -439,27 +429,20 @@ class Matrix:
     """
     def __init__(self, file=None, data=None):
         self.data = [(1, 0, 0), (0, 1, 0), (0, 0, 1)]
-        
+
         if file:
             self.read(file)
         elif data:
-            print("Data received:", data)
-            if isinstance(data, Matrix):
-                # If a Matrix instance is provided, use its data directly
-                self.data = data.data
-            elif isinstance(data, list) and all(isinstance(row, (list, tuple)) and len(row) == 3 for row in data):
-                self.data = data
-            else:
-                raise ValueError("Data must be a list of three lists or tuples, each with three floats.")
+            self.data = data
+
+    def __repr__(self):
+        return "Matrix"
 
     def read(self, file):
+        # Reads the matrix line by line
         self.data[0] = struct.unpack("<3f", file.read(12))
         self.data[1] = struct.unpack("<3f", file.read(12))
         self.data[2] = struct.unpack("<3f", file.read(12))
-        
-    def transpose(self):
-        # Transpose the matrix in place
-        self.data = list(map(list, zip(*self.data)))
 
     def write(self, file):
         # Writes the matrix line by line (only the firs three columns and rows)
@@ -717,6 +700,7 @@ class TexAnimation:
             frame.from_dict(framedic)
             self.frames.append(frame)
 
+
 class Frame:
     """
     Reads and stores exactly one texture animation frame
@@ -772,6 +756,7 @@ class Frame:
             uv.from_dict(uvdict)
             uvs.append(uv)
         self.uv = uvs
+
 
 class Color:
     """
@@ -854,13 +839,15 @@ class Instance:
     """
     def __init__(self, file=None):
         self.name = ""                            # first 8 letters of file name
-        self.color = (0, 0, 0)                    # model % RGB color
+        self.color = (0, 0, 0)       # model % RGB color
         self.env_color = Color(color=[0, 0, 0], alpha=True) # envMap color
         self.priority = 0                         # priority for multiplayer
         self.flag = 0                             # flag with properties
         self.lod_bias = 1024                      # when to load hq-meshes
         self.position = Vector(data=(0, 0, 0))    # position of the PRM
-        self.or_matrix = Matrix()                 # orientation of the PRM
+        self.or_matrix = Matrix(data=((0, 0, 0),
+                                      (0, 0, 0),
+                                      (0, 0, 0))) # orientation of the PRM
 
         if file:
             self.read(file)
@@ -1349,11 +1336,9 @@ class Interior:
         self.spheres = [Sphere(file) for x in range(self.sphere_count)]
 
     def write(self, file):
-        # Update sphere_count to match the actual number of spheres just before writing
-        self.sphere_count = len(self.spheres)
         file.write(struct.pack("<h", self.sphere_count))
-        for sphere in self.spheres:  # This avoids index out of range errors
-            sphere.write(file)
+        for x in range(self.sphere_count):
+            self.spheres[x].write(file)
 
     def as_dict(self):
         dic = {"sphere_count": self.sphere_count,
@@ -1385,24 +1370,24 @@ class Sphere:
         }
         return dic
 
+
 class RIM:
-    """Mirror planes"""
+    """ Mirror planes """
     def __init__(self, file=None):
         self.num_mirror_planes = 0
         self.mirror_planes = []
+
         if file:
             self.read(file)
 
     def read(self, file):
-        # Read the number of mirror planes and initialize them
         self.num_mirror_planes = struct.unpack("<h", file.read(2))[0]
-        self.mirror_planes = [MirrorPlane(file) for _ in range(self.num_mirror_planes)]
+        self.mirror_planes = [MirrorPlane(file) for x in range(self.num_mirror_planes)]
 
     def write(self, file):
-        # Write the number of mirror planes and then each mirror plane's data
         file.write(struct.pack("<h", self.num_mirror_planes))
-        for mirror_plane in self.mirror_planes:
-            mirror_plane.write(file)
+        for x in range(self.num_mirror_planes):
+            self.mirror_planes[x].write(file)
 
 class MirrorPlane:
     """ Mirror plane """
@@ -1464,15 +1449,12 @@ class TrackZones:
         for zone in self.zones:
             zone.write(file)
             
-    def append(self, id, pos, rotation_matrix, scale):
+    def append(self, id, pos, rotation_matrix, size):
         new_zone = Zone()
         new_zone.id = id
-        new_zone.pos = Vector(data=pos)
-
-        # Ensure rotation_matrix is always a Matrix instance
-        new_zone.matrix = Matrix(data=rotation_matrix) if not isinstance(rotation_matrix, Matrix) else rotation_matrix
-
-        new_zone.size = Vector(data=scale)
+        new_zone.pos = Vector(data = pos)
+        new_zone.matrix = Matrix(data=rotation_matrix)
+        new_zone.size = Vector(data = size)
         self.zones.append(new_zone)
         self.zones_count += 1
 
@@ -1506,7 +1488,8 @@ class Zone:
         self.pos.write(file)
         self.matrix.write(file)
         self.size.write(file)
-            
+        
+    
     def as_dict(self):
         dic = { "id": self.id,
                 "pos": self.pos,
