@@ -5,3 +5,41 @@ INSTALLATION
 place io_revolt in Blender/"version"/scripts/addons/
 
 -Theman with the help of Chat GPT
+
+TO DO LIST:
+
+20.24.?
+Objects (.fob) ?
+Triggers (.tri) (trigger type + low flag + high flag)
+Track Zones (.taz) (id property, check sizes)
+Texture Animations
+Col / Env Light Baking
+pin import / export
+spinner import / export
+Check envlist + WorldCut
+
+FULL CHANGELOG:
+
+20.24.8
+Vertex Color / Alpha / Env / EnvAlpha Layers
+Material Change
+Fixed import/export bugs
+
+20.24.7
+Copy Car Parameters to Clipboard fine-tuning to default values
+Export to top menu
+Some tool tips
+Fixed WorldCut bugs
+string.prm and axle.prm import/export
+
+20.24.6
+Added WorldCut
+Import to top menu
+
+20.24.4
+First release
+
+20.24.3
+I don't include props modules or custom attribute revolts, I'll see if bpy.context.scene works in import/export.
+
+Changes: new panels and buttons, structural changes, operator labeling, registrations
