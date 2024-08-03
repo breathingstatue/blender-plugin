@@ -36,7 +36,10 @@ class RVIO_PT_RevoltFacePropertiesPanel(bpy.types.Panel):
             col.prop(mesh, "face_envmapping", text="EnvMap")
         
             if getattr(mesh, "face_envmapping", False):
-                col.prop(mesh, "face_env", text="EnvMap Color")
+                try:
+                    col.prop(mesh, "face_env", text="EnvMap Color")
+                except SystemError as e:
+                    col.label(text="Unable to access EnvMap Color in current mode.")
             
             col.prop(mesh, "face_cloth", text="Cloth effect")
             col.prop(mesh, "face_skip", text="Do not export")

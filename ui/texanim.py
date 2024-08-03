@@ -18,11 +18,10 @@ class RVIO_PT_AnimModesPanel(bpy.types.Panel):
         col.prop(scene, "ta_max_frames")
         col.prop(scene, "ta_max_slots")
         col.prop(scene, "ta_current_slot")
-        col.prop(scene, "ta_max_frames", slider=True)
         col.prop(scene, "ta_delay")
         col.prop(scene, "rvio_frame_start")
         col.prop(scene, "rvio_frame_end")
-        col.prop(scene, "ta_current_frame", text="Current Frame")
+        col.prop(scene, "ta_current_frame")
         
         # layout.operator("object.add_texanim_uv", text="Add Animation UV Layer")
         # layout.operator("uv.texanim_direction", text="Animation Direction")
