@@ -28,7 +28,7 @@ from .rvstruct import *
 from . import carinfo
 from .common import get_format, FORMAT_PRM, FORMAT_FIN, FORMAT_NCP, FORMAT_HUL, FORMAT_W, FORMAT_RIM, FORMAT_TA_CSV, FORMAT_TAZ, FORMAT_UNK
 from .common import get_errors, msg_box, FORMATS, to_revolt_scale, FORMAT_CAR, TEX_PAGES_MAX, int_to_texture
-from .layers import set_face_env, update_model_rgb
+from .layers import set_face_env
 
 from bpy.props import (
     BoolProperty,
@@ -810,48 +810,6 @@ class MaterialAssignment(bpy.types.Operator):
         # Update the mesh to reflect changes
         bmesh.update_edit_mesh(obj.data)
         
-class CreateRGBModelMaterial(bpy.types.Operator):
-    bl_idname = "object.create_rgbmodel_material"
-    bl_label = "Create or Assign RGB Model Material"
-
-    @classmethod
-    def poll(cls, context):
-        return context.object and context.object.type == 'MESH'
-
-    def execute(self, context):
-        obj = context.object
-        mat_name = f"{obj.name}_RGBModelColor"
-        
-        # Check for existing materials with the same suffix in the current scene
-        existing_material = None
-        for mat in bpy.data.materials:
-            if mat.name.endswith("_RGBModelColor"):
-                existing_material = mat
-                break
-        
-        if existing_material:
-            material = existing_material
-        else:
-            material = bpy.data.materials.new(name=mat_name)
-            material.use_nodes = True
-            nodes = material.node_tree.nodes
-            links = material.node_tree.links
-
-            material_output = nodes.get('Material Output') or nodes.new(type='ShaderNodeOutputMaterial')
-            attr_node = nodes.new(type='ShaderNodeAttribute')
-            attr_node.attribute_name = "RGBModelColor"
-
-            principled_bsdf = nodes.new(type='ShaderNodeBsdfPrincipled')
-            links.new(attr_node.outputs['Color'], principled_bsdf.inputs['Base Color'])
-            links.new(principled_bsdf.outputs['BSDF'], material_output.inputs['Surface'])
-        
-        # Assign the material to the object
-        if material.name not in obj.data.materials:
-            obj.data.materials.append(material)
-        obj.active_material = material
-
-        return {'FINISHED'}
-
 """
 OBJECTS -----------------------------------------------------------------------
 """

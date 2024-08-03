@@ -124,12 +124,12 @@ from .common import DialogOperator, TEX_ANIM_MAX, TEX_PAGES_MAX
 from .common import FACE_DOUBLE, FACE_TRANSLUCENT, FACE_MIRROR, FACE_TRANSL_TYPE, FACE_TEXANIM, FACE_NOENV, FACE_ENV, FACE_CLOTH, FACE_SKIP
 from .common import NCP_DOUBLE, NCP_NO_SKID, NCP_OIL, NCP_OBJECT_ONLY, NCP_CAMERA_ONLY, NCP_NOCOLL, MATERIALS
 from .layers import select_ncp_material, get_face_material, set_face_material, set_face_texture, get_face_texture, update_envmapping, update_no_envmapping
-from .layers import set_face_ncp_property, get_face_ncp_property, get_face_env, set_face_env, update_face_env, get_face_property
-from .layers import set_face_property, update_vertex_alpha, update_fin_env, set_rgb, get_rgb, update_rgb, get_alpha_items
-from .layers import update_fin_env_map, update_model_rgb, update_no_envmapping, update_envmapping
+from .layers import set_face_ncp_property, get_face_ncp_property, get_face_env, set_face_env, update_face_env
+from .layers import get_face_property, set_face_property, update_fin_envcol, set_rgb, get_rgb, update_fin_col, get_alpha_items
+from .layers import update_fin_env, update_rgb, update_no_envmapping, update_envmapping, remove_env_material
 from .operators import ImportRV, ExportRV, RVIO_OT_ReadCarParameters, RVIO_OT_SelectRevoltDirectory, ButtonReExport
 from .operators import VertexAndAlphaLayer, VertexColorRemove, SetVertexColor, BakeShadow
-from .operators import TexAnimDirection, SetVertexAlpha, CreateRGBModelMaterial
+from .operators import TexAnimDirection, SetVertexAlpha
 from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, MaterialAssignment
 from .operators import SetInstanceProperty, RemoveInstanceProperty, LaunchRV, TexturesSave
 from .operators import TexturesRename, CarParametersExport, ButtonZoneHide, AddTrackZone
@@ -212,7 +212,7 @@ def register():
         name = "Use Environment Map",
         default = True,
         description = "If set on, instance is EnvMapped.",
-        update=update_fin_env_map
+        update=update_fin_env
     )
     
     bpy.types.Object.fin_no_mirror = bpy.props.BoolProperty(
@@ -241,17 +241,13 @@ def register():
 
     bpy.types.Object.fin_col = bpy.props.FloatVectorProperty(
         name="Model Color",
-        subtype='COLOR',
-        size=4,
+        subtype='COLOR_GAMMA',  # Use COLOR_GAMMA for more accurate color representation
+        size=3,
         min=0.0,
         max=1.0,
-        default=(0.5, 0.5, 0.5, 1.0),  # Ensure RGBA is used here
-        description="Model RGB color to be added/subtracted:\n1.0: Bright, overrides vertex colors\n"
-                    "0.5: Default, leaves vertex colors intact\n"
-                    "0.0: Dark",
-        get=get_rgb,
-        set=set_rgb,
-        update=update_rgb
+        default=(0.5, 0.5, 0.5),  # Default color
+        description="Model RGB color to be used",
+        update=update_rgb  # Ensure this directly updates the RGB
     )
     
     bpy.types.Object.fin_envcol = bpy.props.FloatVectorProperty(
@@ -263,14 +259,14 @@ def register():
         description="Instance EnvMap Color",
         get=get_face_env,
         set=set_face_env,
-        update=update_fin_env
+        update=update_fin_envcol
     )
     
     bpy.types.Object.fin_model_rgb = bpy.props.BoolProperty(
         name="Use Model Color",
         description="Toggle to use the model's color",
         default=False,
-        update=update_model_rgb
+        update=update_rgb  # Reference the function directly without lambda
     )
     
     bpy.types.Object.fin_hide = bpy.props.BoolProperty(
@@ -542,6 +538,14 @@ def register():
         description = "Texture of the current frame"
     )
     
+    bpy.types.Scene.ta_current_frame_delay = bpy.props.FloatProperty(
+        name = "Duration",
+        default = 0.01,
+        min = 0,
+        update = update_ta_current_frame_delay,
+        description = "Duration of the current frame"
+    )
+    
     bpy.types.Scene.ta_current_frame = bpy.props.IntProperty(
         name = "Frame",
         default = 1,
@@ -550,7 +554,7 @@ def register():
         description = "Current frame"
     )
         
-    bpy.types.Scene.ta_frame_uv0 = bpy.props.FloatVectorProperty(
+    bpy.types.Scene.ta_current_frame_uv0 = bpy.props.FloatVectorProperty(
         name = "UV 0",
         size = 2,
         default = (0, 0),
@@ -560,7 +564,7 @@ def register():
         description = "UV coordinate of the first vertex"
     )
     
-    bpy.types.Scene.ta_frame_uv1 = bpy.props.FloatVectorProperty(
+    bpy.types.Scene.ta_current_frame_uv1 = bpy.props.FloatVectorProperty(
         name = "UV 1",
         size = 2,
         default = (0, 0),
@@ -570,7 +574,7 @@ def register():
         description = "UV coordinate of the second vertex"
     )
     
-    bpy.types.Scene.ta_frame_uv2 = bpy.props.FloatVectorProperty(
+    bpy.types.Scene.ta_current_frame_uv2 = bpy.props.FloatVectorProperty(
         name = "UV 2",
         size = 2,
         default = (0, 0),
@@ -580,7 +584,7 @@ def register():
         description = "UV coordinate of the third vertex"
     )
     
-    bpy.types.Scene.ta_frame_uv3 = bpy.props.FloatVectorProperty(
+    bpy.types.Scene.ta_current_frame_uv3 = bpy.props.FloatVectorProperty(
         name = "UV 3",
         size = 2,
         default = (0, 0),
@@ -889,7 +893,6 @@ def register():
     bpy.utils.register_class(AddTrackZone)
     bpy.utils.register_class(SetBCubeMeshIndices)
     bpy.utils.register_class(SetVertexAlpha)
-    bpy.utils.register_class(CreateRGBModelMaterial)
     bpy.utils.register_class(RVIO_OT_SelectRevoltDirectory)
     
     # Register UI
@@ -926,7 +929,6 @@ def unregister():
     
     # Unregister Operators
     bpy.utils.unregister_class(RVIO_OT_SelectRevoltDirectory)
-    bpy.utils.unregister_class(CreateRGBModelMaterial)
     bpy.utils.unregister_class(SetVertexAlpha)
     bpy.utils.unregister_class(SetBCubeMeshIndices)
     bpy.utils.unregister_class(AddTrackZone)
