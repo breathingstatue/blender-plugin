@@ -13,14 +13,13 @@ Objects (.fob) ?
 Triggers (.tri) (trigger type + low flag + high flag)
 Track Zones (.taz) (id property, check sizes)
 Texture Animations
-Col / Env Light Baking
 pin import / export
 spinner import / export
-Check envlist + WorldCut
 
 FULL CHANGELOG:
 
 20.24.8
+Light Baking to Col / Fin Env / RGB
 Vertex Color / Alpha / Env / EnvAlpha Layers
 Material Change
 Fixed import/export bugs

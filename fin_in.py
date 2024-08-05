@@ -1,3 +1,12 @@
+"""
+Name:    fin_in
+Purpose: Imports Re-Volt instance files (.fin)
+
+Description:
+Imports Instance files.
+
+"""
+
 import os
 import bpy
 import bmesh
@@ -65,7 +74,7 @@ def import_instance(filepath, scene, instance):
 
     # Set custom properties on the Blender object
     instance_obj["is_instance"] = True
-    instance_obj["fin_col"] = [(128 + c) / 255 for c in instance.color] + [1.0]  # Ensure RGBA
+    instance_obj["fin_col"] = [(128 + c) / 255 for c in instance.color]
     envcol = (*instance.env_color.color, 255 - instance.env_color.alpha)
     instance_obj["fin_envcol"] = [c / 255 for c in envcol]
     instance_obj["fin_priority"] = instance.priority
@@ -153,14 +162,14 @@ def should_apply_env_settings(obj):
 
 def model_color_material(obj):
     """Creates a model color material and assigns it to the object or retrieves it if already created."""
-    base_name = get_base_name_for_layers(obj)
+    base_name, _ = get_base_name_for_layers(obj)
     material_name = f"{base_name}_RGBModelColor"
 
     mat = bpy.data.materials.get(material_name)
     if not mat:
         mat = bpy.data.materials.new(name=material_name)
         mat.use_nodes = True
-        setup_material_nodes(obj, mat)
+        setup_material_nodes(mat)
 
     if mat.name not in obj.data.materials:
         obj.data.materials.append(mat)
@@ -173,18 +182,16 @@ def model_color_material(obj):
 def update_shader_color(obj, mat):
     """Update the shader color based on the object's 'fin_col' property."""
     nodes = mat.node_tree.nodes
-    color = obj.get("fin_col", [0.5, 0.5, 0.5, 1.0])
+    color = obj.get("fin_col", [0.5, 0.5, 0.5])
 
     bsdf = nodes.get('Principled BSDF')
     if bsdf:
-        bsdf.inputs['Base Color'].default_value = color
+        bsdf.inputs['Base Color'].default_value[:3] = color[:3]
 
-    print(f"Updated shader color for material '{mat.name}' to {color}")
-
-def setup_material_nodes(obj, mat):
+def setup_material_nodes(mat):
     """Sets up the shader nodes for the RGB model material."""
     nodes = mat.node_tree.nodes
-    nodes.clear()  # Clear existing nodes
+    nodes.clear()
     bsdf = nodes.new('ShaderNodeBsdfPrincipled')
     output = nodes.new('ShaderNodeOutputMaterial')
     links = mat.node_tree.links
@@ -193,10 +200,15 @@ def setup_material_nodes(obj, mat):
     print(f"Material '{mat.name}' set up with principled shader.")
 
 def get_base_name_for_layers(obj):
-    """Generates a base name for the object based on its type and name, focusing on specific parts."""
-    base_name = obj.name.split('.')[0]
-    extension = ""
+    name_parts = obj.name.split('.')
+    base_name = name_parts[0]
+    suffix = ""
 
+    # Check if the last part of the name is a number (suffix like .001, .002)
+    if len(name_parts) > 1 and name_parts[-1].isdigit():
+        suffix = f".{name_parts[-1]}"
+
+    extension = ""
     specific_parts = ["body", "wheel", "axle", "spring"]
 
     if ".w" in obj.name:
@@ -204,4 +216,4 @@ def get_base_name_for_layers(obj):
     elif ".prm" in obj.name or any(part in obj.name for part in specific_parts):
         extension = ".prm"
 
-    return f"{base_name}{extension}"
+    return f"{base_name}{extension}", suffix

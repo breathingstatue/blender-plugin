@@ -28,7 +28,7 @@ from .rvstruct import *
 from . import carinfo
 from .common import get_format, FORMAT_PRM, FORMAT_FIN, FORMAT_NCP, FORMAT_HUL, FORMAT_W, FORMAT_RIM, FORMAT_TA_CSV, FORMAT_TAZ, FORMAT_UNK
 from .common import get_errors, msg_box, FORMATS, to_revolt_scale, FORMAT_CAR, TEX_PAGES_MAX, int_to_texture
-from .layers import set_face_env
+from .layers import set_face_env, create_or_assign_env_material
 
 from bpy.props import (
     BoolProperty,
@@ -604,9 +604,22 @@ class SetInstanceProperty(bpy.types.Operator):
     bl_description = "Marks all selected objects as instances"
 
     def execute(self, context):
+        # Check if any selected object is not in Object Mode
         for obj in context.selected_objects:
-            # Set 'is_instance' as a custom property
-            obj["is_instance"] = True
+            if obj.type == 'MESH':
+                if obj.mode != 'OBJECT':
+                    self.report({'WARNING'}, "You must be in Object Mode to run this operator.")
+                    return {'CANCELLED'}  # Exit if not in Object Mode
+                
+                # Set 'is_instance' and 'fin_env' as custom properties
+                obj["is_instance"] = True
+                obj["fin_env"] = True  # Set the default for EnvMap to True
+
+                # Create and assign the _Env material
+                create_or_assign_env_material(obj)
+
+                # Print debug information
+                print(f"Marked {obj.name} as instance with fin_env set to {obj['fin_env']}")
 
         context.view_layer.update()
         self.report({'INFO'}, f"Marked {len(context.selected_objects)} objects as is_instance")
@@ -684,8 +697,7 @@ class MaterialAssignment(bpy.types.Operator):
         if material_choice == 'UV_TEX':
             base_name = self.get_base_name_for_texture(obj)
             self.assign_uv_textures(obj, base_name)
-        elif material_choice in ['COL', 'ALPHA', 'ENV', 'RGB']:
-            base_name = self.get_base_name_for_layers(obj)
+        else:
             self.assign_regular_materials(obj, material_suffix)
 
     def get_base_name_for_texture(self, obj):
@@ -765,32 +777,26 @@ class MaterialAssignment(bpy.types.Operator):
                 else:
                     continue
 
-                # Create or get the material
-                if material_name not in bpy.data.materials:
-                    mat = bpy.data.materials.new(name=material_name)
-                    mat.use_nodes = True
-                    bsdf = mat.node_tree.nodes.get('Principled BSDF')
-                    tex_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
-                    tex_node.image = bpy.data.images[texture_name]
-                    mat.node_tree.links.new(bsdf.inputs['Base Color'], tex_node.outputs['Color'])
-                else:
-                    mat = bpy.data.materials[material_name]
-
                 # Ensure material is in object material slot
-                if mat.name not in obj.data.materials:
+                mat = bpy.data.materials.get(material_name)
+                if mat and mat.name not in obj.data.materials:
                     obj.data.materials.append(mat)
-                face.material_index = obj.data.materials.find(mat.name)
+                if mat:
+                    face.material_index = obj.data.materials.find(mat.name)
 
         bmesh.update_edit_mesh(obj.data, loop_triangles=True)
         obj.data.update()
 
     def assign_regular_materials(self, obj, material_suffix):
         base_name = self.get_base_name_for_layers(obj)
-        material_name = f"{base_name}{material_suffix}"
+        prefixed_material_name = f"{base_name}{material_suffix}"
+        generic_material_name = material_suffix
 
-        # Retrieve the existing material
-        material = bpy.data.materials.get(material_name)
+        # Check for materials with and without prefixes
+        material = bpy.data.materials.get(prefixed_material_name) or bpy.data.materials.get(generic_material_name)
+
         if not material:
+            self.report({'WARNING'}, f"Material {prefixed_material_name} or {generic_material_name} not found.")
             return
 
         # Ensure material is in object material slot
@@ -1015,6 +1021,503 @@ class BakeShadow(bpy.types.Operator):
     def execute(self, context):
         self.bake_shadow(context)
         return {"FINISHED"}
+    
+class BakeVertex(bpy.types.Operator):
+    """Bake lighting to vertex colors and apply changes to the _Col material."""
+    bl_idname = "object.bake_vertex"
+    bl_label = "Bake Light to Vertex Color"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    shadow_strength: bpy.props.FloatProperty(
+        name="Shadow Strength",
+        description="Strength of the shadows",
+        default=5.0,
+        min=0.0,
+        max=10.0
+    )
+
+    light_strength: bpy.props.FloatProperty(
+        name="Light Strength",
+        description="Strength of the light rays",
+        default=0.5,
+        min=0.0,
+        max=10.0
+    )
+    
+    samples: bpy.props.IntProperty(
+        name="Samples",
+        description="Number of samples for baking",
+        default=512,
+        min=1,
+        max=5000
+    )
+    
+    def get_base_name_for_layers(self, obj):
+        base_name = obj.name.split('.')[0]
+        extension = ""
+
+        specific_parts = ["body", "wheel", "axle", "spring"]
+
+        if ".w" in obj.name:
+            extension = ".w"
+        elif ".prm" in obj.name or any(part in obj.name for part in specific_parts):
+            extension = ".prm"
+
+        return f"{base_name}{extension}"
+
+    def execute(self, context):
+        scene = context.scene
+        obj = context.active_object
+        if not obj or obj.type != 'MESH':
+            self.report({'WARNING'}, "Active object is not a mesh")
+            return {'CANCELLED'}
+
+        # Check if the object is in Object mode
+        if obj.mode != 'OBJECT':
+            self.report({'WARNING'}, "You must be in Object Mode to bake vertex colors.")
+            msg_box("You must be in Object Mode to bake vertex colors.", 'ERROR')
+            return {'CANCELLED'}
+
+    def execute(self, context):
+        scene = context.scene
+        obj = context.active_object
+        if not obj or obj.type != 'MESH':
+            self.report({'WARNING'}, "Active object is not a mesh")
+            return {'CANCELLED'}
+
+        # Check if the object is in Object mode
+        if obj.mode != 'OBJECT':
+            self.report({'WARNING'}, "You must be in Object Mode to bake vertex colors.")
+            self.show_message_box("You must be in Object Mode to bake vertex colors.", "Error", 'ERROR')
+            return {'CANCELLED'}
+
+        # Ensure the object has a vertex color layer named 'Col'
+        vc_layer = obj.data.vertex_colors.get('Col')
+        if not vc_layer:
+            vc_layer = obj.data.vertex_colors.new(name='Col')
+        obj.data.vertex_colors.active = vc_layer
+
+        # Preserve the original vertex colors
+        original_vcols = [loop.color[:] for loop in vc_layer.data]
+
+        # Create temporary vertex color layers for baking
+        temp_ao_vc_layer = obj.data.vertex_colors.new(name='TempBakeAO')
+        temp_direct_vc_layer = obj.data.vertex_colors.new(name='TempBakeDirect')
+        obj.data.vertex_colors.active = temp_ao_vc_layer
+
+        # Set render engine to Cycles and configure settings
+        original_engine = scene.render.engine
+        scene.render.engine = 'CYCLES'
+        original_samples = scene.cycles.samples
+        scene.cycles.samples = self.samples
+
+        # Ensure the material setup is correct
+        base_name = self.get_base_name_for_layers(obj)
+        prefixed_mat_name = f"{base_name}_Col"
+        generic_mat_name = "_Col"
+
+        material = bpy.data.materials.get(prefixed_mat_name) or bpy.data.materials.get(generic_mat_name)
+        if not material:
+            self.report({'WARNING'}, f"Material {prefixed_mat_name} or {generic_mat_name} not found.")
+            return {'CANCELLED'}
+
+        # Ensure material is in object material slot
+        if material.name not in obj.data.materials:
+            obj.data.materials.append(material)
+
+        # Prepare vertex color material node setup with Principled BSDF
+        if not material.use_nodes:
+            material.use_nodes = True
+        nodes = material.node_tree.nodes
+        links = material.node_tree.links
+        nodes.clear()
+        vcol_node = nodes.new(type='ShaderNodeVertexColor')
+        bsdf_node = nodes.new(type='ShaderNodeBsdfPrincipled')
+        output_node = nodes.new(type='ShaderNodeOutputMaterial')
+        links.new(vcol_node.outputs['Color'], bsdf_node.inputs['Base Color'])
+        links.new(bsdf_node.outputs['BSDF'], output_node.inputs['Surface'])
+
+        # Ensure the active mesh object is selected
+        bpy.context.view_layer.objects.active = obj
+        bpy.ops.object.select_all(action='DESELECT')
+        obj.select_set(True)
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+        # Bake the ambient occlusion (AO) to the temporary vertex color layer
+        vcol_node.layer_name = temp_ao_vc_layer.name
+        bpy.ops.object.bake(type='AO', use_clear=True, use_selected_to_active=False, margin=2, cage_extrusion=0.0, normal_space='TANGENT', target='VERTEX_COLORS')
+
+        # Switch to the temporary direct lighting vertex color layer
+        obj.data.vertex_colors.active = temp_direct_vc_layer
+
+        # Bake the direct lighting to the temporary vertex color layer
+        vcol_node.layer_name = temp_direct_vc_layer.name
+        bpy.ops.object.bake(type='DIFFUSE', use_clear=True, use_selected_to_active=False, margin=2, cage_extrusion=0.0, normal_space='TANGENT', pass_filter={'DIRECT'}, target='VERTEX_COLORS')
+
+        # Merge the baked AO and direct lighting with the original colors using bmesh
+        bm = bmesh.new()
+        bm.from_mesh(obj.data)
+
+        # Access vertex color layers in bmesh
+        vc_layer_bm = bm.loops.layers.color.get('Col')
+        temp_ao_vc_layer_bm = bm.loops.layers.color.get('TempBakeAO')
+        temp_direct_vc_layer_bm = bm.loops.layers.color.get('TempBakeDirect')
+
+        for face in bm.faces:
+            for loop in face.loops:
+                original_color = loop[vc_layer_bm]
+                ao_color = loop[temp_ao_vc_layer_bm]
+                direct_color = loop[temp_direct_vc_layer_bm]
+                # Blend the original color with the AO shadow and direct lighting
+                blended_color = [
+                    original_color[j] * (1 - self.shadow_strength * (1 - ao_color[j])) + self.light_strength * direct_color[j]
+                    for j in range(3)
+                ]
+                loop[vc_layer_bm] = blended_color + [1.0]
+
+        # Update the mesh
+        bm.to_mesh(obj.data)
+        bm.free()
+
+        # Delete the temporary vertex color layers
+        obj.data.vertex_colors.remove(temp_ao_vc_layer)
+        obj.data.vertex_colors.remove(temp_direct_vc_layer)
+
+        # Cleanup and restore settings
+        scene.render.engine = original_engine
+        scene.cycles.samples = original_samples
+
+        # Restore the correct vertex color layer in the material
+        vcol_node.layer_name = 'Col'
+
+        obj.select_set(True)
+        context.view_layer.objects.active = obj
+        context.view_layer.update()
+
+        self.report({'INFO'}, "Baking completed successfully")
+        return {'FINISHED'}
+    
+    def invoke(self, context, event):
+        wm = context.window_manager
+        return wm.invoke_props_dialog(self)
+    
+class BatchBakeVertexToEnv(bpy.types.Operator):
+    """Batch Bake lighting to vertex colors and apply changes to the _Env material."""
+    bl_idname = "object.batch_bake_vertex_to_env"
+    bl_label = "Batch Bake Light to Vertex Color for _Env"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    shadow_strength: bpy.props.FloatProperty(
+        name="Shadow Strength",
+        description="Strength of the shadows",
+        default=5.0,
+        min=0.0,
+        max=10.0
+    )
+
+    light_strength: bpy.props.FloatProperty(
+        name="Light Strength",
+        description="Strength of the light rays",
+        default=0.5,
+        min=0.0,
+        max=10.0
+    )
+    
+    samples: bpy.props.IntProperty(
+        name="Samples",
+        description="Number of samples for baking",
+        default=512,
+        min=1,
+        max=5000
+    )
+    
+    def get_base_name_for_layers(self, obj):
+        base_name = obj.name.split('.')[0]
+        extension = ""
+
+        specific_parts = ["body", "wheel", "axle", "spring"]
+
+        if ".w" in obj.name:
+            extension = ".w"
+        elif ".prm" in obj.name or any(part in obj.name for part in specific_parts):
+            extension = ".prm"
+
+        return f"{base_name}{extension}"
+
+    def batch_bake(self, context):
+        scene = context.scene
+
+        # Set render engine to Cycles and configure settings
+        original_engine = scene.render.engine
+        scene.render.engine = 'CYCLES'
+        original_samples = scene.cycles.samples
+        scene.cycles.samples = self.samples
+
+        # Bakes all selected objects
+        for obj in context.selected_objects:
+            # Skips unsupported objects
+            if not hasattr(obj.data, "vertex_colors") or not obj.get('is_instance'):
+                continue
+
+            print(f"Baking at {obj.name}...")
+            context.view_layer.objects.active = obj
+
+            # Ensure the object has a vertex color layer named 'Env'
+            env_layer = obj.data.vertex_colors.get('Env')
+            if not env_layer:
+                env_layer = obj.data.vertex_colors.new(name='Env')
+            obj.data.vertex_colors.active = env_layer
+
+            # Preserve the original vertex colors
+            original_vcols = [loop.color[:] for loop in env_layer.data]
+
+            # Create temporary vertex color layers for baking
+            temp_ao_env_layer = obj.data.vertex_colors.new(name='TempBakeAO')
+            temp_direct_env_layer = obj.data.vertex_colors.new(name='TempBakeDirect')
+            obj.data.vertex_colors.active = temp_ao_env_layer
+
+            # Ensure the material setup is correct
+            base_name = self.get_base_name_for_layers(obj)
+            prefixed_mat_name = f"{base_name}_Env"
+            generic_mat_name = "_Env"
+
+            material = bpy.data.materials.get(prefixed_mat_name) or bpy.data.materials.get(generic_mat_name)
+            if not material:
+                self.report({'WARNING'}, f"Material {prefixed_mat_name} or {generic_mat_name} not found.")
+                continue
+
+            # Ensure material is in object material slot
+            if material.name not in obj.data.materials:
+                obj.data.materials.append(material)
+
+            # Prepare vertex color material node setup with Principled BSDF
+            if not material.use_nodes:
+                material.use_nodes = True
+            nodes = material.node_tree.nodes
+            links = material.node_tree.links
+            nodes.clear()
+            vcol_node = nodes.new(type='ShaderNodeVertexColor')
+            vcol_node.layer_name = 'Env'
+            bsdf_node = nodes.new(type='ShaderNodeBsdfPrincipled')
+            output_node = nodes.new(type='ShaderNodeOutputMaterial')
+            links.new(vcol_node.outputs['Color'], bsdf_node.inputs['Base Color'])
+            links.new(bsdf_node.outputs['BSDF'], output_node.inputs['Surface'])
+
+            # Ensure the active mesh object is selected
+            bpy.context.view_layer.objects.active = obj
+            bpy.ops.object.select_all(action='DESELECT')
+            obj.select_set(True)
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+            # Bake the ambient occlusion (AO) to the temporary vertex color layer
+            bpy.ops.object.bake(type='AO', use_clear=True, use_selected_to_active=False, margin=2, cage_extrusion=0.0, normal_space='TANGENT', target='VERTEX_COLORS')
+
+            # Switch to the temporary direct lighting vertex color layer
+            obj.data.vertex_colors.active = temp_direct_env_layer
+
+            # Bake the direct lighting to the temporary vertex color layer
+            bpy.ops.object.bake(type='DIFFUSE', use_clear=True, use_selected_to_active=False, margin=2, cage_extrusion=0.0, normal_space='TANGENT', pass_filter={'DIRECT'}, target='VERTEX_COLORS')
+
+            # Merge the baked AO and direct lighting with the original colors using bmesh
+            bm = bmesh.new()
+            bm.from_mesh(obj.data)
+
+            # Access vertex color layers in bmesh
+            env_layer_bm = bm.loops.layers.color.get('Env')
+            temp_ao_env_layer_bm = bm.loops.layers.color.get('TempBakeAO')
+            temp_direct_env_layer_bm = bm.loops.layers.color.get('TempBakeDirect')
+
+            for face in bm.faces:
+                for loop in face.loops:
+                    original_color = loop[env_layer_bm]
+                    ao_color = loop[temp_ao_env_layer_bm]
+                    direct_color = loop[temp_direct_env_layer_bm]
+                    # Blend the original color with the AO shadow and direct lighting
+                    blended_color = [
+                        original_color[j] * (1 - self.shadow_strength * (1 - ao_color[j])) + self.light_strength * direct_color[j]
+                        for j in range(3)
+                    ]
+                    loop[env_layer_bm] = blended_color + [original_color[3]]  # Preserve original alpha value
+
+            # Update the mesh
+            bm.to_mesh(obj.data)
+            bm.free()
+
+            # Delete the temporary vertex color layers
+            obj.data.vertex_colors.remove(temp_ao_env_layer)
+            obj.data.vertex_colors.remove(temp_direct_env_layer)
+
+        # Cleanup and restore settings
+        scene.render.engine = original_engine
+        scene.cycles.samples = original_samples
+
+    def execute(self, context):
+        self.batch_bake(context)
+        self.report({'INFO'}, "Batch baking completed successfully")
+        return {'FINISHED'}
+    
+    def invoke(self, context, event):
+        wm = context.window_manager
+        return wm.invoke_props_dialog(self)
+
+class BakeVertexToRGBModelColor(bpy.types.Operator):
+    """Bake lighting to vertex colors and apply changes to the _RGBModelColor material."""
+    bl_idname = "object.bake_vertex_to_rgbmodelcolor"
+    bl_label = "Bake Light to Vertex Color for RGBModelColor"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    shadow_strength: bpy.props.FloatProperty(
+        name="Shadow Strength",
+        description="Strength of the shadows",
+        default=5.0,
+        min=0.0,
+        max=10.0
+    )
+
+    light_strength: bpy.props.FloatProperty(
+        name="Light Strength",
+        description="Strength of the light rays",
+        default=0.5,
+        min=0.0,
+        max=10.0
+    )
+    
+    samples: bpy.props.IntProperty(
+        name="Samples",
+        description="Number of samples for baking",
+        default=512,
+        min=1,
+        max=5000
+    )
+    
+    def get_base_name_for_layers(self, obj):
+        base_name = obj.name.split('.')[0]
+        extension = ""
+
+        specific_parts = ["body", "wheel", "axle", "spring"]
+
+        if ".w" in obj.name:
+            extension = ".w"
+        elif ".prm" in obj.name or any(part in obj.name for part in specific_parts):
+            extension = ".prm"
+
+        return f"{base_name}{extension}"
+
+    def batch_bake(self, context):
+        scene = context.scene
+
+        # Set render engine to Cycles and configure settings
+        original_engine = scene.render.engine
+        scene.render.engine = 'CYCLES'
+        original_samples = scene.cycles.samples
+        scene.cycles.samples = self.samples
+
+        # Bakes all selected objects
+        for obj in context.selected_objects:
+            # Skips unsupported objects
+            if not hasattr(obj.data, "vertex_colors") or not obj.get('is_instance'):
+                continue
+
+            print(f"Baking at {obj.name}...")
+            context.view_layer.objects.active = obj
+
+            # Ensure the object has a vertex color layer named 'RGBModelColor'
+            rgb_layer = obj.data.vertex_colors.get('RGBModelColor')
+            if not rgb_layer:
+                rgb_layer = obj.data.vertex_colors.new(name='RGBModelColor')
+            obj.data.vertex_colors.active = rgb_layer
+
+            # Preserve the original vertex colors
+            original_vcols = [loop.color[:] for loop in rgb_layer.data]
+
+            # Create temporary vertex color layers for baking
+            temp_ao_rgb_layer = obj.data.vertex_colors.new(name='TempBakeAO')
+            temp_direct_rgb_layer = obj.data.vertex_colors.new(name='TempBakeDirect')
+            obj.data.vertex_colors.active = temp_ao_rgb_layer
+
+            # Ensure the material setup is correct
+            base_name = self.get_base_name_for_layers(obj)
+            prefixed_mat_name = f"{base_name}_RGBModelColor"
+            generic_mat_name = "_RGBModelColor"
+
+            material = bpy.data.materials.get(prefixed_mat_name) or bpy.data.materials.get(generic_mat_name)
+            if not material:
+                self.report({'WARNING'}, f"Material {prefixed_mat_name} or {generic_mat_name} not found.")
+                continue
+
+            # Ensure material is in object material slot
+            if material.name not in obj.data.materials:
+                obj.data.materials.append(material)
+
+            # Prepare vertex color material node setup with Principled BSDF
+            if not material.use_nodes:
+                material.use_nodes = True
+            nodes = material.node_tree.nodes
+            links = material.node_tree.links
+            nodes.clear()
+            vcol_node = nodes.new(type='ShaderNodeVertexColor')
+            vcol_node.layer_name = 'RGBModelColor'
+            bsdf_node = nodes.new(type='ShaderNodeBsdfPrincipled')
+            output_node = nodes.new(type='ShaderNodeOutputMaterial')
+            links.new(vcol_node.outputs['Color'], bsdf_node.inputs['Base Color'])
+            links.new(bsdf_node.outputs['BSDF'], output_node.inputs['Surface'])
+
+            # Ensure the active mesh object is selected
+            bpy.context.view_layer.objects.active = obj
+            bpy.ops.object.select_all(action='DESELECT')
+            obj.select_set(True)
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+            # Bake the ambient occlusion (AO) to the temporary vertex color layer
+            bpy.ops.object.bake(type='AO', use_clear=True, use_selected_to_active=False, margin=2, cage_extrusion=0.0, normal_space='TANGENT', target='VERTEX_COLORS')
+
+            # Switch to the temporary direct lighting vertex color layer
+            obj.data.vertex_colors.active = temp_direct_rgb_layer
+
+            # Bake the direct lighting to the temporary vertex color layer
+            bpy.ops.object.bake(type='DIFFUSE', use_clear=True, use_selected_to_active=False, margin=2, cage_extrusion=0.0, normal_space='TANGENT', pass_filter={'DIRECT'}, target='VERTEX_COLORS')
+
+            # Merge the baked AO and direct lighting with the original colors using bmesh
+            bm = bmesh.new()
+            bm.from_mesh(obj.data)
+
+            # Access vertex color layers in bmesh
+            rgb_layer_bm = bm.loops.layers.color.get('RGBModelColor')
+            temp_ao_rgb_layer_bm = bm.loops.layers.color.get('TempBakeAO')
+            temp_direct_rgb_layer_bm = bm.loops.layers.color.get('TempBakeDirect')
+
+            for face in bm.faces:
+                for loop in face.loops:
+                    original_color = loop[rgb_layer_bm]
+                    ao_color = loop[temp_ao_rgb_layer_bm]
+                    direct_color = loop[temp_direct_rgb_layer_bm]
+                    # Blend the original color with the AO shadow and direct lighting
+                    blended_color = [
+                        original_color[j] * (1 - self.shadow_strength * (1 - ao_color[j])) + self.light_strength * direct_color[j]
+                        for j in range(3)
+                    ]
+                    loop[rgb_layer_bm] = blended_color + [1.0]  # Add alpha value for RGBModelColor
+
+            # Update the mesh
+            bm.to_mesh(obj.data)
+            bm.free()
+
+            # Delete the temporary vertex color layers
+            obj.data.vertex_colors.remove(temp_ao_rgb_layer)
+            obj.data.vertex_colors.remove(temp_direct_rgb_layer)
+
+        # Cleanup and restore settings
+        scene.render.engine = original_engine
+        scene.cycles.samples = original_samples
+
+    def execute(self, context):
+        self.batch_bake(context)
+        self.report({'INFO'}, "Batch baking completed successfully")
+        return {'FINISHED'}
+    
+    def invoke(self, context, event):
+        wm = context.window_manager
+        return wm.invoke_props_dialog(self)
 
 """
 TEXTURE ANIMATIONS -------------------------------------------------------
@@ -1343,6 +1846,7 @@ VERTEX COLORS -----------------------------------------------------------------
 """
 
 class VertexAndAlphaLayer(bpy.types.Operator):
+    """Setup Vertex Color and Alpha Layers and create generic named materials if they do not exist."""
     bl_idname = "mesh.vertex_color_and_alpha_setup"
     bl_label = "Setup Vertex Color and Alpha Layers"
     bl_description = "Creates necessary vertex color layers and materials if they do not exist."
@@ -1353,45 +1857,48 @@ class VertexAndAlphaLayer(bpy.types.Operator):
         return obj and obj.type == 'MESH' and obj.mode == 'EDIT'
 
     def execute(self, context):
-        obj = context.object
-        mesh = obj.data
-        bm = bmesh.from_edit_mesh(mesh)
+        for obj in context.selected_objects:
+            if obj.type == 'MESH':
+                mesh = obj.data
+                bm = bmesh.from_edit_mesh(mesh)
 
-        # Define the layers to be checked or created
-        layers = ['Col', 'Alpha']
+                # Define the layers to be checked or created
+                layers = ['Col', 'Alpha']
 
-        for layer_name in layers:
-            created_layer = bm.loops.layers.color.get(layer_name)
-            if not created_layer:
-                created_layer = bm.loops.layers.color.new(layer_name)
-                self.report({'INFO'}, f"{layer_name} vertex color layer created.")
-            else:
-                self.report({'INFO'}, f"{layer_name} vertex color layer already exists.")
+                for layer_name in layers:
+                    created_layer = bm.loops.layers.color.get(layer_name)
+                    if not created_layer:
+                        created_layer = bm.loops.layers.color.new(layer_name)
+                        self.report({'INFO'}, f"{layer_name} vertex color layer created for {obj.name}.")
+                    else:
+                        self.report({'INFO'}, f"{layer_name} vertex color layer already exists for {obj.name}.")
 
-        bmesh.update_edit_mesh(mesh, destructive=True)
+                bmesh.update_edit_mesh(mesh, destructive=True)
 
-        # Ensure materials are set up for the layers
-        self.setup_materials(obj, layers)
+                # Ensure materials are set up for the layers
+                self.setup_materials(obj, layers)
 
         return {'FINISHED'}
 
     def setup_materials(self, obj, attributes):
-        base_name = self.get_base_name_for_layers(obj)
         for attr_name in attributes:
-            mat_name = f"{base_name}_{attr_name}"
+            mat_name = f"_{attr_name}"
             material = bpy.data.materials.get(mat_name)
             if not material:
                 material = bpy.data.materials.new(name=mat_name)
                 material.use_nodes = True
-                bsdf = material.node_tree.nodes.new('ShaderNodeBsdfPrincipled')
+                nodes = material.node_tree.nodes
+                nodes.clear()
+                bsdf = nodes.new('ShaderNodeBsdfPrincipled')
+                output = nodes.new('ShaderNodeOutputMaterial')
+                vcol = nodes.new('ShaderNodeVertexColor')
+                vcol.layer_name = attr_name
                 bsdf.inputs['Base Color'].default_value = (0.0, 0.0, 0.0, 1.0) if attr_name == 'Alpha' else (1.0, 1.0, 1.0, 1.0)
+                material.node_tree.links.new(vcol.outputs['Color'], bsdf.inputs['Base Color'])
+                material.node_tree.links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
                 self.report({'INFO'}, f"{mat_name} material created.")
-            if mat_name not in obj.data.materials:
+            if material.name not in obj.data.materials:
                 obj.data.materials.append(material)
-
-    def get_base_name_for_layers(self, obj):
-        base_name = obj.name.split('.')[0]
-        return base_name  # Simplified without specific file extensions or conditions
 
 class VertexColorRemove(bpy.types.Operator):
     bl_idname = "vertexcolor.remove_layer"
@@ -1405,38 +1912,35 @@ class VertexColorRemove(bpy.types.Operator):
 
     def execute(self, context):
         for obj in context.selected_objects:
-            mesh = obj.data
-            bm = bmesh.from_edit_mesh(mesh)
+            if obj.type == 'MESH':
+                mesh = obj.data
+                bm = bmesh.from_edit_mesh(mesh)
 
-            # Remove the vertex color layer
-            vc_layer = bm.loops.layers.color.get("Col")
-            if vc_layer is not None:
-                for face in bm.faces:
-                    for loop in face.loops:
-                        loop[vc_layer] = (1.0, 1.0, 1.0, 1.0) 
+                # Remove the vertex color layer
+                vc_layer = bm.loops.layers.color.get("Col")
+                if vc_layer is not None:
+                    bm.loops.layers.color.remove(vc_layer)
 
-            # Remove the alpha layer
-            va_layer = bm.loops.layers.color.get("Alpha")
-            if va_layer is not None:
-                for face in bm.faces:
-                    for loop in face.loops:
-                        loop[va_layer] = (0.0, 0.0, 0.0, 1.0)
+                # Remove the alpha layer
+                va_layer = bm.loops.layers.color.get("Alpha")
+                if va_layer is not None:
+                    bm.loops.layers.color.remove(va_layer)
 
-            bmesh.update_edit_mesh(mesh, destructive=True)
+                bmesh.update_edit_mesh(mesh, destructive=True)
 
-            # Remove the _Col and _Alpha materials
-            col_material_name = f"{obj.name}_Col"
-            alpha_material_name = f"{obj.name}_Alpha"
+                # Remove the _Col and _Alpha materials
+                col_material_name = f"{obj.name}_Col"
+                alpha_material_name = f"{obj.name}_Alpha"
 
-            if col_material_name in bpy.data.materials:
-                mat = bpy.data.materials[col_material_name]
-                if mat in obj.data.materials:
-                    obj.data.materials.remove(mat)
+                if col_material_name in bpy.data.materials:
+                    mat = bpy.data.materials[col_material_name]
+                    if mat in obj.data.materials:
+                        obj.data.materials.remove(mat)
 
-            if alpha_material_name in bpy.data.materials:
-                mat = bpy.data.materials[alpha_material_name]
-                if mat in obj.data.materials:
-                    obj.data.materials.remove(mat)
+                if alpha_material_name in bpy.data.materials:
+                    mat = bpy.data.materials[alpha_material_name]
+                    if mat in obj.data.materials:
+                        obj.data.materials.remove(mat)
 
         self.report({'INFO'}, "Vertex color and alpha layers removed.")
         return {'FINISHED'}
@@ -1452,24 +1956,25 @@ class SetVertexColor(bpy.types.Operator):
         return obj and obj.type == 'MESH' and obj.mode == 'EDIT'
 
     def execute(self, context):
-        eo = context.edit_object
-        bm = bmesh.from_edit_mesh(eo.data)
+        for eo in context.selected_objects:
+            if eo.type == 'MESH':
+                bm = bmesh.from_edit_mesh(eo.data)
 
-        vc_layer = bm.loops.layers.color.get("Col")
-        if not vc_layer:
-            self.report({'WARNING'}, "No active vertex color layer found.")
-            return {'CANCELLED'}
+                vc_layer = bm.loops.layers.color.get("Col")
+                if not vc_layer:
+                    self.report({'WARNING'}, f"No active vertex color layer found for {eo.name}.")
+                    continue
 
-        selmode = context.tool_settings.mesh_select_mode
-        color = context.scene.vertex_color_picker
+                selmode = context.tool_settings.mesh_select_mode
+                color = context.scene.vertex_color_picker
 
-        for face in bm.faces:
-            for loop in face.loops:
-                if (selmode[0] and loop.vert.select) or (selmode[1] and loop.edge.select) or (selmode[2] and face.select):
-                    loop[vc_layer] = (color[0], color[1], color[2], 1.0)  # Include alpha
+                for face in bm.faces:
+                    for loop in face.loops:
+                        if (selmode[0] and loop.vert.select) or (selmode[1] and loop.edge.select) or (selmode[2] and face.select):
+                            loop[vc_layer] = (color[0], color[1], color[2], 1.0)  # Include alpha
 
-        bmesh.update_edit_mesh(eo.data, destructive=False)
-        self.report({'INFO'}, "Vertex color set.")
+                bmesh.update_edit_mesh(eo.data, destructive=False)
+                self.report({'INFO'}, f"Vertex color set for {eo.name}.")
         return {'FINISHED'}
 
 class SetVertexAlpha(bpy.types.Operator):
@@ -1483,28 +1988,29 @@ class SetVertexAlpha(bpy.types.Operator):
         return obj and obj.type == 'MESH'
 
     def execute(self, context):
-        eo = context.edit_object
-        bm = bmesh.from_edit_mesh(eo.data)
+        for eo in context.selected_objects:
+            if eo.type == 'MESH':
+                bm = bmesh.from_edit_mesh(eo.data)
 
-        va_layer = bm.loops.layers.color.get("Alpha")
-        if not va_layer:
-            self.report({'WARNING'}, "No vertex color layer with 'Alpha' in its name found.")
-            return {'CANCELLED'}
+                va_layer = bm.loops.layers.color.get("Alpha")
+                if not va_layer:
+                    self.report({'WARNING'}, f"No vertex color layer with 'Alpha' in its name found for {eo.name}.")
+                    continue
 
-        # Retrieve the alpha percentage from the scene property and update the vertex_alpha
-        alpha_percent = int(context.scene.vertex_alpha_percentage)
-        alpha_value = alpha_percent / 100.0  # Normalize to 0-1
-        context.scene.vertex_alpha = alpha_value  # Update the scene's vertex_alpha property
+                # Retrieve the alpha percentage from the scene property and update the vertex_alpha
+                alpha_percent = int(context.scene.vertex_alpha_percentage)
+                alpha_value = alpha_percent / 100.0  # Normalize to 0-1
+                context.scene.vertex_alpha = alpha_value  # Update the scene's vertex_alpha property
 
-        grayscale_value = 1.0 - alpha_value  # Set color based on the inverse of alpha value
+                grayscale_value = 1.0 - alpha_value  # Set color based on the inverse of alpha value
 
-        for face in bm.faces:
-            if face.select:
-                for loop in face.loops:
-                    loop[va_layer] = (grayscale_value, grayscale_value, grayscale_value, alpha_value)
+                for face in bm.faces:
+                    if face.select:
+                        for loop in face.loops:
+                            loop[va_layer] = (grayscale_value, grayscale_value, grayscale_value, alpha_value)
 
-        bmesh.update_edit_mesh(eo.data, destructive=False)
-        self.report({'INFO'}, f"Alpha adjusted to {alpha_percent}% for selected faces on the chosen layer.")
+                bmesh.update_edit_mesh(eo.data, destructive=False)
+                self.report({'INFO'}, f"Alpha adjusted to {alpha_percent}% for selected faces on the chosen layer for {eo.name}.")
         return {'FINISHED'}
 
 def menu_func_import(self, context):

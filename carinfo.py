@@ -11,9 +11,9 @@ import os
 import bpy
 from . import common
 
-if "bpy" in locals():
-    import imp
-    imp.reload(common)
+if 'common' in locals():
+    import importlib
+    importlib.reload(common)
 
 # Action name for error reporting
 action_name = "reading parameters"

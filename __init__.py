@@ -124,11 +124,11 @@ from .common import DialogOperator, TEX_ANIM_MAX, TEX_PAGES_MAX
 from .common import FACE_DOUBLE, FACE_TRANSLUCENT, FACE_MIRROR, FACE_TRANSL_TYPE, FACE_TEXANIM, FACE_NOENV, FACE_ENV, FACE_CLOTH, FACE_SKIP
 from .common import NCP_DOUBLE, NCP_NO_SKID, NCP_OIL, NCP_OBJECT_ONLY, NCP_CAMERA_ONLY, NCP_NOCOLL, MATERIALS
 from .layers import select_ncp_material, get_face_material, set_face_material, set_face_texture, get_face_texture, update_envmapping, update_no_envmapping
-from .layers import set_face_ncp_property, get_face_ncp_property, get_face_env, set_face_env, update_face_env
+from .layers import set_face_ncp_property, get_face_ncp_property, get_face_env, set_face_env, update_face_env, get_fin_envcol, set_fin_envcol
 from .layers import get_face_property, set_face_property, update_fin_envcol, set_rgb, get_rgb, update_fin_col, get_alpha_items
 from .layers import update_fin_env, update_rgb, update_no_envmapping, update_envmapping, remove_env_material
 from .operators import ImportRV, ExportRV, RVIO_OT_ReadCarParameters, RVIO_OT_SelectRevoltDirectory, ButtonReExport
-from .operators import VertexAndAlphaLayer, VertexColorRemove, SetVertexColor, BakeShadow
+from .operators import VertexAndAlphaLayer, VertexColorRemove, SetVertexColor, BakeShadow, BakeVertex, BatchBakeVertexToEnv, BakeVertexToRGBModelColor
 from .operators import TexAnimDirection, SetVertexAlpha
 from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, MaterialAssignment
 from .operators import SetInstanceProperty, RemoveInstanceProperty, LaunchRV, TexturesSave
@@ -139,7 +139,7 @@ from .operators import menu_func_import, menu_func_export
 from .rvstruct import World, PRM, Mesh, BoundingBox, Vector, Matrix, Polygon, Vertex, UV, BigCube, TexAnimation
 from .rvstruct import Frame, Color, Instances, Instance, PosNodes, PosNode, NCP, Polyhedron, Plane, LookupGrid
 from .rvstruct import LookupList, Hull, ConvexHull, Edge, Interior, Sphere, RIM, MirrorPlane, TrackZones, Zone
-from .texanim import update_ta_max_frames, update_ta_current_slot, update_ta_current_frame
+from .texanim import update_ta_max_frames, update_ta_current_slot, update_ta_current_frame, update_ta_current_frame_uv
 from .texanim import update_ta_current_frame_delay, update_ta_current_frame_tex, update_ta_max_slots
 from .ui.faceprops import RVIO_PT_RevoltFacePropertiesPanel
 from .ui.headers import RVIO_PT_RevoltIOToolPanel
@@ -241,13 +241,15 @@ def register():
 
     bpy.types.Object.fin_col = bpy.props.FloatVectorProperty(
         name="Model Color",
-        subtype='COLOR_GAMMA',  # Use COLOR_GAMMA for more accurate color representation
+        subtype='COLOR',
         size=3,
         min=0.0,
         max=1.0,
-        default=(0.5, 0.5, 0.5),  # Default color
+        default=(0.5, 0.5, 0.5),
         description="Model RGB color to be used",
-        update=update_rgb  # Ensure this directly updates the RGB
+        get=get_rgb,
+        set=set_rgb,
+        update=update_fin_col
     )
     
     bpy.types.Object.fin_envcol = bpy.props.FloatVectorProperty(
@@ -257,8 +259,8 @@ def register():
         size=4,
         min=0.0, max=1.0,
         description="Instance EnvMap Color",
-        get=get_face_env,
-        set=set_face_env,
+        get=get_fin_envcol,
+        set=set_fin_envcol,
         update=update_fin_envcol
     )
     
@@ -266,7 +268,7 @@ def register():
         name="Use Model Color",
         description="Toggle to use the model's color",
         default=False,
-        update=update_rgb  # Reference the function directly without lambda
+        update=update_rgb
     )
     
     bpy.types.Object.fin_hide = bpy.props.BoolProperty(
@@ -496,22 +498,6 @@ def register():
                       "All higher slots will be ignored on export"
     )
     
-    bpy.types.Scene.rvio_frame_start = bpy.props.IntProperty(
-        name="Start Frame",
-        description="Start frame of the animation",
-        default=1,
-        min=0,
-        max=TEX_PAGES_MAX-1
-    )
-
-    bpy.types.Scene.rvio_frame_end = bpy.props.IntProperty(
-        name="End Frame",
-        description="End frame of the animation",
-        default=2,
-        min=0,
-        max=TEX_PAGES_MAX-1
-    )
-
     bpy.types.Scene.ta_delay = bpy.props.FloatProperty(
         name="Frame Duration",
         description="Duration of every frame",
@@ -883,6 +869,9 @@ def register():
     bpy.utils.register_class(CarParametersExport)
     bpy.utils.register_class(ButtonHullGenerate)  
     bpy.utils.register_class(BakeShadow)
+    bpy.utils.register_class(BakeVertex)
+    bpy.utils.register_class(BatchBakeVertexToEnv)
+    bpy.utils.register_class(BakeVertexToRGBModelColor)
     bpy.utils.register_class(ButtonHullSphere)
     bpy.utils.register_class(ButtonCopyUvToFrame)
     bpy.utils.register_class(ButtonCopyFrameToUv)
@@ -939,6 +928,9 @@ def unregister():
     bpy.utils.unregister_class(ButtonCopyFrameToUv)
     bpy.utils.unregister_class(ButtonCopyUvToFrame)
     bpy.utils.unregister_class(ButtonHullSphere)
+    bpy.utils.unregister_class(BakeVertexToRGBModelColor)
+    bpy.utils.unregister_class(BatchBakeVertexToEnv)
+    bpy.utils.unregister_class(BakeVertex)
     bpy.utils.unregister_class(BakeShadow)
     bpy.utils.unregister_class(ButtonHullGenerate) 
     bpy.utils.unregister_class(CarParametersExport)
@@ -1009,8 +1001,6 @@ def unregister():
     del bpy.types.Scene.ta_current_frame_tex
     del bpy.types.Scene.ta_current_slot  
     del bpy.types.Scene.ta_delay
-    del bpy.types.Scene.rvio_frame_end
-    del bpy.types.Scene.rvio_frame_start
     del bpy.types.Scene.ta_max_frames
     del bpy.types.Scene.ta_max_slots
     del bpy.types.Scene.texture_animations

@@ -15,6 +15,7 @@ import mathutils
 import re
 from math import pi
 import time
+from . import common
 from .common import create_material, COL_HULL, int_to_texture, texture_to_int, get_texture_path
 import importlib
 
@@ -129,126 +130,6 @@ def bake_shadow(self, context):
     )
     scene.shadow_table = shtable
     scene.render.engine = original_engine
-    
-def bake_vertex(self, context):
-    scene = context.scene
-    rd = scene.render
-    rd.use_bake_to_vertex_color = True
-    rd.use_textures = False
-
-    shade_obj = context.object
-
-    if scene.light1 != "None":
-        light_location1, light_rotation1 = self.determine_light_position(scene.light_orientation, 1)
-        lamp_object1 = self.setup_light(scene.light1, "ShadeLight1", scene.light_intensity1, light_location1, light_rotation1)
-
-    if scene.light2 != "None":
-        light_location2, light_rotation2 = self.determine_light_position(scene.light_orientation, 2)
-        lamp_object2 = self.setup_light(scene.light2, "ShadeLight2", scene.light_intensity2, light_location2, light_rotation2)
-
-    # Assuming additional steps for preparation before baking...
-    bpy.ops.object.bake_image()
-
-    # Cleanup
-    bpy.data.objects.remove(lamp_object1)
-    bpy.data.objects.remove(lamp_object2)
-
-    shade_obj.select_set(True)
-    bpy.context.view_layer.objects.active = shade_obj
-    bpy.context.view_layer.update()
-
-
-def batch_bake(self, context):
-    rd = context.scene.render
-
-    # Saves old render settings
-    old_bake_vcol = rd.use_bake_to_vertex_color
-    old_bake_type = rd.bake_type
-
-    # Sets render settings
-    rd.use_bake_to_vertex_color = True
-    rd.bake_type = "FULL"
-
-    # Bakes all selected objects
-    for obj in context.selected_objects:
-
-        # Skips unsupported objects
-        if not hasattr(obj.data, "vertex_colors"):
-            continue
-
-        print("Baking at {}...".format(obj.name))
-        context.scene.objects.active = obj
-
-        # Gets currently selected layers
-        old_active_render_layer = None
-        old_active = None
-        for vclayer in obj.data.vertex_colors:
-            if vclayer.active_render:
-                old_active_render_layer = vclayer.name
-            if vclayer.active:
-                old_active = vclayer.name
-
-        print("Currently active layer:", old_active)
-        print("Currently active layer (render):", old_active_render_layer)
-        
-        # Creates a temporary layer for baking a full render to
-        if not "temp" in obj.data.vertex_colors:
-            obj.data.vertex_colors.new(name="temp")
-        tmp_layer = obj.data.vertex_colors.get("temp")
-        tmp_layer.active = True
-        tmp_layer.active_render = True
-        print("TMP layer:", tmp_layer.name)
-        print("TMP is active render:", tmp_layer.active_render)
-        
-        # Bakes the image onto that layer
-        print("Baking...")
-        bpy.ops.object.bake_image()
-        print("done.")
-
-        print("Calculating mean color...")
-        
-        bm = bmesh.new()
-        bm.from_mesh(obj.data)
-
-        vcol_layer = bm.loops.layers.color.get("temp")
-        
-        avg_col = [0.0, 0.0, 0.0]
-        
-        count = 0
-
-        for face in bm.faces:
-            for loop in face.loops:
-                for c in range(3):
-                    avg_col[c] += loop[vcol_layer][c]
-                count += 1
-
-        #TODO: Figure out if brightness is right
-        inf_col = [c / count for c in avg_col]
-        bm.free()
-
-        for c in range(3):
-            if context.scene.batch_bake_model_rgb:
-                obj.fin_col[c] = inf_col[c]
-            if context.scene.batch_bake_model_env:
-                obj.fin_envcol[c] = inf_col[c]
-        obj.fin_model_rgb = True
-
-        # Removes the temporary render layer
-        obj.data.vertex_colors.remove(tmp_layer)
-
-        print("Restoring selection...")
-        # Restores active layers
-        if old_active_render_layer is not None:
-            obj.data.vertex_colors[old_active_render_layer].active_render = True
-        if old_active is not None:
-            obj.data.vertex_colors[old_active].active = True
-        print("done.")
-
-
-    # Restores baking settings
-    rd.use_bake_to_vertex_color = old_bake_vcol
-    rd.bake_type = old_bake_type
-    return len(context.selected_objects)
 
 def generate_chull(context):
     hull_name = f"is_hull_convex"  # Prefix for naming the hull object

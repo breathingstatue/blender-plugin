@@ -12,7 +12,7 @@ import bpy
 from . import common
 from . import rvstruct
 
-if "bpy" in locals():
+if "common" in locals():
     import importlib
     importlib.reload(common)
     
