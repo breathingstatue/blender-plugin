@@ -7,15 +7,14 @@ Zone files contain numbered boxes to identify tracks space.
 
 """
 
-
 import os
 import bpy
+import math
 import mathutils
 from . import common
 from . import rvstruct
-from .common import to_revolt_coord, to_revolt_axis
+from .common import to_revolt_coord, to_revolt_axis, to_revolt_scale, to_trans_matrix
 from .rvstruct import TrackZones
-
 
 def export_file(filepath, scene):
     zones = TrackZones()
@@ -29,28 +28,45 @@ def export_file(filepath, scene):
         if "is_track_zone" not in obj or not obj["is_track_zone"]:
             continue
         
-        # Get a name of object and zone id from it
-        zid = int(obj.name.split(".", 1)[0][1:])
-        zones.append(zid, *transforms_to_revolt(obj.location, obj.rotation_euler, obj.scale))
+        # Get the ID from the custom property
+        zid = obj.get("track_zone_id")
+        if zid is None:
+            print(f"Skipping object {obj.name}: No 'track_zone_id' custom property found")
+            continue
+        
+        # Convert object transforms to Re-Volt format
+        location, rotation_matrix, scale = transforms_to_revolt(obj.location, obj.rotation_euler, obj.scale)
+        # Append the zone to the TrackZones object
+        zones.append(zid, location, rotation_matrix, scale)
     
-    # Exports all zones to the TAZ file
+    # Export all zones to the TAZ file
     with open(filepath, "wb") as file:
         zones.write(file)
 
-def transforms_to_revolt(location, rotation_euler = (0,0,0), scale = (1,1,1)):
+def transforms_to_revolt(location, rotation_euler=(0,0,0), scale=(1,1,1)):
     """
-    This function takes blender's order transformation parameters values and converts
-    them into values ready to export
+    Converts Blender's transformation parameters to Re-Volt format, accounting for specific discrepancies.
     """
-    location = to_revolt_coord(location)
-    rotation_euler = to_revolt_axis(rotation_euler)
-    rotation_matrix = mathutils.Euler(rotation_euler, 'XZY').to_matrix()
-    rotation_matrix.transpose()
-
-    # Ensuring the rotation matrix is in the correct format
-    rotation_matrix_correct_format = [list(row)[:3] for row in rotation_matrix]
-
-    scale = to_revolt_coord(scale)
-    scale = [abs(val) for val in scale]
+    # Convert location from Blender coordinates to Re-Volt coordinates
+    location_revolt = to_revolt_coord(location)
     
-    return location, rotation_matrix_correct_format, scale
+    # Convert scale to Re-Volt format
+    scale_revolt = to_revolt_scale(scale)
+    
+    # Since Re-Volt expects the scale to be halved, adjust accordingly
+    scale_revolt = [val / 2 for val in scale_revolt]
+    
+    # Convert rotation from Blender Euler angles to Re-Volt format
+    # Apply the XZY order and correct the 90-degree offset on the X-axis
+    rotation_euler_revolt = (rotation_euler[0] - math.radians(90), -rotation_euler[2], rotation_euler[1])
+    
+    # Create a rotation matrix from Re-Volt's Euler angles (XZY order)
+    rotation_matrix = mathutils.Euler(rotation_euler_revolt, 'XZY').to_matrix()
+    
+    # Convert the rotation matrix to a 4x4 matrix
+    rotation_matrix_4x4 = rotation_matrix.to_4x4()
+    
+    # Convert rotation matrix to a 3x3 matrix for Re-Volt
+    rotation_matrix_correct_format = [list(row)[:3] for row in rotation_matrix_4x4]
+    
+    return location_revolt, rotation_matrix_correct_format, scale_revolt

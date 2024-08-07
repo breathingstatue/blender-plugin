@@ -29,6 +29,7 @@ from . import carinfo
 from .common import get_format, FORMAT_PRM, FORMAT_FIN, FORMAT_NCP, FORMAT_HUL, FORMAT_W, FORMAT_RIM, FORMAT_TA_CSV, FORMAT_TAZ, FORMAT_UNK
 from .common import get_errors, msg_box, FORMATS, to_revolt_scale, FORMAT_CAR, TEX_PAGES_MAX, int_to_texture
 from .layers import set_face_env, create_or_assign_env_material
+from .taz_in import create_zone
 
 from bpy.props import (
     BoolProperty,
@@ -1803,15 +1804,27 @@ class ButtonZoneHide(bpy.types.Operator):
 class AddTrackZone(bpy.types.Operator):
     bl_idname = "scene.add_track_zone"
     bl_label = "Track Zone"
-    bl_description = (
-        "Adds a new track zone under cursor location"
-    )
+    bl_description = "Adds a new track zone under cursor location"
     bl_options = {'UNDO'}
     
     def execute(self, context):
-        from .taz_in import create_zone
         cursor_location = context.scene.cursor.location
-        obj = create_zone(None, cursor_location)
+        existing_zones = [obj for obj in bpy.data.objects if obj.get("is_track_zone")]
+        next_id = max([obj.get("track_zone_id", -1) for obj in existing_zones], default=-1) + 1
+
+        obj = create_zone(next_id, cursor_location)
+        obj.is_track_zone = True
+        context.view_layer.objects.active = obj  # Set the new zone as the active object
+        obj.select_set(True)
+
+        # Keep the focus on the Scene panel
+        for area in context.screen.areas:
+            if area.type == 'PROPERTIES':
+                for space in area.spaces:
+                    if space.type == 'PROPERTIES':
+                        space.context = 'SCENE'
+                        break
+
         return {'FINISHED'}
     
 class ButtonHullSphere(bpy.types.Operator):

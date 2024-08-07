@@ -831,20 +831,19 @@ def register():
         options={'HIDDEN'}  # Hide this property in the UI as it will be displayed differently
     )
 
-
-    #Unused
-    #bpy.types.Scene.batch_bake_model_rgb = bpy.props.BoolProperty(
-    #    name = "Bake to Model RGB",
-    #    default = True,
-    #    description = "Bake scene lighting to Instance model RGB"
-    #)
+    bpy.types.Object.track_zone_id = bpy.props.IntProperty(
+        name="Track Zone ID",
+        description="ID of the Track Zone",
+        default=0,
+        min=0,
+        max=1023  # Maximum value set to 1023
+    )
     
-    #Unused
-    #bpy.types.Scene.batch_bake_model_env = bpy.props.BoolProperty(
-    #    name = "Bake to Model Env",
-    #    default = True,
-    #    description = "Bake scene lighting to Instance model environment color"
-    #)
+    bpy.types.Object.is_track_zone = bpy.props.BoolProperty(
+        name="Is Track Zone",
+        description="Indicates if the object is a track zone",
+        default=False
+    )
     
     
     #Register Operators
@@ -953,9 +952,9 @@ def unregister():
     bpy.utils.unregister_class(ImportRV)
     bpy.utils.unregister_class(DialogOperator)
     
-    # Unregister Custom Properties
-    #del bpy.types.Scene.batch_bake_model_env
-    #del bpy.types.Scene.batch_bake_model_rgb
+
+    del bpy.types.Object.is_track_zone
+    del bpy.types.Object.track_zone_id
 
     del bpy.types.Scene.split_size_faces
     del bpy.types.Scene.actual_split_size
