@@ -10,13 +10,14 @@ class RVIO_PT_RevoltZonePanel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
+        obj = context.object
         
         box = layout.box()
         box.label(text="Track Zones:")
         col = box.column(align=True)
         col.operator("scene.add_track_zone", icon="MATCUBE", text="Create Track Zone")
         col.operator("scene.zone_hide", icon="RESTRICT_VIEW_ON")
-             
+        
         # Hull properties
         box = layout.box()
         box.label(text="Hull Properties:")

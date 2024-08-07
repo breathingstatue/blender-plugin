@@ -17,6 +17,14 @@ class RVIO_PT_RevoltObjectPanel(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         obj = context.active_object
+        
+        #Track Zone properties
+        tz_box = layout.box()
+        tz_box.label(text="Track Zone Properties")
+        tz_col = tz_box.column(align=True)
+        tz_col.prop(obj, "is_track_zone", text="Is Track Zone")
+        if obj and obj.is_track_zone:
+            tz_col.prop(obj, "track_zone_id", text="Track Zone ID", slider=True)
 
         # Mirror properties
         mirror_box = layout.box()
