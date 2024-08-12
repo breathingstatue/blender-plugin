@@ -34,7 +34,7 @@ class RVIO_PT_RevoltLightPanel(bpy.types.Panel):
         col.prop(scene, "shadow_quality")
         col.prop(scene, "shadow_resolution")
         col.prop(scene, "shadow_softness")
-        layout.operator("lighttools.bake_shadow")
+        col.operator("lighttools.bake_shadow")
         layout.prop(scene, "shadow_table")
 
         # Light orientation selection

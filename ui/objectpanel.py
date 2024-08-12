@@ -1,11 +1,9 @@
 import bpy
 import bmesh
+from ..common import LOW_FLAG_OPTIONS, HIGH_FLAG_OPTIONS
+from ..tools import get_high_flag_items
 from ..operators import *
 from ..rvstruct import *
-from bpy.props import (BoolProperty,
-                       FloatVectorProperty, 
-                       IntProperty
-)
 
 class RVIO_PT_RevoltObjectPanel(bpy.types.Panel):
     bl_label = "Revolt Object Properties"
@@ -25,6 +23,38 @@ class RVIO_PT_RevoltObjectPanel(bpy.types.Panel):
         tz_col.prop(obj, "is_track_zone", text="Is Track Zone")
         if obj and obj.is_track_zone:
             tz_col.prop(obj, "track_zone_id", text="Track Zone ID", slider=True)
+            
+        #Trigger properties
+        tri_box = layout.box()
+        tri_box.label(text="Trigger Properties")
+        tri_col = tri_box.column(align=True)
+        if obj and obj.get("is_trigger"):
+
+            # Draw Trigger Type
+            tri_col.prop(obj, "trigger_type_enum", text="Type")
+
+            # Get the trigger type
+            trigger_type = int(obj.trigger_type_enum)
+
+            # Get the appropriate flag options based on the trigger type
+            low_flag_data = LOW_FLAG_OPTIONS.get(trigger_type)
+            high_flag_data = HIGH_FLAG_OPTIONS.get(trigger_type)
+
+            # If Trigger Type 2 or 5, use EnumProperty for selector
+            if trigger_type in {2, 5}:
+                tri_col.prop(obj, "low_flag_enum", text=low_flag_data["name"])
+            else:
+                tri_col.prop(obj, "flag_low", text=low_flag_data["name"] if low_flag_data else "Low Flag")
+
+            # Display high flag only if it applies to this trigger type
+            if high_flag_data:
+                tri_col.prop(obj, "flag_high", text=high_flag_data["name"])
+            else:
+                tri_col.label(text="High Flag: N/A")
+            
+            tri_col.operator("object.duplicate_trigger")
+            tri_col.operator("object.copy_trigger", text="Copy Trigger Values")
+            tri_col.operator("object.paste_trigger", text="Paste Trigger Values")
 
         # Mirror properties
         mirror_box = layout.box()
