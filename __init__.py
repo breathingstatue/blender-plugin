@@ -7,6 +7,7 @@ Marv's Add-On for Re-Volt with Theman's Update
 """
 
 from collections import defaultdict
+from venv import create
 import bpy
 import bmesh
 import os
@@ -50,6 +51,8 @@ from . import (
     taz_out,
     ta_csv_in,
     ta_csv_out,
+    tri_in,
+    tri_out,
     texanim,
     tools,
     w_in,
@@ -66,7 +69,7 @@ from .ui import (
     settings,
     texanim,
     vertex,
-    zone,
+    migpanel,
 )
 
 # Reloads potentially changed modules on reload (F8 in Blender)
@@ -111,6 +114,10 @@ if "ta_csv_in" in locals():
     importlib.reload(ta_csv_in)
 if "ta_csv_out" in locals():
     importlib.reload(ta_csv_out)
+if "tri_in" in locals():
+    importlib.reload(tri_in)
+if "tri_out" in locals():
+    importlib.reload(tri_out)
 if "w_in" in locals():
     importlib.reload(w_in)
 if "w_out" in locals():
@@ -132,15 +139,18 @@ from .operators import VertexAndAlphaLayer, VertexColorRemove, SetVertexColor, B
 from .operators import TexAnimDirection, SetVertexAlpha
 from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, MaterialAssignment
 from .operators import SetInstanceProperty, RemoveInstanceProperty, LaunchRV, TexturesSave
-from .operators import TexturesRename, CarParametersExport, ButtonZoneHide, AddTrackZone
-from .operators import SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere
+from .operators import TexturesRename, CarParametersExport, ButtonZoneHide, AddTrackZone, CreateTrigger, DuplicateTrigger
+from .operators import CopyTrigger, PasteTrigger, SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere
 from .operators import ButtonCopyUvToFrame, ButtonCopyFrameToUv, TexAnimTransform, TexAnimGrid, OBJECT_OT_texanim_uv
 from .operators import menu_func_import, menu_func_export
 from .rvstruct import World, PRM, Mesh, BoundingBox, Vector, Matrix, Polygon, Vertex, UV, BigCube, TexAnimation
 from .rvstruct import Frame, Color, Instances, Instance, PosNodes, PosNode, NCP, Polyhedron, Plane, LookupGrid
 from .rvstruct import LookupList, Hull, ConvexHull, Edge, Interior, Sphere, RIM, MirrorPlane, TrackZones, Zone
+from .rvstruct import Triggers, Trigger
 from .texanim import update_ta_max_frames, update_ta_current_slot, update_ta_current_frame, update_ta_current_frame_uv
 from .texanim import update_ta_current_frame_delay, update_ta_current_frame_tex, update_ta_max_slots
+from .tools import get_trigger_type_items, get_trigger_type, set_trigger_type, get_low_flag_items, get_low_flag, set_low_flag, get_high_flag_items
+from .tools import get_high_flag, set_high_flag
 from .ui.faceprops import RVIO_PT_RevoltFacePropertiesPanel
 from .ui.headers import RVIO_PT_RevoltIOToolPanel
 from .ui.helpers import RVIO_PT_RevoltHelpersPanelMesh
@@ -150,7 +160,7 @@ from .ui.texanim import RVIO_PT_AnimModesPanel
 from .ui.objectpanel import RVIO_PT_RevoltObjectPanel
 from .ui.settings import RVIO_PT_RevoltSettingsPanel, update_actual_split_size, get_actual_split_size
 from .ui.vertex import RVIO_PT_VertexPanel
-from .ui.zone import RVIO_PT_RevoltZonePanel
+from .ui.migpanel import RVIO_PT_RevoltMIGPanel
 
 bl_info = {
 "name": "Re-Volt",
@@ -845,6 +855,61 @@ def register():
         default=False
     )
     
+    bpy.types.Object.is_trigger = bpy.props.BoolProperty(
+        name="Is Trigger",
+        description="Mark this object as a trigger",
+        default=False
+    )
+    
+    bpy.types.Scene.new_trigger_type = bpy.props.EnumProperty(
+        name="New Trigger Type",
+        description="Select the type of trigger to create",
+        items=get_trigger_type_items
+    )
+    
+    bpy.types.Object.trigger_type_enum = bpy.props.EnumProperty(
+        name="Trigger Type",
+        description="Select the trigger type",
+        items=get_trigger_type_items,
+        get=get_trigger_type,
+        set=set_trigger_type
+    )
+    
+    bpy.types.Object.low_flag_enum = bpy.props.EnumProperty(
+        name="Low Flag",
+        description="Select the low flag value",
+        items=get_low_flag_items,
+        get=get_low_flag,
+        set=set_low_flag
+    )
+
+    bpy.types.Object.flag_low = bpy.props.IntProperty(
+        name="Low Flag",
+        description="Low Flag value for the trigger",
+        default=0,
+        min=0,
+        max=2000
+    )
+
+    bpy.types.Object.flag_high = bpy.props.IntProperty(
+        name="High Flag",
+        description="Set the high flag value",
+        default=0,
+        min=0,
+        max=63,
+        get=get_high_flag,
+        set=set_high_flag
+    )
+    
+    bpy.types.Object.low_flag_slider = bpy.props.IntProperty(
+        name="Low Flag",
+        description="Set the low flag value",
+        default=0,
+        min=0,
+        max=2000
+    )
+
+    bpy.types.Scene.copied_trigger_properties = bpy.props.PointerProperty(type=bpy.types.PropertyGroup)
     
     #Register Operators
     bpy.utils.register_class(DialogOperator)
@@ -879,6 +944,10 @@ def register():
     bpy.utils.register_class(OBJECT_OT_texanim_uv)
     bpy.utils.register_class(ButtonZoneHide)
     bpy.utils.register_class(AddTrackZone)
+    bpy.utils.register_class(CreateTrigger)
+    bpy.utils.register_class(DuplicateTrigger)
+    bpy.utils.register_class(CopyTrigger)
+    bpy.utils.register_class(PasteTrigger)
     bpy.utils.register_class(SetBCubeMeshIndices)
     bpy.utils.register_class(SetVertexAlpha)
     bpy.utils.register_class(RVIO_OT_SelectRevoltDirectory)
@@ -890,7 +959,7 @@ def register():
     bpy.utils.register_class(RVIO_PT_RevoltSettingsPanel)
     bpy.utils.register_class(RVIO_PT_AnimModesPanel)
     bpy.utils.register_class(RVIO_PT_VertexPanel)
-    bpy.utils.register_class(RVIO_PT_RevoltZonePanel)
+    bpy.utils.register_class(RVIO_PT_RevoltMIGPanel)
     bpy.utils.register_class(RVIO_PT_RevoltInstancesPanel)
     bpy.utils.register_class(RVIO_PT_RevoltLightPanel)
     bpy.utils.register_class(RVIO_PT_RevoltObjectPanel)
@@ -907,7 +976,7 @@ def unregister():
     bpy.utils.unregister_class(RVIO_PT_RevoltObjectPanel)
     bpy.utils.unregister_class(RVIO_PT_RevoltLightPanel)
     bpy.utils.unregister_class(RVIO_PT_RevoltInstancesPanel)
-    bpy.utils.unregister_class(RVIO_PT_RevoltZonePanel)
+    bpy.utils.unregister_class(RVIO_PT_RevoltMIGPanel)
     bpy.utils.unregister_class(RVIO_PT_VertexPanel)
     bpy.utils.unregister_class(RVIO_PT_AnimModesPanel)
     bpy.utils.unregister_class(RVIO_PT_RevoltSettingsPanel)
@@ -919,6 +988,10 @@ def unregister():
     bpy.utils.unregister_class(RVIO_OT_SelectRevoltDirectory)
     bpy.utils.unregister_class(SetVertexAlpha)
     bpy.utils.unregister_class(SetBCubeMeshIndices)
+    bpy.utils.unregister_class(PasteTrigger)
+    bpy.utils.unregister_class(CopyTrigger)
+    bpy.utils.unregister_class(DuplicateTrigger)
+    bpy.utils.unregister_class(CreateTrigger)
     bpy.utils.unregister_class(AddTrackZone)
     bpy.utils.unregister_class(ButtonZoneHide)
     bpy.utils.unregister_class(OBJECT_OT_texanim_uv)
@@ -952,6 +1025,14 @@ def unregister():
     bpy.utils.unregister_class(ImportRV)
     bpy.utils.unregister_class(DialogOperator)
     
+    del bpy.types.Scene.copied_trigger_properties
+    del bpy.types.Object.low_flag_slider
+    del bpy.types.Object.flag_high
+    del bpy.types.Object.flag_low
+    del bpy.types.Object.low_flag_enum
+    del bpy.types.Object.trigger_type_enum
+    del bpy.types.Scene.new_trigger_type
+    del bpy.types.Object.is_trigger
 
     del bpy.types.Object.is_track_zone
     del bpy.types.Object.track_zone_id

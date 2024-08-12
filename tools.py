@@ -16,7 +16,7 @@ import re
 from math import pi
 import time
 from . import common
-from .common import create_material, COL_HULL, int_to_texture, texture_to_int, get_texture_path
+from .common import create_material, COL_HULL, int_to_texture, texture_to_int, get_texture_path, TRIGGER_TYPES, LOW_FLAG_OPTIONS, HIGH_FLAG_OPTIONS
 import importlib
 
 from bpy.props import (
@@ -191,3 +191,58 @@ def generate_chull(context):
     except Exception as e:
         print(f"An error occurred while generating the hull: {e}")
         return None
+    
+def get_trigger_type_items(self, context):
+    """Generates a list of trigger type items for the EnumProperty."""
+    return [(str(k), v, "") for k, v in TRIGGER_TYPES.items()]
+    
+def get_trigger_type(self):
+    """Retrieve the trigger_type stored as an integer."""
+    return self.get("trigger_type", 0)  # Return as an integer
+
+def set_trigger_type(self, value):
+    """Store the trigger_type as an integer."""
+    self["trigger_type"] = int(value)  # Store as integer
+    self["trigger_type_description"] = TRIGGER_TYPES.get(int(value), "UnknownType")
+
+    # Reset high_flag_enum if not needed
+    if int(value) not in HIGH_FLAG_OPTIONS:
+        self["high_flag_enum"] = 0
+
+def get_low_flag_items(self, context):
+    """Generate a list of low flag items based on the trigger type."""
+    obj = context.object
+    trigger_type = int(obj.trigger_type_enum)
+    low_flag_data = LOW_FLAG_OPTIONS.get(trigger_type)
+
+    if not low_flag_data or "values" not in low_flag_data:
+        return []
+
+    return [(str(k), v, "") for k, v in low_flag_data["values"].items()]
+
+def get_high_flag_items(self, context):
+    """Generate a list of high flag items based on the trigger type."""
+    obj = context.object
+    trigger_type = int(obj.trigger_type_enum)  # Retrieve the current trigger type
+    high_flag_data = HIGH_FLAG_OPTIONS.get(trigger_type)
+
+    if not high_flag_data:
+        return []
+
+    return [(str(i), f"High Flag {i}", "") for i in range(high_flag_data["range"][0], high_flag_data["range"][1] + 1)]
+
+def get_low_flag(self):
+    """Retrieve the stored low flag value and return it as an integer."""
+    return self.get("flag_low", 0)  # Return as an integer
+
+def set_low_flag(self, value):
+    """Store the low flag value as an integer."""
+    self["flag_low"] = int(value)  # Store as integer
+
+def get_high_flag(self):
+    """Retrieve the stored high flag value as an integer."""
+    return self.get("flag_high", 0)  # Return as an integer
+
+def set_high_flag(self, value):
+    """Set the high flag value."""
+    self["flag_high"] = int(value)

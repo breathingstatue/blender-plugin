@@ -26,10 +26,11 @@ from .texanim import *
 from .tools import generate_chull
 from .rvstruct import *
 from . import carinfo
-from .common import get_format, FORMAT_PRM, FORMAT_FIN, FORMAT_NCP, FORMAT_HUL, FORMAT_W, FORMAT_RIM, FORMAT_TA_CSV, FORMAT_TAZ, FORMAT_UNK
+from .common import get_format, FORMAT_PRM, FORMAT_FIN, FORMAT_NCP, FORMAT_HUL, FORMAT_W, FORMAT_RIM, FORMAT_TA_CSV, FORMAT_TAZ, FORMAT_TRI, FORMAT_UNK
 from .common import get_errors, msg_box, FORMATS, to_revolt_scale, FORMAT_CAR, TEX_PAGES_MAX, int_to_texture
 from .layers import set_face_env, create_or_assign_env_material
 from .taz_in import create_zone
+from .tri_in import create_trigger
 
 from bpy.props import (
     BoolProperty,
@@ -51,7 +52,8 @@ def update_file_extension(operator_instance):
         'HUL': '.hul',
         'W': '.w',
         'RIM': '.rim',
-        'TAZ': '.taz'
+        'TAZ': '.taz',
+        'TRI': '.tri'
     }
     ext = ext_mapping.get(operator_instance.format_type, "")
     operator_instance.filename_ext = ext
@@ -138,6 +140,10 @@ class ImportRV(bpy.types.Operator):
             elif frmt == FORMAT_TAZ:
                 from . import taz_in
                 taz_in.import_file(self.filepath, scene)
+                
+            elif frmt == FORMAT_TRI:
+                from . import tri_in
+                tri_in.import_file(self.filepath, scene)
         
             else:
                 self.report({'ERROR'}, "Format not yet supported: {}".format(FORMATS.get(frmt, "Unknown Format")))
@@ -192,6 +198,7 @@ class ExportRV(bpy.types.Operator):
             ('W', "W (.w)", "Export as W file"),
             ('RIM', "RIM (.rim)", "Export as RIM file"),
             ('TAZ', "TAZ (.taz)", "Export as TAZ file"),
+            ('TRI', "TRI (.tri)", "Export as TRI file"),
         ],
         update=None  # Removing the update function
     )
@@ -221,7 +228,8 @@ def exec_export(filepath, format_type, context):
         'HUL': '.hul',
         'W': '.w',
         'RIM': '.rim',
-        'TAZ': '.taz'
+        'TAZ': '.taz',
+        'TRI': '.tri'
     }
 
     # Extract the extension from the filename
@@ -270,6 +278,10 @@ def exec_export(filepath, format_type, context):
     elif frmt == 'TAZ':
         from . import taz_out
         taz_out.export_file(filepath, context.scene)
+        
+    elif frmt == 'TRI':
+        from . import tri_out
+        tri_out.export_file(filepath, context.scene)
 
     # Re-enable undo and cleanup
     bpy.context.preferences.edit.use_global_undo = True
@@ -1780,7 +1792,7 @@ class TexAnimGrid(bpy.types.Operator):
 
 
 """
-TRACK ZONES & HULL SPHERE -------------------------------------------------------
+MAKEITGOOD SECTOR & HULL SPHERE -------------------------------------------------------
 """
 
 class ButtonZoneHide(bpy.types.Operator):
@@ -1825,6 +1837,132 @@ class AddTrackZone(bpy.types.Operator):
                         space.context = 'SCENE'
                         break
 
+        return {'FINISHED'}
+    
+class CreateTrigger(bpy.types.Operator):
+    bl_idname = "mesh.create_trigger"
+    bl_label = "Create Trigger"
+
+    def execute(self, context):
+        scene = context.scene
+        trigger_type = int(scene.new_trigger_type)
+        
+        # Logic to create the trigger using the selected trigger type
+        trigger_obj = create_trigger(trigger_type=trigger_type)
+
+        # Ensure the TRIGGERS collection exists
+        triggers_collection_name = 'TRIGGERS'
+        if triggers_collection_name not in bpy.data.collections:
+            triggers_collection = bpy.data.collections.new(triggers_collection_name)
+            bpy.context.scene.collection.children.link(triggers_collection)
+        else:
+            triggers_collection = bpy.data.collections[triggers_collection_name]
+
+        # Check if the object is already linked to the collection
+        if trigger_obj.name not in triggers_collection.objects:
+            # Add the created trigger object to the TRIGGERS collection
+            triggers_collection.objects.link(trigger_obj)
+
+        # Unlink from the main scene collection if it is linked there
+        if trigger_obj.name in bpy.context.scene.collection.objects:
+            bpy.context.scene.collection.objects.unlink(trigger_obj)
+        
+        return {'FINISHED'}
+
+class DuplicateTrigger(bpy.types.Operator):
+    bl_idname = "object.duplicate_trigger"
+    bl_label = "Duplicate Trigger"
+    bl_description = "Duplicate the selected trigger object and copy its custom properties"
+
+    def execute(self, context):
+        obj = context.object
+        
+        if not obj or not obj.get("is_trigger"):
+            self.report({'WARNING'}, "No trigger object selected")
+            return {'CANCELLED'}
+        
+        # Duplicate the object
+        new_obj = obj.copy()
+        new_obj.data = obj.data.copy()
+        context.collection.objects.link(new_obj)
+
+        # Copy custom properties
+        new_obj.trigger_type_enum = obj.trigger_type_enum
+        new_obj.flag_low = obj.flag_low
+        new_obj.flag_high = obj.flag_high
+
+        # Ensure the TRIGGERS collection exists
+        triggers_collection_name = 'TRIGGERS'
+        if triggers_collection_name not in bpy.data.collections:
+            triggers_collection = bpy.data.collections.new(triggers_collection_name)
+            bpy.context.scene.collection.children.link(triggers_collection)
+        else:
+            triggers_collection = bpy.data.collections[triggers_collection_name]
+
+        # Add the duplicated trigger object to the TRIGGERS collection
+        triggers_collection.objects.link(new_obj)
+
+        # Ensure the object is unlinked from the main scene collection to avoid duplication
+        context.collection.objects.unlink(new_obj)
+        
+        # Select the new object and make it active
+        bpy.ops.object.select_all(action='DESELECT')
+        new_obj.select_set(True)
+        context.view_layer.objects.active = new_obj
+
+        self.report({'INFO'}, f"Duplicated Trigger: {new_obj.name}")
+        return {'FINISHED'}
+
+class CopyTrigger(bpy.types.Operator):
+    bl_idname = "object.copy_trigger"
+    bl_label = "Copy Trigger Properties"
+    bl_description = "Copy the trigger properties (type, flag low, flag high) from the selected object"
+
+    def execute(self, context):
+        obj = context.object
+        
+        if not obj or not obj.get("is_trigger"):
+            self.report({'WARNING'}, "No trigger object selected")
+            return {'CANCELLED'}
+        
+        # Store the properties in a temporary storage on the scene as a dictionary
+        context.scene['copied_trigger_properties'] = {
+            'trigger_type': obj.get("trigger_type"),
+            'flag_low': obj.get("flag_low"),
+            'flag_high': obj.get("flag_high"),
+        }
+
+        self.report({'INFO'}, "Trigger properties copied")
+        return {'FINISHED'}
+    
+class PasteTrigger(bpy.types.Operator):
+    bl_idname = "object.paste_trigger"
+    bl_label = "Paste Trigger Properties"
+    bl_description = "Paste the copied trigger properties (type, flag low, flag high) to the selected object"
+
+    def execute(self, context):
+        obj = context.object
+        
+        if not obj or not obj.get("is_trigger"):
+            self.report({'WARNING'}, "No trigger object selected")
+            return {'CANCELLED'}
+        
+        # Retrieve the stored properties from the scene
+        copied_properties = context.scene.get('copied_trigger_properties', None)
+        
+        if not copied_properties:
+            self.report({'WARNING'}, "No copied trigger properties found")
+            return {'CANCELLED'}
+        
+        # Paste the properties to the selected object
+        obj["trigger_type"] = copied_properties.get('trigger_type', obj.get("trigger_type"))
+        obj["flag_low"] = copied_properties.get('flag_low', obj.get("flag_low"))
+        obj["flag_high"] = copied_properties.get('flag_high', obj.get("flag_high"))
+        
+        # Optionally, you can trigger an update or redraw if necessary
+        context.area.tag_redraw()
+
+        self.report({'INFO'}, "Trigger properties pasted")
         return {'FINISHED'}
     
 class ButtonHullSphere(bpy.types.Operator):

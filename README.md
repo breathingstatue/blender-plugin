@@ -9,8 +9,7 @@ place io_revolt in Blender/"version"/scripts/addons/
 TO DO LIST:
 
 20.24.?
-Objects (.fob) ?
-Triggers (.tri) (trigger type + low flag + high flag)
+Objects (.fob)
 Texture Animations
 pin import / export
 spinner import / export
@@ -18,10 +17,11 @@ spinner import / export
 FULL CHANGELOG:
 
 20.24.8
+Triggers import / export
 Track Zones import / export
 Light Baking to Col / Fin Env / RGB
 Vertex Color / Alpha / Env / EnvAlpha Layers
-Material Change
+Material Change (Blender related)
 Fixed import/export bugs
 
 20.24.7

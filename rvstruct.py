@@ -1498,3 +1498,133 @@ class Zone:
         }
         return dic
 
+class Triggers:
+    """
+    Reads a .tri file and stores all sub-structures.
+    All contained objects are of a same flat structure.
+    Usage: Objects of this class can be created to read and store .tri files.
+    If an opened file is supplied, it immediately starts reading from it.
+    """
+    def __init__(self, file=None):
+        self.triggers_count = 0           # rvint, amount of Trigger objects
+        self.triggers = []                # sequence of Trigger structures
+
+        # Immediately starts reading if an opened file is supplied
+        if file:
+            self.read(file)
+
+    def read(self, file):
+        # Reads the triggers count 
+        self.triggers_count = struct.unpack("<i", file.read(4))[0]
+
+        # Reads the triggers. 
+        for _ in range(self.triggers_count):
+            self.triggers.append(Trigger(file))
+
+    def write(self, file):
+        # Sort all triggers by id
+        self.triggers.sort(key=lambda trg: trg.id)
+        
+        # Writes the triggers count
+        file.write(struct.pack("<i", self.triggers_count))
+
+        # Writes all triggers
+        for trigger in self.triggers:
+            trigger.write(file)
+            
+    def append(self, id, pos, rotation_matrix, size, trigger_type, flag_low, flag_high):
+        new_trigger = Trigger()
+        new_trigger.id = id
+        new_trigger.pos = Vector(data=pos)
+        new_trigger.matrix = Matrix(data=rotation_matrix)
+        new_trigger.size = Vector(data=size)
+        new_trigger.trigger_type = trigger_type
+        new_trigger.flag_low = flag_low
+        new_trigger.flag_high = flag_high
+        self.triggers.append(new_trigger)
+        self.triggers_count += 1
+
+class Trigger:
+    """
+    Reads the Triggers found in .tri files from an opened file.
+    """
+    def __init__(self, file=None, w=None):
+        self.w = w                      # World it belongs to
+        self.trigger_type = 0           # Trigger type int (max value 9)
+        self.flag_low = 0               # Flag low int
+        self.flag_high = 0              # Flag high int (max value 63)
+        self.pos = None                 # Position Vector 3f
+        self.matrix = None              # Rotation Matrix 9f
+        self.size = None                # Trigger size 3f
+
+        if file:
+            self.read(file)
+
+    def __repr__(self):
+        return f"Trigger(Type: {self.trigger_type}, Flags: {self.flag_low}, {self.flag_high})"
+
+    def read(self, file):
+        try:
+            # Read Trigger Type
+            trigger_type_data = file.read(4)
+            if len(trigger_type_data) == 4:
+                self.trigger_type = struct.unpack("<i", trigger_type_data)[0]
+                if not (0 <= self.trigger_type <= 9):
+                    print(f"Invalid Trigger Type: {self.trigger_type}, setting to 0")
+                    self.trigger_type = 0
+                print(f"Read Trigger Type: {self.trigger_type}")
+            else:
+                print(f"Invalid Trigger Type Data: {trigger_type_data}")
+                self.trigger_type = 0
+
+            # Read the flag data (assuming flag_low and flag_high are packed together)
+            flag_data = file.read(4)
+            if len(flag_data) == 4:
+                flag_value = struct.unpack("<i", flag_data)[0]  # Read as a single integer
+
+                # Extract flag_low and flag_high using bitwise operations
+                self.flag_low = flag_value & 0xFFFF  # Lower 16 bits for flag_low
+                self.flag_high = (flag_value >> 16) & 0xFFFF  # Upper 16 bits for flag_high
+
+                print(f"Read Flag Low: {self.flag_low}")
+                print(f"Read Flag High: {self.flag_high}")
+            else:
+                print(f"Invalid Flag Data: {flag_data}")
+                self.flag_low = 0
+                self.flag_high = 0
+
+            # Read Position Vector
+            self.pos = Vector(file)
+            print(f"Read Position: {self.pos}")
+
+            # Read Matrix
+            self.matrix = Matrix(file)
+            print(f"Read Matrix: {self.matrix}")
+
+            # Read Size Vector
+            self.size = Vector(file)
+            print(f"Read Size: {self.size}")
+
+        except struct.error as e:
+            print(f"Failed to read Trigger data: {e}")
+
+    def write(self, file):
+        file.write(struct.pack("<i", self.trigger_type))  # 4 bytes
+        
+        # Pack flag_low and flag_high together into one integer
+        flag_value = (self.flag_high << 16) | (self.flag_low & 0xFFFF)
+        file.write(struct.pack("<i", flag_value))  # 4 bytes
+        
+        self.pos.write(file)  # 12 bytes
+        self.matrix.write(file)  # 36 bytes
+        self.size.write(file)  # 12 bytes
+
+    def as_dict(self):
+        return {
+            "trigger_type": self.trigger_type,
+            "flag_low": self.flag_low,
+            "flag_high": self.flag_high,
+            "pos": self.pos,
+            "matrix": self.matrix,
+            "size": self.size,
+        }

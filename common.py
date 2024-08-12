@@ -188,6 +188,68 @@ COL_BCUBE = Color(rgb(0, 180, 20))
 COL_SPHERE = Color(rgb(60, 60, 80))
 COL_HULL = Color(rgb(0, 20, 180))
 
+TRIGGER_TYPES = {
+    0: "Piano",
+    1: "Split",
+    2: "Track Dir",
+    3: "CameraRail",
+    4: "AI Home",
+    5: "CameraShorten",
+    6: "Object Thrower",
+    7: "Gap Camera",
+    8: "Reposition Car",
+    9: "Custom Animation",
+}
+
+LOW_FLAG_OPTIONS = {
+    0: {"name": "PianoFlagLow", "range": (0, 63), "description": "Unknown"},
+    1: {"name": "TriggerOrder", "range": (0, 2000), "description": "Order Number"},
+    2: {
+        "name": "Direction",
+        "values": {
+            0: "Chicane Left",
+            1: "180 Left",
+            2: "90 Left",
+            3: "45 Left",
+            4: "Chicane Right",
+            5: "180 Right",
+            6: "90 Right",
+            7: "45 Right",
+            8: "Ahead",
+            9: "Danger",
+            10: "Fork",
+            11: "Dummy"
+        },
+        "range": (0, 11)
+    },
+    3: {"name": "CameraID", "range": (0, 2000), "description": "Camera ID"},
+    4: {"name": "AIHomeFlagLow", "range": (0, 2000), "description": "Unknown"},
+    5: {
+        "name": "Zoom",
+        "values": {
+            0: "1/8",
+            1: "1/4",
+            2: "3/8",
+            3: "1/2",
+            4: "5/8",
+            5: "3/4",
+            6: "7/8"
+        },
+        "range": (0, 6)
+    },
+    6: {"name": "ObjectID", "range": (0, 2000), "description": "Object ID"},
+    7: {"name": "CameraID", "range": (0, 1000), "description": "Camera ID"},
+    8: {"name": None, "range": None, "description": None},
+    9: {"name": "ObjectID", "range": (0, 2000), "description": "Object ID"},
+}
+
+HIGH_FLAG_OPTIONS = {
+    0: {"name": "PianoFlagHigh", "range": (0, 63), "description": "Unknown"},
+    2: {"name": "TriggerOrder", "range": (0, 63), "description": "Order Number"},
+    4: {"name": "AIHomeFlagHigh", "range": (0, 63), "description": "Unknown"},
+    9: {"name": "LapOfTrigger", "range": (0, 63), "description": "Lap of Trigger"},
+}
+
 """
 Supported File Formats
 """
@@ -204,8 +266,9 @@ FORMAT_PRM = 8
 FORMAT_RIM = 9
 FORMAT_RTU = 10
 FORMAT_TAZ = 11
-FORMAT_VIS = 12
-FORMAT_W = 13
+FORMAT_TRI = 12
+FORMAT_VIS = 13
+FORMAT_W = 14
 
 FORMATS = {
 	FORMAT_BMP: "Bitmap (.bm*)",
@@ -220,6 +283,7 @@ FORMATS = {
 	FORMAT_RIM: "Mirrors (.rim)",
 	FORMAT_RTU: "Track Editor (.rtu)",
 	FORMAT_TAZ: "Track Zones (.taz)",
+	FORMAT_TRI: "Triggers (.tri)",
 	FORMAT_VIS: "Visiboxes (.vis)",
 	FORMAT_W:   "World (.w)",
 }
@@ -697,5 +761,7 @@ def get_format(fstr):
 		return FORMAT_W
 	elif ext == "taz":
 		return FORMAT_TAZ
+	elif ext == "tri":
+		return FORMAT_TRI
 	else:
 		return FORMAT_UNK

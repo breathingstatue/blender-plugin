@@ -1,3 +1,12 @@
+"""
+Name:    taz_in
+Purpose: Imports Re-Volt level track zone files (.taz)
+
+Description:
+Zone files contain numbered boxes to identify tracks space.
+
+"""
+
 import bpy
 import bmesh
 import os
