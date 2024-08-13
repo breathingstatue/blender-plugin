@@ -888,7 +888,7 @@ def register():
         description="Low Flag value for the trigger",
         default=0,
         min=0,
-        max=2000
+        max=1023
     )
 
     bpy.types.Object.flag_high = bpy.props.IntProperty(
@@ -906,7 +906,7 @@ def register():
         description="Set the low flag value",
         default=0,
         min=0,
-        max=2000
+        max=1023
     )
 
     bpy.types.Scene.copied_trigger_properties = bpy.props.PointerProperty(type=bpy.types.PropertyGroup)
