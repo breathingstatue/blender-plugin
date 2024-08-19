@@ -323,7 +323,7 @@ class RVIO_OT_ReadCarParameters(bpy.types.Operator):
                 formatted_str += f"{key}:\n"
                 for model_key, model_value in value.items():
                     formatted_str += f"  {model_key}: {model_value}\n"
-            elif key in ['wheel', 'spring', 'pin', 'axle', 'spinner', 'aerial', 'body', 'ai']:
+            elif key in ['wheel', 'spring', 'pin', 'axle', 'spinner', 'aerial', 'body']:
                 formatted_str += f"{key}:\n"
                 if isinstance(value, dict):
                     for sub_key, sub_value in value.items():
@@ -2165,7 +2165,7 @@ class SetVertexAlpha(bpy.types.Operator):
         return {'FINISHED'}
 
 def menu_func_import(self, context):
-    self.layout.operator(ImportRV.bl_idname, text="Re-Volt (.prm, .w, .ncp, .fin, .rim., .hul, .taz, parameters.txt)")
+    self.layout.operator(ImportRV.bl_idname, text="Re-Volt (.prm, .w, .ncp, .fin, .rim., .hul, .taz, .tri, parameters.txt)")
 
 def menu_func_export(self, context):
-    self.layout.operator(ExportRV.bl_idname, text="Re-Volt (.prm, .fin, .ncp, .hul, .w, .rim, .taz)")
+    self.layout.operator(ExportRV.bl_idname, text="Re-Volt (.prm, .w, .ncp, .fin, .rim, .hul, .taz, .tri)")

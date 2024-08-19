@@ -846,7 +846,7 @@ def register():
         description="ID of the Track Zone",
         default=0,
         min=0,
-        max=1023  # Maximum value set to 1023
+        max=1023
     )
     
     bpy.types.Object.is_track_zone = bpy.props.BoolProperty(

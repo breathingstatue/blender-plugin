@@ -155,9 +155,9 @@ def simple_split_mesh_by_grid(obj, split_size_faces):
     grid_size = int(num_splits ** (1/3)) + 1  # Ensure we have enough splits
 
     # Calculate grid cell dimensions
-    cell_width = (max_x - min_x) / grid_size
-    cell_height = (max_y - min_y) / grid_size
-    cell_depth = (max_z - min_z) / grid_size
+    cell_width = (max_x - min_x) / grid_size if max_x != min_x else 1.0
+    cell_height = (max_y - min_y) / grid_size if max_y != min_y else 1.0
+    cell_depth = (max_z - min_z) / grid_size if max_z != min_z else 1.0
 
     # Create face batches
     face_batches = []
