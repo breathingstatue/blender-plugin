@@ -18,6 +18,7 @@ class RVIO_PT_RevoltMIGPanel(bpy.types.Panel):
         col = box.column(align=True)
         col.operator("scene.add_track_zone", icon="MATCUBE", text="Create Track Zone")
         col.operator("scene.zone_hide", icon="RESTRICT_VIEW_ON")
+        col.operator("object.reverse_track_zones", icon='ARROW_LEFTRIGHT', text="Reverse Zone IDs")
         
         # Dropdown menu for selecting trigger type for new triggers
         col.prop(scene, "new_trigger_type", text="Trigger")
