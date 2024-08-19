@@ -33,26 +33,36 @@ def append_model_info(params, car_name):
     params += f"MODEL\t3\t\"cars\\{car_name}\\wheelbl.prm\"\n"
     params += f"MODEL\t4\t\"cars\\{car_name}\\wheelbr.prm\"\n"
 
-    spring_found = False
-    for obj in bpy.data.objects:
-        if obj.name.startswith(("spring")):
-            params += f"MODEL\t5\t\"cars\\{car_name}\\spring.prm\"\n"
-            spring_found = True
-            break
+    # Check and add spring model
+    if any(obj.name.startswith("spring") for obj in bpy.data.objects):
+        params += f"MODEL\t5\t\"cars\\{car_name}\\spring.prm\"\n"
+    else:
+        params += f"MODEL\t5\t\"NONE\"\n"
 
-    # Append "NONE" for models 6 to 8
+    # Default to "NONE" for models 6 to 8 unless a pin or spinner is found
     for i in range(6, 8):
         params += f"MODEL\t{i}\t\"NONE\"\n"
-        
-    axle_found = False
-    for obj in bpy.data.objects:
-        if obj.name.startswith(("axle")):
-            params += f"MODEL\t9\t\"cars\\{car_name}\\axle.prm\"\n"
-            axle_found = True
-            break
-        
-    # Append "NONE" for models 10 to 16
-    for i in range(10, 16):
+
+    # Check and add axle model
+    if any(obj.name.startswith("axle") for obj in bpy.data.objects):
+        params += f"MODEL\t9\t\"cars\\{car_name}\\axle.prm\"\n"
+    else:
+        params += f"MODEL\t9\t\"NONE\"\n"
+
+    # Default to "NONE" for models 10 to 12
+    for i in range(10, 12):
+        params += f"MODEL\t{i}\t\"NONE\"\n"
+
+    # Check and add pin or spinner model
+    pin_or_spinner_obj = next((obj for obj in bpy.data.objects if obj.name.startswith(("pin", "spinner"))), None)
+    if pin_or_spinner_obj:
+        model_name = "pin.prm" if pin_or_spinner_obj.name.startswith("pin") else "spinner.prm"
+        params += f"MODEL\t13\t\"cars\\{car_name}\\{model_name}\"\n"
+    else:
+        params += f"MODEL\t13\t\"NONE\"\n"
+
+    # Default to "NONE" for models 14 to 16
+    for i in range(14, 16):
         params += f"MODEL\t{i}\t\"NONE\"\n"
 
     # Append models 17 and 18
@@ -62,12 +72,12 @@ def append_model_info(params, car_name):
     # Append TPAGE, COLL
     params += f"TPAGE\t\"cars\\{car_name}\\car.bmp\"\n"
     params += f"COLL\t\"cars\\{car_name}\\hull.hul\"\n"
-    
+
     # Fetch the EnvRGB color
-    env_rgb = copy_average_vcol_to_clipboard()
-    
+    env_rgb = get_body_env_rgb()
+
     params += f"EnvRGB\t{env_rgb}\n\n"
-            
+
     return params
             
 def append_additional_params(params):
@@ -196,7 +206,7 @@ def append_back_left_wheel(params, body, processed):
     wheels = get_objects_by_exact_names(wheel_names, parent_object=body)
 
     # Check for any of the matching keys
-    child = wheels.get("wheelbl") or wheels.get("wheelbl.prm") or wheels.get("wheell.prm.001")
+    child = wheels.get("wheelbl") or wheels.get("wheelbl.prm") or wheels.get("wheelfl.prm.001") or wheels.get("wheell.prm.001")
     if child and child.name not in processed:
         location = to_revolt_coord(child.location)
         params += f"\nWHEEL 2 {{\t; Start Wheel\n"
@@ -228,7 +238,7 @@ def append_back_right_wheel(params, body, processed):
     wheels = get_objects_by_exact_names(wheel_names, parent_object=body)
 
     # Check for any of the matching keys
-    child = wheels.get("wheelbr") or wheels.get("wheelbr.prm") or wheels.get("wheelr.prm.001")
+    child = wheels.get("wheelbr") or wheels.get("wheelbr.prm") or wheels.get("wheelfr.prm.001") or wheels.get("wheelr.prm.001")
     if child and child.name not in processed:
         location = to_revolt_coord(child.location)
         params += f"\nWHEEL 3 {{\t; Start Wheel\n"
@@ -255,10 +265,10 @@ def append_back_right_wheel(params, body, processed):
 
 def append_spring_info(params, body, processed):
     spring_names = [
-        ("spring0", "spring.prm", "springsl.prm"),
-        ("spring1", "spring.prm.001", "springsr.prm"),
-        ("spring2", "spring.prm.002", "springsr.prm.001"),
-        ("spring3", "spring.prm.003", "springsl.prm.001")
+        ("spring0", "spring.prm", "springsl.prm", "springs.prm"),
+        ("spring1", "spring.prm.001", "springsr.prm", "springs.prm.001"),
+        ("spring2", "spring.prm.002", "springsr.prm.001", "springs.prm.002"),
+        ("spring3", "spring.prm.003", "springsl.prm.001", "springs.prm.003"),
     ]
     springs = get_objects_by_exact_names(spring_names, parent_object=body)
 
@@ -305,6 +315,41 @@ def append_spring_info(params, body, processed):
 
     return params
 
+def append_pin_info(params, body, processed):
+    pin_names = ["pin0", "pin1", "pin2", "pin3"]
+
+    for i, pin_name in enumerate(pin_names):
+        pin_obj = bpy.data.objects.get(pin_name)
+
+        if not pin_obj or pin_obj.parent != body:
+            print(f"Warning: Pin {pin_name} not found or not parented to the body.")
+            continue
+
+        # Calculate the length of the pin that extends beyond the spring
+        pin_length = to_revolt_scale(pin_obj.dimensions.z)
+
+        # Adjust the length by subtracting the part that overlaps with the spring
+        spring_obj = bpy.data.objects.get(f"spring{i}")
+        if spring_obj:
+            spring_bbox = [spring_obj.matrix_world @ Vector(corner) for corner in spring_obj.bound_box]
+            spring_z_max = max(corner.z for corner in spring_bbox)
+
+            pin_bbox = [pin_obj.matrix_world @ Vector(corner) for corner in pin_obj.bound_box]
+            pin_z_max = max(corner.z for corner in pin_bbox)
+
+            # Calculate the part of the pin that extends beyond the spring
+            pin_extension_length = max(0, pin_z_max - spring_z_max)
+            pin_length = to_revolt_scale(pin_extension_length)
+
+        params += f"\nPIN {i} {{\t\t; Start Pin\n"
+        params += f"ModelNum\t13\n"
+        params += f"Offset\t\t0.000000 0.000000 0.000000\n"
+        params += f"Length\t\t{pin_length:.6f}\n"
+        params += f"}}\t\t; End Pin\n\n"
+        processed.add(pin_obj.name)
+
+    return params
+
 def append_axle_info(params, body, processed):
     axle_names = [
         ("axle0", "axle.prm", "axlefl.prm"),
@@ -347,6 +392,25 @@ def append_axle_info(params, body, processed):
         # Restore original rotation if needed
         axle_obj.rotation_euler = original_rotation
     
+    return params
+
+def append_spinner_info(params, body, processed):
+    spinner = bpy.data.objects.get("spinner")
+
+    if spinner and spinner.parent == body and spinner.name not in processed:
+        spinner_position = to_revolt_coord(spinner.location)
+        x, y, z = spinner_position
+
+        params += f"\nSPINNER {{\t; Start Spinner\n"
+        params += f"ModelNum\t13\n"
+        params += f"Offset\t\t{x:.6f} {y:.6f} {z:.6f}\n"
+        params += f"Axis\t\t0.000000 1.000000 0.000000\n"
+        params += f"AngVel\t\t1.000000\n"
+        params += f"}}\t\t; End Spinner\n"
+        processed.add(spinner.name)
+    else:
+        print("Spinner not found or already processed.")
+
     return params
 
 def append_aerial_info(params, body, processed):
@@ -452,29 +516,41 @@ def get_objects_by_exact_names(name_tuples, parent_object=None):
 
     return found_objects
 
-def copy_average_vcol_to_clipboard():
-    obj = bpy.context.active_object
-    if obj and obj.type == 'MESH':
-        bm = bmesh.new()
-        bm.from_mesh(obj.data)
-
-        vc_layer = bm.loops.layers.color.get("Col")
-        if not vc_layer:
-            print("No active vertex color layer found.")
-            bm.free()
-            return "000 000 000"
-
-        avg_color = get_average_vcol2(bm.faces, vc_layer)
-        env_rgb = f"{int(avg_color[0] * 255):03d} {int(avg_color[1] * 255):03d} {int(avg_color[2] * 255):03d}"
-        
-        bm.free()
-        return env_rgb
-    else:
-        print("No active mesh object found.")
+def get_body_env_rgb():
+    body = bpy.data.objects.get("body")
+    if not body or body.type != 'MESH':
+        print("Body object not found or is not a mesh.")
         return "000 000 000"
     
+    original_mode = bpy.context.object.mode if bpy.context.object else None
+
+    # Ensure the body object is selected and switch to Edit mode
+    bpy.context.view_layer.objects.active = body
+
+    if original_mode != 'EDIT':
+        bpy.ops.object.mode_set(mode='EDIT')
+
+    bm = bmesh.from_edit_mesh(body.data)
+    vc_layer = bm.loops.layers.color.get("Col")
+
+    if not vc_layer:
+        print("No active vertex color layer found on body.")
+        bpy.ops.object.mode_set(mode='OBJECT')
+        return "000 000 000"
+
+    avg_color = get_average_vcol2(bm.faces, vc_layer)
+    env_rgb = f"{int(avg_color[0] * 255):03d} {int(avg_color[1] * 255):03d} {int(avg_color[2] * 255):03d}"
+
+    # Ensure the mesh is updated
+    bmesh.update_edit_mesh(body.data)
+
+    # Explicitly set the mode back to OBJECT mode
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    return env_rgb
+    
 def export_file(car_name="car", filepath=None, scene=None):
-    params = f"\t{{\n\n;============================================================\n"
+    params = f"{{\n\n;============================================================\n"
     params += f";============================================================\n"
     params += f" {car_name}\n"
     params += f";============================================================\n"
@@ -499,7 +575,9 @@ def export_file(car_name="car", filepath=None, scene=None):
     params += f"\n"
     params += f";====================\n"
     params += f"; Car Pin details\n"
-    params += f";====================\n\n"
+    params += f";====================\n"
+    params = append_pin_info(params, body, processed)
+    params += f"\n"
     params += f";====================\n"
     params += f"; Car Axle details\n"
     params += f";====================\n"
@@ -507,7 +585,9 @@ def export_file(car_name="car", filepath=None, scene=None):
     params += f"\n"
     params += f";====================\n"
     params += f"; Car Spinner details\n"
-    params += f";====================\n\n"
+    params += f";====================\n"
+    params = append_spinner_info(params, body, processed)
+    params += f"\n"
     params = append_aerial_info(params, body, processed)
     params += f"\n"
     params += f";====================\n"

@@ -40,14 +40,22 @@ def import_car(params, filepath, scene):
     spring1length = to_blender_scale(params["spring"][1]["length"])
     spring2length = to_blender_scale(params["spring"][2]["length"])
     spring3length = to_blender_scale(params["spring"][3]["length"])
-    axle0length = to_blender_scale(params["axle"][0]["length"])
-    axle1length = to_blender_scale(params["axle"][1]["length"])
-    axle2length = to_blender_scale(params["axle"][2]["length"])
-    axle3length = to_blender_scale(params["axle"][3]["length"])
     axle0loc = to_blender_coord(params["axle"][0]["offset"])
     axle1loc = to_blender_coord(params["axle"][1]["offset"])
     axle2loc = to_blender_coord(params["axle"][2]["offset"])
     axle3loc = to_blender_coord(params["axle"][3]["offset"])
+    axle0length = to_blender_scale(params["axle"][0]["length"])
+    axle1length = to_blender_scale(params["axle"][1]["length"])
+    axle2length = to_blender_scale(params["axle"][2]["length"])
+    axle3length = to_blender_scale(params["axle"][3]["length"])
+    pin0loc = to_blender_coord(params["pin"][0]["offset"]) if params["pin"][0]["offset"] != (0.0, 0.0, 0.0) else spring0loc
+    pin1loc = to_blender_coord(params["pin"][1]["offset"]) if params["pin"][1]["offset"] != (0.0, 0.0, 0.0) else spring1loc
+    pin2loc = to_blender_coord(params["pin"][2]["offset"]) if params["pin"][2]["offset"] != (0.0, 0.0, 0.0) else spring2loc
+    pin3loc = to_blender_coord(params["pin"][3]["offset"]) if params["pin"][3]["offset"] != (0.0, 0.0, 0.0) else spring3loc
+    pin0length = to_blender_scale(params["pin"][0]["length"])
+    pin1length = to_blender_scale(params["pin"][1]["length"])
+    pin2length = to_blender_scale(params["pin"][2]["length"])
+    pin3length = to_blender_scale(params["pin"][3]["length"])
     aerial_loc = to_blender_coord(params["aerial"]["offset"])
 
     folder = os.sep.join(filepath.split(os.sep)[:-1])
@@ -85,10 +93,14 @@ def import_car(params, filepath, scene):
     wheel_names = ['wheelfl', 'wheelfr', 'wheelbl', 'wheelbr']
     spring_names = ['spring0', 'spring1', 'spring2', 'spring3']
     axle_names = ['axle0', 'axle1', 'axle2', 'axle3']
+    pin_names = ['pin0', 'pin1', 'pin2', 'pin3']
 
     wheel_locations = [wheel0loc, wheel1loc, wheel2loc, wheel3loc]
+    spring_locations = [spring0loc, spring1loc, spring2loc, spring3loc]
     spring_lengths = [spring0length, spring1length, spring2length, spring3length]
     axle_lengths = [axle0length, axle1length, axle2length, axle3length]
+    pin_locations = [pin0loc, pin1loc, pin2loc, pin3loc]
+    pin_lengths = [spring_lengths[i] + to_blender_scale(params["pin"][i]["length"]) for i in range(4)]
     
     for i in range(4):
         wheel_path = get_path(params['wheel'][i]['modelnum'], 'wheel')
@@ -101,7 +113,6 @@ def import_car(params, filepath, scene):
         if spring_path:
             spring = import_or_placeholder(spring_path, spring_names[i], to_blender_coord(params['spring'][i]['offset']))
             spring.parent = body_obj
-            spring.location = to_blender_coord(params['spring'][i]['offset'])
             springs.append(spring)
             align_to_axis(spring, 'Z')
             adjust_object_length(spring, spring_lengths[i], 'Z')
@@ -115,12 +126,56 @@ def import_car(params, filepath, scene):
         if axle_path:
             axle = import_or_placeholder(axle_path, axle_names[i], to_blender_coord(params['axle'][i]['offset']))
             axle.parent = body_obj
-            axle.location = to_blender_coord(params['axle'][i]['offset'])
             axles.append(axle)
             align_to_axis(axle, 'Y')
             adjust_object_length(axle, axle_lengths[i], 'Y')
             set_orientation(axle, wheel_locations[i])
             print(f"Adjusted length and set orientation for {axle.name}")
+
+    pins = []
+    for i in range(4):
+        # Check if the pin should exist
+        if params['pin'][i]['modelnum'] == -1:
+            continue  # Skip this pin if ModelNum is -1
+
+        # Import pins
+        pin_path = get_path(params['pin'][i]['modelnum'], 'pin')
+        if pin_path:
+            pin = import_or_placeholder(pin_path, pin_names[i], pin_locations[i])
+            pin.parent = body_obj
+            pins.append(pin)
+            align_to_axis(pin, 'Z')
+            adjust_object_length(pin, pin_lengths[i], 'Z')
+            print(f"Imported and aligned {pin.name}")
+
+            # Calculate the direction vector from the pin to the corresponding wheel
+            direction_to_wheel = Vector(wheel_locations[i]) - Vector(pin_locations[i])
+            direction_to_wheel.normalize()
+
+            # Orient the pin to point in the opposite direction of the wheel
+            opposite_direction = -direction_to_wheel
+            rot_quat = opposite_direction.to_track_quat('Z', 'Y')  # Align Z-axis with the opposite direction
+            pin.rotation_euler = rot_quat.to_euler()
+
+            print(f"Oriented {pin.name} to face away from {wheel_names[i]}")
+
+            # Move the pin along the direction of the wheel by the pin's length
+            move_distance = pin_lengths[i]
+            move_vector = direction_to_wheel * move_distance
+            pin.location += move_vector
+
+            print(f"Moved {pin.name} towards {wheel_names[i]} by {move_distance} units")
+
+    if "spinner" in params:
+        spinner_params = params["spinner"]
+        spinner_path = get_path(spinner_params["modelnum"], '')
+        if not spinner_path:
+            pass
+        else:
+            spinner_loc = to_blender_coord(spinner_params["offset"])
+            spinner_obj = import_or_placeholder(spinner_path, "spinner", spinner_loc)
+            spinner_obj.parent = body_obj
+            print(f"Imported spinner at {spinner_loc}")
     
     aerial = bpy.data.objects.new("aerial", None)
     scene.collection.objects.link(aerial)

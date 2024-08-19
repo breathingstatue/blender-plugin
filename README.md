@@ -11,12 +11,12 @@ TO DO LIST:
 20.24.?
 Objects (.fob)
 Texture Animations Editor
-pin import / export
-spinner import / export
 
 FULL CHANGELOG:
 
 20.24.8
+Pins import / export
+Spinner import / export
 Triggers import / export (value now Limited to 1024)
 Track Zones import / export (reversable Zone IDs)
 Light Baking to Col / Fin Env / RGB
