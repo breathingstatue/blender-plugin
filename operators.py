@@ -1838,6 +1838,63 @@ class AddTrackZone(bpy.types.Operator):
                         break
 
         return {'FINISHED'}
+
+class ReverseTrackZone(bpy.types.Operator):
+    bl_idname = "object.reverse_track_zones"
+    bl_label = "Reverse Track Zone IDs"
+    bl_description = "Reverse the Track Zone IDs for all objects in the scene flagged as Track Zones"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        # Gather all track zone IDs
+        track_zone_objects = [obj for obj in context.scene.objects if obj.is_track_zone]
+        if not track_zone_objects:
+            self.report({'WARNING'}, "No Track Zone objects found in the scene.")
+            return {'CANCELLED'}
+
+        track_zone_ids = [obj.track_zone_id for obj in track_zone_objects]
+        if not track_zone_ids:
+            self.report({'WARNING'}, "No Track Zone IDs found.")
+            return {'CANCELLED'}
+
+        min_id = min(track_zone_ids)
+        max_id = max(track_zone_ids)
+
+        # Reverse the track zone IDs
+        id_map = {}  # To track renaming
+        for obj in track_zone_objects:
+            original_id = obj.track_zone_id
+            reversed_id = max_id - (original_id - min_id)
+            obj.track_zone_id = reversed_id
+
+            # Prepare name
+            base_name = f"TZ{reversed_id}"
+            if reversed_id not in id_map:
+                id_map[reversed_id] = 0
+            else:
+                id_map[reversed_id] += 1
+
+            # Suffix handling
+            suffix = string.ascii_lowercase[id_map[reversed_id]] if id_map[reversed_id] > 0 else ""
+            new_name = f"{base_name}{suffix}"
+
+            obj.name = new_name
+
+        # Remove any unwanted ".001", ".002", etc., suffixes
+        self.remove_numeric_suffixes(track_zone_objects)
+
+        self.report({'INFO'}, f"Reversed and renamed {len(track_zone_objects)} Track Zone objects.")
+        return {'FINISHED'}
+
+    def remove_numeric_suffixes(self, objects):
+        for obj in objects:
+            original_name = obj.name
+            # Check and remove Blender's automatic numeric suffix (like ".001")
+            if obj.name.endswith(".001") or obj.name.endswith(".002") or obj.name.endswith(".003"):  # and so on
+                base_name = obj.name.rsplit(".", 1)[0]
+                # Ensure the new name isn't already taken by another object
+                if not bpy.data.objects.get(base_name):
+                    obj.name = base_name
     
 class CreateTrigger(bpy.types.Operator):
     bl_idname = "mesh.create_trigger"

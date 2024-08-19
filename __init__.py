@@ -139,7 +139,7 @@ from .operators import VertexAndAlphaLayer, VertexColorRemove, SetVertexColor, B
 from .operators import TexAnimDirection, SetVertexAlpha
 from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, MaterialAssignment
 from .operators import SetInstanceProperty, RemoveInstanceProperty, LaunchRV, TexturesSave
-from .operators import TexturesRename, CarParametersExport, ButtonZoneHide, AddTrackZone, CreateTrigger, DuplicateTrigger
+from .operators import TexturesRename, CarParametersExport, ButtonZoneHide, AddTrackZone, ReverseTrackZone, CreateTrigger, DuplicateTrigger
 from .operators import CopyTrigger, PasteTrigger, SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere
 from .operators import ButtonCopyUvToFrame, ButtonCopyFrameToUv, TexAnimTransform, TexAnimGrid, OBJECT_OT_texanim_uv
 from .operators import menu_func_import, menu_func_export
@@ -944,6 +944,7 @@ def register():
     bpy.utils.register_class(OBJECT_OT_texanim_uv)
     bpy.utils.register_class(ButtonZoneHide)
     bpy.utils.register_class(AddTrackZone)
+    bpy.utils.register_class(ReverseTrackZone)
     bpy.utils.register_class(CreateTrigger)
     bpy.utils.register_class(DuplicateTrigger)
     bpy.utils.register_class(CopyTrigger)
@@ -992,6 +993,7 @@ def unregister():
     bpy.utils.unregister_class(CopyTrigger)
     bpy.utils.unregister_class(DuplicateTrigger)
     bpy.utils.unregister_class(CreateTrigger)
+    bpy.utils.unregister_class(ReverseTrackZone)
     bpy.utils.unregister_class(AddTrackZone)
     bpy.utils.unregister_class(ButtonZoneHide)
     bpy.utils.unregister_class(OBJECT_OT_texanim_uv)

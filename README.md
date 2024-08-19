@@ -18,7 +18,7 @@ FULL CHANGELOG:
 
 20.24.8
 Triggers import / export (value now Limited to 1024)
-Track Zones import / export
+Track Zones import / export (reversable Zone IDs)
 Light Baking to Col / Fin Env / RGB
 Vertex Color / Alpha / Env / EnvAlpha Layers
 Material Change (Blender related)
