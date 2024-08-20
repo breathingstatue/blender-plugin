@@ -15,20 +15,24 @@ class RVIO_PT_AnimModesPanel(bpy.types.Panel):
         
         box = layout.box()
         col = box.column(align=True)
+        col.operator("texanim.copy_uv_to_frame")
+        col.operator("texanim.copy_frame_to_uv")
         col.prop(scene, "ta_max_frames")
         col.prop(scene, "ta_max_slots")
-        col.prop(scene, "ta_current_slot")
+        col.operator("texanim.prev_next")
+        col.operator("texanim.prev_prev")
+        
+        layout = self.layout
+        row = layout.row(align=True)
+        row.prop(scene, "ta_frame_start")
+        row.prop(scene, "ta_frame_end")
+        row = layout.row()
+        row.prop(scene, "ta_texture", icon="TEXTURE")
+        layout = self.layout
+        layout.operator("texanim.transform")
+        col = layout.column(align=True)
         col.prop(scene, "ta_delay")
-        col.prop(scene, "ta_current_frame")
-        
-        # layout.operator("object.add_texanim_uv", text="Add Animation UV Layer")
-        # layout.operator("uv.texanim_direction", text="Animation Direction")
-        # layout.operator("texanim.transform", icon="UV", text="Transform Animation")
-        
-        # box = layout.box()
-        # col = box.column(align=True)
-        # col.prop(scene, "grid_x", slider=True)
-        # col.prop(scene, "grid_y", slider=True)
-        # col.operator("texanim.grid", icon="GRID", text="Grid Animation")
-        
-        # layout.prop(scene, "ta_max_slots", slider=True)
+        row = layout.row(align=True)
+        row.prop(scene, "grid_x")
+        row.prop(scene, "grid_y")
+        layout.operator("texanim.grid", icon="GRID")
