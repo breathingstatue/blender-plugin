@@ -61,6 +61,7 @@ class RVIO_PT_RevoltObjectPanel(bpy.types.Panel):
         mirror_box.label(text="Mirror Properties:")
         mirror_col = mirror_box.column(align=True)
         mirror_col.prop(obj, "is_mirror_plane", text="Is Mirror Plane")
+        mirror_col.prop(obj, "mirror_strength", text="Mirror Strength")
 
         # Hull properties
         hull_box = layout.box()

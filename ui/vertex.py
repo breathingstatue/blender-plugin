@@ -20,11 +20,15 @@ class RVIO_PT_VertexPanel(bpy.types.Panel):
         obj = context.object
         
         if obj.mode == 'EDIT':
-            layout.operator("mesh.vertex_color_and_alpha_setup", text="Create Vertex Colour (Alpha)")
-            layout.operator("vertexcolor.remove_layer", text="Remove Col/Alpha")
-            layout.prop(scene, "vertex_color_picker")
-            layout.operator("vertexcolor.set_color", text="Set Color")
-            layout.prop(scene, "vertex_alpha_percentage", text="Alpha Level")
-            layout.operator("vertexcolor.set_alpha", text="Set Alpha")
+            box = layout.box()
+            col = box.column(align=True)
+            col.operator("mesh.vertex_color_and_alpha_setup", text="Create Vertex Colour (Alpha)")
+            col.operator("vertexcolor.remove_layer", text="Remove Col/Alpha")
+            col.prop(scene, "vertex_color_picker")
+            col.operator("vertexcolor.set_color", text="Set Color")
+            col.prop(scene, "vertex_alpha_percentage", text="Alpha Level")
+            col.operator("vertexcolor.set_alpha", text="Set Alpha")
         else:
-            layout.label(text="SWITCH TO EDIT MODE FOR VERTEX COLORS.")
+            box = layout.box()
+            col = box.column(align=True)
+            col.label(text="SWITCH TO EDIT MODE FOR VERTEX COLORS.")

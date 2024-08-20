@@ -22,7 +22,10 @@ class RVIO_PT_RevoltFacePropertiesPanel(bpy.types.Panel):
         box.label(text="Texture / Material")
         col = box.column(align=True)
         col.prop(mesh, "material_choice")
-        col.operator("object.assign_materials", text= "Set")
+        # Create a row to place buttons side by side
+        row = col.row(align=True)
+        row.operator("object.assign_materials_auto", text="Set to All")
+        row.operator("object.assign_materials", text="Set to Selected")
 
         if obj.mode == 'EDIT':
             box = layout.box()
