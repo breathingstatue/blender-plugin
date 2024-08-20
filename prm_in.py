@@ -143,7 +143,7 @@ def add_rvmesh_to_bmesh(prm, bm, me, filepath, scene, envlist=None):
         face[texnum_layer] = poly.texture
         
         for l in range(num_loops):
-            alpha = 1 - (float(colors[l].alpha) / 255)
+            alpha = 1-(float(colors[l].alpha) / 255)
             color = [float(c) / 255 for c in colors[l].color]
 
             face.loops[l][uv_layer].uv = (uvs[l].u, 1 - uvs[l].v)

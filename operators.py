@@ -660,6 +660,184 @@ class RemoveInstanceProperty(bpy.types.Operator):
 """
 MATERIALS & TEXTURES ---------------------------------------------------------
 """
+
+class MaterialAssignmentAuto(bpy.types.Operator):
+    """Assign Materials to All Meshes Automatically"""
+    bl_idname = "object.assign_materials_auto"
+    bl_label = "Assign Materials Automatically"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        # Ensure we are in object mode
+        if bpy.context.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        # Get a list of all mesh objects
+        mesh_objects = [obj for obj in bpy.data.objects if obj.type == 'MESH']
+
+        # Store the current active object and its material choice
+        original_active_object = context.view_layer.objects.active
+        if original_active_object and original_active_object.type == 'MESH':
+            active_material_choice = original_active_object.data.material_choice
+        else:
+            self.report({'WARNING'}, "No active mesh object with material choice found.")
+            return {'CANCELLED'}
+
+        # Synchronize material_choice across all mesh objects
+        for obj in mesh_objects:
+            obj.data.material_choice = active_material_choice
+
+        # Batch processing of all mesh objects
+        self.assign_materials_to_all(mesh_objects)
+
+        # Restore the original selection state and active object
+        bpy.ops.object.select_all(action='DESELECT')
+        for obj in mesh_objects:
+            obj.select_set(True)
+        context.view_layer.objects.active = original_active_object
+
+        return {'FINISHED'}
+
+    def assign_materials_to_all(self, mesh_objects):
+        bpy.ops.object.select_all(action='DESELECT')  # Deselect all objects initially
+
+        for obj in mesh_objects:
+            obj.select_set(True)  # Select the object
+
+        # Switch to edit mode for all selected objects at once
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.select_all(action='SELECT')
+
+        for obj in mesh_objects:
+            self.update_material_assignment(obj)
+
+        # Switch back to object mode after processing all objects
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+    def update_material_assignment(self, obj):
+        material_map = {
+            'UV_TEX': '_UVTex',
+            'COL': '_Col',
+            'ALPHA': '_Alpha',
+            'ENV': '_Env',
+            'RGB': '_RGBModelColor'
+        }
+
+        material_choice = obj.data.material_choice
+        material_suffix = material_map.get(material_choice, '_Col')
+
+        if material_choice == 'UV_TEX':
+            base_name = self.get_base_name_for_texture(obj)
+            self.assign_uv_textures(obj, base_name)
+        else:
+            self.assign_regular_materials(obj, material_suffix)
+
+    def get_base_name_for_texture(self, obj):
+        base_name = obj.name.split('.')[0]
+        return base_name
+
+    def get_base_name_for_layers(self, obj):
+        base_name = obj.name.split('.')[0]
+        extension = ""  # Default to no extension
+
+        specific_keywords = ["body", "wheel", "axle", "spring"]
+        filtered_parts = [part for part in obj.name.split('_') if any(keyword in part for keyword in specific_keywords)]
+
+        if ".w" in obj.name:
+            extension = ".w"
+        elif ".prm" in obj.name or filtered_parts:
+            extension = ".prm"
+
+        return f"{base_name}{extension}"
+    
+    def get_existing_textures(self):
+        textures = {}
+        for image in bpy.data.images:
+            name_parts = image.name.rsplit('.', 1)
+            if len(name_parts) > 1 and name_parts[-1].isalpha():
+                textures[image.name] = name_parts[0]
+        return textures
+
+    def get_texture_base_name(self, tex_num, existing_textures):
+        suffix1 = chr(tex_num % 26 + 97)
+        suffix2_num = tex_num // 26 - 1
+        suffix2 = chr(suffix2_num % 26 + 97) if suffix2_num >= 0 else ''
+        suffix = suffix2 + suffix1
+        
+        for texture in existing_textures:
+            if texture.endswith(suffix + ".bmp"):
+                return existing_textures[texture].rsplit(suffix, 1)[0]
+        return None
+
+    def get_texture_name(self, base_name, tex_num, existing_textures):
+        texture_base_name = self.get_texture_base_name(tex_num, existing_textures)
+        if texture_base_name:
+            return int_to_texture(tex_num, texture_base_name)
+        return int_to_texture(tex_num, base_name)
+
+    def assign_uv_textures(self, obj, base_name):
+        bm = bmesh.from_edit_mesh(obj.data)
+        if bm is None:
+            return
+
+        uv_layer = bm.loops.layers.uv.verify()
+        texnum_layer = bm.faces.layers.int.get("Texture Number") or bm.faces.layers.int.new("Texture Number")
+
+        special_texture = "car.bmp"  # Define the special texture name
+
+        # Retrieve existing textures in the Blender scene
+        existing_textures = self.get_existing_textures()
+
+        for face in bm.faces:
+            if face.select:
+                tex_num = face[texnum_layer]
+                if tex_num == -1:
+                    continue
+
+                if obj.get("is_instance", False):
+                    texture_name = self.get_texture_name(base_name, tex_num, existing_textures)
+                else:
+                    texture_suffix = chr(97 + tex_num)  # 97 is the ASCII code for 'a'
+                    texture_name = f"{base_name}{texture_suffix}.bmp" if special_texture not in bpy.data.images else special_texture
+
+                if texture_name in bpy.data.images:
+                    material_name = texture_name
+                else:
+                    continue
+
+                mat = bpy.data.materials.get(material_name)
+                if mat and mat.name not in obj.data.materials:
+                    obj.data.materials.append(mat)
+                if mat:
+                    face.material_index = obj.data.materials.find(mat.name)
+
+        bmesh.update_edit_mesh(obj.data, loop_triangles=True)
+        obj.data.update()
+
+    def assign_regular_materials(self, obj, material_suffix):
+        base_name = self.get_base_name_for_layers(obj)
+        prefixed_material_name = f"{base_name}{material_suffix}"
+        generic_material_name = material_suffix
+
+        material = bpy.data.materials.get(prefixed_material_name) or bpy.data.materials.get(generic_material_name)
+
+        if not material:
+            self.report({'WARNING'}, f"Material {prefixed_material_name} or {generic_material_name} not found.")
+            return
+
+        if material.name not in obj.data.materials:
+            obj.data.materials.append(material)
+
+        bm = bmesh.from_edit_mesh(obj.data)
+        if bm is None:
+            return
+
+        material_index = obj.data.materials.find(material.name)
+        for face in bm.faces:
+            if face.select:
+                face.material_index = material_index
+
+        bmesh.update_edit_mesh(obj.data)
     
 class MaterialAssignment(bpy.types.Operator):
     """Assign Materials to Selected Meshes Based on Material Choice"""
@@ -697,10 +875,10 @@ class MaterialAssignment(bpy.types.Operator):
 
     def update_material_assignment(self, obj):
         material_map = {
+            'UV_TEX': '_UVTex',
             'COL': '_Col',
             'ALPHA': '_Alpha',
             'ENV': '_Env',
-            'UV_TEX': '_UVTex',
             'RGB': '_RGBModelColor'
         }
 
@@ -2074,9 +2252,15 @@ class VertexAndAlphaLayer(bpy.types.Operator):
                 layers = ['Col', 'Alpha']
 
                 for layer_name in layers:
+                    # Check if the specific layer already exists
                     created_layer = bm.loops.layers.color.get(layer_name)
                     if not created_layer:
                         created_layer = bm.loops.layers.color.new(layer_name)
+                        # Set default color to gray (0.5, 0.5, 0.5) with full opacity (1.0) for both layers
+                        default_color = (0.5, 0.5, 0.5, 1.0) if layer_name == 'Alpha' else (1.0, 1.0, 1.0, 1.0)
+                        for face in bm.faces:
+                            for loop in face.loops:
+                                loop[created_layer] = default_color
                         self.report({'INFO'}, f"{layer_name} vertex color layer created for {obj.name}.")
                     else:
                         self.report({'INFO'}, f"{layer_name} vertex color layer already exists for {obj.name}.")
@@ -2089,22 +2273,36 @@ class VertexAndAlphaLayer(bpy.types.Operator):
         return {'FINISHED'}
 
     def setup_materials(self, obj, attributes):
+        obj_name = obj.name.split('.')[0]  # Get the base name of the object
+        
+        # Define the potential shared material names based on the "worldname"
+        worldname_materials = {attr_name: f"{obj_name}.w_{attr_name}" for attr_name in attributes}
+        
         for attr_name in attributes:
-            mat_name = f"_{attr_name}"
-            material = bpy.data.materials.get(mat_name)
+            # First, try to find an existing material with the specific worldname
+            material = bpy.data.materials.get(worldname_materials[attr_name])
+
             if not material:
-                material = bpy.data.materials.new(name=mat_name)
-                material.use_nodes = True
-                nodes = material.node_tree.nodes
-                nodes.clear()
-                bsdf = nodes.new('ShaderNodeBsdfPrincipled')
-                output = nodes.new('ShaderNodeOutputMaterial')
-                vcol = nodes.new('ShaderNodeVertexColor')
-                vcol.layer_name = attr_name
-                bsdf.inputs['Base Color'].default_value = (0.0, 0.0, 0.0, 1.0) if attr_name == 'Alpha' else (1.0, 1.0, 1.0, 1.0)
-                material.node_tree.links.new(vcol.outputs['Color'], bsdf.inputs['Base Color'])
-                material.node_tree.links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
-                self.report({'INFO'}, f"{mat_name} material created.")
+                # If the specific worldname material doesn't exist, check for a generic one
+                mat_name_generic = f"_{attr_name}"
+                material = bpy.data.materials.get(mat_name_generic)
+
+                if not material:
+                    # If no generic material exists, create one
+                    material = bpy.data.materials.new(name=mat_name_generic)
+                    material.use_nodes = True
+                    nodes = material.node_tree.nodes
+                    nodes.clear()
+                    bsdf = nodes.new('ShaderNodeBsdfPrincipled')
+                    output = nodes.new('ShaderNodeOutputMaterial')
+                    vcol = nodes.new('ShaderNodeVertexColor')
+                    vcol.layer_name = attr_name
+                    bsdf.inputs['Base Color'].default_value = (0.5, 0.5, 0.5, 1.0) if attr_name == 'Alpha' else (1.0, 1.0, 1.0, 1.0)
+                    material.node_tree.links.new(vcol.outputs['Color'], bsdf.inputs['Base Color'])
+                    material.node_tree.links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
+                    self.report({'INFO'}, f"{mat_name_generic} material created.")
+            
+            # Ensure the material is assigned to the object
             if material.name not in obj.data.materials:
                 obj.data.materials.append(material)
 
@@ -2136,21 +2334,13 @@ class VertexColorRemove(bpy.types.Operator):
 
                 bmesh.update_edit_mesh(mesh, destructive=True)
 
-                # Remove the _Col and _Alpha materials
-                col_material_name = f"{obj.name}_Col"
-                alpha_material_name = f"{obj.name}_Alpha"
+                # Remove materials with _Col or _Alpha suffix
+                materials_to_remove = [mat for mat in obj.data.materials if mat.name.endswith('_Col') or mat.name.endswith('_Alpha')]
 
-                if col_material_name in bpy.data.materials:
-                    mat = bpy.data.materials[col_material_name]
-                    if mat in obj.data.materials:
-                        obj.data.materials.remove(mat)
+                for mat in materials_to_remove:
+                    obj.data.materials.remove(mat)
 
-                if alpha_material_name in bpy.data.materials:
-                    mat = bpy.data.materials[alpha_material_name]
-                    if mat in obj.data.materials:
-                        obj.data.materials.remove(mat)
-
-        self.report({'INFO'}, "Vertex color and alpha layers removed.")
+        self.report({'INFO'}, "Vertex color and alpha layers and associated materials removed.")
         return {'FINISHED'}
 
 class SetVertexColor(bpy.types.Operator):

@@ -137,7 +137,7 @@ from .layers import update_fin_env, update_rgb, update_no_envmapping, update_env
 from .operators import ImportRV, ExportRV, RVIO_OT_ReadCarParameters, RVIO_OT_SelectRevoltDirectory, ButtonReExport
 from .operators import VertexAndAlphaLayer, VertexColorRemove, SetVertexColor, BakeShadow, BakeVertex, BatchBakeVertexToEnv, BakeVertexToRGBModelColor
 from .operators import TexAnimDirection, SetVertexAlpha
-from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, MaterialAssignment
+from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, MaterialAssignment, MaterialAssignmentAuto
 from .operators import SetInstanceProperty, RemoveInstanceProperty, LaunchRV, TexturesSave
 from .operators import TexturesRename, CarParametersExport, ButtonZoneHide, AddTrackZone, ReverseTrackZone, CreateTrigger, DuplicateTrigger
 from .operators import CopyTrigger, PasteTrigger, SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere
@@ -649,10 +649,10 @@ def register():
     bpy.types.Mesh.material_choice = bpy.props.EnumProperty(
         name="Material Layer",
         items=[
+            ('UV_TEX', "Texture", "Assign UV Texture"),
             ('COL', "Color", "Assign Color Material"),
             ('ALPHA', "Alpha", "Assign Vertex Alpha Material"),
             ('ENV', "EnvMap", "Assign Env / EnvAlpha Material"),
-            ('UV_TEX', "Texture", "Assign UV Texture"),
             ('RGB', "Model Color (Instance)", "Assign RGB Model Color")
         ],
     )
@@ -930,6 +930,7 @@ def register():
     bpy.utils.register_class(TexturesSave)
     bpy.utils.register_class(TexturesRename)
     bpy.utils.register_class(MaterialAssignment)
+    bpy.utils.register_class(MaterialAssignmentAuto)
     bpy.utils.register_class(CarParametersExport)
     bpy.utils.register_class(ButtonHullGenerate)  
     bpy.utils.register_class(BakeShadow)
@@ -1008,6 +1009,7 @@ def unregister():
     bpy.utils.unregister_class(BakeShadow)
     bpy.utils.unregister_class(ButtonHullGenerate) 
     bpy.utils.unregister_class(CarParametersExport)
+    bpy.utils.unregister_class(MaterialAssignmentAuto)
     bpy.utils.unregister_class(MaterialAssignment)
     bpy.utils.unregister_class(TexturesRename)
     bpy.utils.unregister_class(TexturesSave)

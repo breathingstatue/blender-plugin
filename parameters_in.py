@@ -138,7 +138,6 @@ def import_car(params, filepath, scene):
         if params['pin'][i]['modelnum'] == -1:
             continue  # Skip this pin if ModelNum is -1
 
-        # Import pins
         pin_path = get_path(params['pin'][i]['modelnum'], 'pin')
         if pin_path:
             pin = import_or_placeholder(pin_path, pin_names[i], pin_locations[i])
@@ -169,9 +168,7 @@ def import_car(params, filepath, scene):
     if "spinner" in params:
         spinner_params = params["spinner"]
         spinner_path = get_path(spinner_params["modelnum"], '')
-        if not spinner_path:
-            pass
-        else:
+        if spinner_path:
             spinner_loc = to_blender_coord(spinner_params["offset"])
             spinner_obj = import_or_placeholder(spinner_path, "spinner", spinner_loc)
             spinner_obj.parent = body_obj
