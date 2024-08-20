@@ -269,6 +269,7 @@ FORMAT_TAZ = 11
 FORMAT_TRI = 12
 FORMAT_VIS = 13
 FORMAT_W = 14
+FORMAT_M = 15
 
 FORMATS = {
 	FORMAT_BMP: "Bitmap (.bm*)",
@@ -279,13 +280,14 @@ FORMATS = {
 	FORMAT_HUL: "Hull (.hul)",
 	FORMAT_LIT: "Lights (.lit)",
 	FORMAT_NCP: "Collision (.ncp)",
-	FORMAT_PRM: "Mesh (.prm/.m)",
+	FORMAT_PRM: "Mesh (.prm)",
 	FORMAT_RIM: "Mirrors (.rim)",
 	FORMAT_RTU: "Track Editor (.rtu)",
 	FORMAT_TAZ: "Track Zones (.taz)",
 	FORMAT_TRI: "Triggers (.tri)",
 	FORMAT_VIS: "Visiboxes (.vis)",
 	FORMAT_W:   "World (.w)",
+	FORMAT_M:   "Model (.m)"
 }
 
 
@@ -753,12 +755,14 @@ def get_format(fstr):
 		return FORMAT_HUL
 	elif ext in ["ncp"]:
 		return FORMAT_NCP
-	elif ext in ["prm", "m"]:
+	elif ext in ["prm"]:
 		return FORMAT_PRM
 	elif ext == "rim":
 		return FORMAT_RIM
 	elif ext == "w":
 		return FORMAT_W
+	elif ext == "m":
+		return FORMAT_M
 	elif ext == "taz":
 		return FORMAT_TAZ
 	elif ext == "tri":

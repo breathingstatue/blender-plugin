@@ -26,7 +26,8 @@ from .texanim import *
 from .tools import generate_chull
 from .rvstruct import *
 from . import carinfo
-from .common import get_format, FORMAT_PRM, FORMAT_FIN, FORMAT_NCP, FORMAT_HUL, FORMAT_W, FORMAT_RIM, FORMAT_TA_CSV, FORMAT_TAZ, FORMAT_TRI, FORMAT_UNK
+from .common import get_format, FORMAT_PRM, FORMAT_FIN, FORMAT_NCP, FORMAT_HUL, FORMAT_W, FORMAT_M, FORMAT_RIM, FORMAT_TA_CSV
+from .common import FORMAT_TAZ, FORMAT_TRI, FORMAT_UNK
 from .common import get_errors, msg_box, FORMATS, to_revolt_scale, FORMAT_CAR, TEX_PAGES_MAX, int_to_texture
 from .layers import set_face_env, create_or_assign_env_material
 from .taz_in import create_zone
@@ -51,6 +52,7 @@ def update_file_extension(operator_instance):
         'NCP': '.ncp',
         'HUL': '.hul',
         'W': '.w',
+        'M': '.m',
         'RIM': '.rim',
         'TAZ': '.taz',
         'TRI': '.tri'
@@ -132,6 +134,10 @@ class ImportRV(bpy.types.Operator):
             elif frmt == FORMAT_W:
                 from . import w_in
                 w_in.import_file(self.filepath, context.scene)
+                
+            elif frmt == FORMAT_M:
+                from . import m_in
+                m_in.import_file(self.filepath, context.scene)
 
             elif frmt == FORMAT_RIM:
                 from . import rim_in
@@ -196,6 +202,7 @@ class ExportRV(bpy.types.Operator):
             ('NCP', "NCP (.ncp)", "Export as NCP file"),
             ('HUL', "HUL (.hul)", "Export as HUL file"),
             ('W', "W (.w)", "Export as W file"),
+            ('M', "M (.m)", "Export as M file"),
             ('RIM', "RIM (.rim)", "Export as RIM file"),
             ('TAZ', "TAZ (.taz)", "Export as TAZ file"),
             ('TRI', "TRI (.tri)", "Export as TRI file"),
@@ -227,6 +234,7 @@ def exec_export(filepath, format_type, context):
         'NCP': '.ncp',
         'HUL': '.hul',
         'W': '.w',
+        'M': '.m',
         'RIM': '.rim',
         'TAZ': '.taz',
         'TRI': '.tri'
@@ -270,6 +278,10 @@ def exec_export(filepath, format_type, context):
     elif frmt == 'W':
         from . import w_out
         w_out.export_file(filepath, context.scene)
+        
+    elif frmt == 'M':
+        from . import m_out
+        m_out.export_file(filepath, context.scene)
 
     elif frmt == 'RIM':
         from . import rim_out
@@ -655,6 +667,279 @@ class RemoveInstanceProperty(bpy.types.Operator):
 
         context.view_layer.update()
         self.report({'INFO'}, f"Removed 'is_instance' property from {removed_count} objects")
+        return {'FINISHED'}
+    
+"""
+MAKEITGOOD SECTOR & HULL SPHERE -------------------------------------------------------
+"""
+
+class ButtonZoneHide(bpy.types.Operator):
+    bl_idname = "scene.zone_hide"
+    bl_label = "Show / Hide Track Zones"
+    bl_description = "Shows or hides all track zones"
+    
+    def execute(self, context):
+        track_zone_collection = bpy.data.collections.get('TRACK_ZONES')
+
+        # Check if the TRACK_ZONES collection exists
+        if track_zone_collection:
+            for obj in track_zone_collection.objects:
+                # Check if the object has the custom property and toggle visibility
+                if "is_track_zone" in obj:
+                    # In Blender 2.8 and later, visibility is controlled by 'hide_viewport'
+                    obj.hide_viewport = not obj.hide_viewport
+
+        return {"FINISHED"}
+
+class AddTrackZone(bpy.types.Operator):
+    bl_idname = "scene.add_track_zone"
+    bl_label = "Track Zone"
+    bl_description = "Adds a new track zone under cursor location"
+    bl_options = {'UNDO'}
+    
+    def execute(self, context):
+        cursor_location = context.scene.cursor.location
+        existing_zones = [obj for obj in bpy.data.objects if obj.get("is_track_zone")]
+        next_id = max([obj.get("track_zone_id", -1) for obj in existing_zones], default=-1) + 1
+
+        obj = create_zone(next_id, cursor_location)
+        obj.is_track_zone = True
+        context.view_layer.objects.active = obj  # Set the new zone as the active object
+        obj.select_set(True)
+
+        # Keep the focus on the Scene panel
+        for area in context.screen.areas:
+            if area.type == 'PROPERTIES':
+                for space in area.spaces:
+                    if space.type == 'PROPERTIES':
+                        space.context = 'SCENE'
+                        break
+
+        return {'FINISHED'}
+
+class ReverseTrackZone(bpy.types.Operator):
+    bl_idname = "object.reverse_track_zones"
+    bl_label = "Reverse Track Zone IDs"
+    bl_description = "Reverse the Track Zone IDs for all objects in the scene flagged as Track Zones"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        # Gather all track zone IDs
+        track_zone_objects = [obj for obj in context.scene.objects if obj.is_track_zone]
+        if not track_zone_objects:
+            self.report({'WARNING'}, "No Track Zone objects found in the scene.")
+            return {'CANCELLED'}
+
+        track_zone_ids = [obj.track_zone_id for obj in track_zone_objects]
+        if not track_zone_ids:
+            self.report({'WARNING'}, "No Track Zone IDs found.")
+            return {'CANCELLED'}
+
+        min_id = min(track_zone_ids)
+        max_id = max(track_zone_ids)
+
+        # Reverse the track zone IDs
+        id_map = {}  # To track renaming
+        for obj in track_zone_objects:
+            original_id = obj.track_zone_id
+            reversed_id = max_id - (original_id - min_id)
+            obj.track_zone_id = reversed_id
+
+            # Prepare name
+            base_name = f"TZ{reversed_id}"
+            if reversed_id not in id_map:
+                id_map[reversed_id] = 0
+            else:
+                id_map[reversed_id] += 1
+
+            # Suffix handling
+            suffix = string.ascii_lowercase[id_map[reversed_id]] if id_map[reversed_id] > 0 else ""
+            new_name = f"{base_name}{suffix}"
+
+            obj.name = new_name
+
+        # Remove any unwanted ".001", ".002", etc., suffixes
+        self.remove_numeric_suffixes(track_zone_objects)
+
+        self.report({'INFO'}, f"Reversed and renamed {len(track_zone_objects)} Track Zone objects.")
+        return {'FINISHED'}
+
+    def remove_numeric_suffixes(self, objects):
+        for obj in objects:
+            original_name = obj.name
+            # Check and remove Blender's automatic numeric suffix (like ".001")
+            if obj.name.endswith(".001") or obj.name.endswith(".002") or obj.name.endswith(".003"):  # and so on
+                base_name = obj.name.rsplit(".", 1)[0]
+                # Ensure the new name isn't already taken by another object
+                if not bpy.data.objects.get(base_name):
+                    obj.name = base_name
+                    
+class ButtonTriggerHide(bpy.types.Operator):
+    bl_idname = "scene.trigger_hide"
+    bl_label = "Show / Hide Triggers"
+    bl_description = "Shows or hides all triggers"
+
+    def execute(self, context):
+        triggers_collection = bpy.data.collections.get('TRIGGERS')
+
+        # Check if the TRIGGERS collection exists
+        if triggers_collection:
+            for obj in triggers_collection.objects:
+                # Toggle visibility for each trigger object
+                obj.hide_viewport = not obj.hide_viewport
+
+        return {"FINISHED"}
+    
+class CreateTrigger(bpy.types.Operator):
+    bl_idname = "mesh.create_trigger"
+    bl_label = "Create Trigger"
+
+    def execute(self, context):
+        scene = context.scene
+        trigger_type = int(scene.new_trigger_type)
+        
+        # Logic to create the trigger using the selected trigger type
+        trigger_obj = create_trigger(trigger_type=trigger_type)
+
+        # Ensure the TRIGGERS collection exists
+        triggers_collection_name = 'TRIGGERS'
+        if triggers_collection_name not in bpy.data.collections:
+            triggers_collection = bpy.data.collections.new(triggers_collection_name)
+            bpy.context.scene.collection.children.link(triggers_collection)
+        else:
+            triggers_collection = bpy.data.collections[triggers_collection_name]
+
+        # Check if the object is already linked to the collection
+        if trigger_obj.name not in triggers_collection.objects:
+            # Add the created trigger object to the TRIGGERS collection
+            triggers_collection.objects.link(trigger_obj)
+
+        # Unlink from the main scene collection if it is linked there
+        if trigger_obj.name in bpy.context.scene.collection.objects:
+            bpy.context.scene.collection.objects.unlink(trigger_obj)
+        
+        return {'FINISHED'}
+
+class DuplicateTrigger(bpy.types.Operator):
+    bl_idname = "object.duplicate_trigger"
+    bl_label = "Duplicate Trigger"
+    bl_description = "Duplicate the selected trigger object and copy its custom properties"
+
+    def execute(self, context):
+        obj = context.object
+        
+        if not obj or not obj.get("is_trigger"):
+            self.report({'WARNING'}, "No trigger object selected")
+            return {'CANCELLED'}
+        
+        # Duplicate the object
+        new_obj = obj.copy()
+        new_obj.data = obj.data.copy()
+        context.collection.objects.link(new_obj)
+
+        # Copy custom properties
+        new_obj.trigger_type_enum = obj.trigger_type_enum
+        new_obj.flag_low = obj.flag_low
+        new_obj.flag_high = obj.flag_high
+
+        # Ensure the TRIGGERS collection exists
+        triggers_collection_name = 'TRIGGERS'
+        if triggers_collection_name not in bpy.data.collections:
+            triggers_collection = bpy.data.collections.new(triggers_collection_name)
+            bpy.context.scene.collection.children.link(triggers_collection)
+        else:
+            triggers_collection = bpy.data.collections[triggers_collection_name]
+
+        # Add the duplicated trigger object to the TRIGGERS collection
+        triggers_collection.objects.link(new_obj)
+
+        # Ensure the object is unlinked from the main scene collection to avoid duplication
+        context.collection.objects.unlink(new_obj)
+        
+        # Select the new object and make it active
+        bpy.ops.object.select_all(action='DESELECT')
+        new_obj.select_set(True)
+        context.view_layer.objects.active = new_obj
+
+        self.report({'INFO'}, f"Duplicated Trigger: {new_obj.name}")
+        return {'FINISHED'}
+
+class CopyTrigger(bpy.types.Operator):
+    bl_idname = "object.copy_trigger"
+    bl_label = "Copy Trigger Properties"
+    bl_description = "Copy the trigger properties (type, flag low, flag high) from the selected object"
+
+    def execute(self, context):
+        obj = context.object
+        
+        if not obj or not obj.get("is_trigger"):
+            self.report({'WARNING'}, "No trigger object selected")
+            return {'CANCELLED'}
+        
+        # Store the properties in a temporary storage on the scene as a dictionary
+        context.scene['copied_trigger_properties'] = {
+            'trigger_type': obj.get("trigger_type"),
+            'flag_low': obj.get("flag_low"),
+            'flag_high': obj.get("flag_high"),
+        }
+
+        self.report({'INFO'}, "Trigger properties copied")
+        return {'FINISHED'}
+    
+class PasteTrigger(bpy.types.Operator):
+    bl_idname = "object.paste_trigger"
+    bl_label = "Paste Trigger Properties"
+    bl_description = "Paste the copied trigger properties (type, flag low, flag high) to the selected object"
+
+    def execute(self, context):
+        obj = context.object
+        
+        if not obj or not obj.get("is_trigger"):
+            self.report({'WARNING'}, "No trigger object selected")
+            return {'CANCELLED'}
+        
+        # Retrieve the stored properties from the scene
+        copied_properties = context.scene.get('copied_trigger_properties', None)
+        
+        if not copied_properties:
+            self.report({'WARNING'}, "No copied trigger properties found")
+            return {'CANCELLED'}
+        
+        # Paste the properties to the selected object
+        obj["trigger_type"] = copied_properties.get('trigger_type', obj.get("trigger_type"))
+        obj["flag_low"] = copied_properties.get('flag_low', obj.get("flag_low"))
+        obj["flag_high"] = copied_properties.get('flag_high', obj.get("flag_high"))
+        
+        # Optionally, you can trigger an update or redraw if necessary
+        context.area.tag_redraw()
+
+        self.report({'INFO'}, "Trigger properties pasted")
+        return {'FINISHED'}
+    
+class ButtonHullSphere(bpy.types.Operator):
+    bl_idname = "scene.add_hull_sphere"
+    bl_label = "Add Hull Sphere"
+    bl_description = "Creates a hull sphere at the 3D cursor's location"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        center = bpy.context.scene.cursor.location
+        radius = to_revolt_scale(0.1)
+        filename = "Hull_Sphere"
+
+        ob = create_sphere(context.scene, center, radius, filename)
+
+        if ob.name not in context.collection.objects:
+            context.collection.objects.link(ob)
+        else:
+            self.report({'WARNING'}, f"Object '{ob.name}' is already in the collection")
+            return {'CANCELLED'}
+
+        ob["is_hull_sphere"] = True
+
+        ob.select_set(True)
+        context.view_layer.objects.active = ob
+
         return {'FINISHED'}
     
 """
@@ -1967,265 +2252,6 @@ class TexAnimGrid(bpy.types.Operator):
         msg_box("Animation of {} frames completed.".format(nframes), icon="FILE_TICK")
 
         return {'FINISHED'} 
-
-
-"""
-MAKEITGOOD SECTOR & HULL SPHERE -------------------------------------------------------
-"""
-
-class ButtonZoneHide(bpy.types.Operator):
-    bl_idname = "scene.zone_hide"
-    bl_label = "Show / Hide Track Zones"
-    bl_description = "Shows or hides all track zones"
-    
-    def execute(self, context):
-        track_zone_collection = bpy.data.collections.get('TRACK_ZONES')
-
-        # Check if the TRACK_ZONES collection exists
-        if track_zone_collection:
-            for obj in track_zone_collection.objects:
-                # Check if the object has the custom property and toggle visibility
-                if "is_track_zone" in obj:
-                    # In Blender 2.8 and later, visibility is controlled by 'hide_viewport'
-                    obj.hide_viewport = not obj.hide_viewport
-
-        return {"FINISHED"}
-
-class AddTrackZone(bpy.types.Operator):
-    bl_idname = "scene.add_track_zone"
-    bl_label = "Track Zone"
-    bl_description = "Adds a new track zone under cursor location"
-    bl_options = {'UNDO'}
-    
-    def execute(self, context):
-        cursor_location = context.scene.cursor.location
-        existing_zones = [obj for obj in bpy.data.objects if obj.get("is_track_zone")]
-        next_id = max([obj.get("track_zone_id", -1) for obj in existing_zones], default=-1) + 1
-
-        obj = create_zone(next_id, cursor_location)
-        obj.is_track_zone = True
-        context.view_layer.objects.active = obj  # Set the new zone as the active object
-        obj.select_set(True)
-
-        # Keep the focus on the Scene panel
-        for area in context.screen.areas:
-            if area.type == 'PROPERTIES':
-                for space in area.spaces:
-                    if space.type == 'PROPERTIES':
-                        space.context = 'SCENE'
-                        break
-
-        return {'FINISHED'}
-
-class ReverseTrackZone(bpy.types.Operator):
-    bl_idname = "object.reverse_track_zones"
-    bl_label = "Reverse Track Zone IDs"
-    bl_description = "Reverse the Track Zone IDs for all objects in the scene flagged as Track Zones"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    def execute(self, context):
-        # Gather all track zone IDs
-        track_zone_objects = [obj for obj in context.scene.objects if obj.is_track_zone]
-        if not track_zone_objects:
-            self.report({'WARNING'}, "No Track Zone objects found in the scene.")
-            return {'CANCELLED'}
-
-        track_zone_ids = [obj.track_zone_id for obj in track_zone_objects]
-        if not track_zone_ids:
-            self.report({'WARNING'}, "No Track Zone IDs found.")
-            return {'CANCELLED'}
-
-        min_id = min(track_zone_ids)
-        max_id = max(track_zone_ids)
-
-        # Reverse the track zone IDs
-        id_map = {}  # To track renaming
-        for obj in track_zone_objects:
-            original_id = obj.track_zone_id
-            reversed_id = max_id - (original_id - min_id)
-            obj.track_zone_id = reversed_id
-
-            # Prepare name
-            base_name = f"TZ{reversed_id}"
-            if reversed_id not in id_map:
-                id_map[reversed_id] = 0
-            else:
-                id_map[reversed_id] += 1
-
-            # Suffix handling
-            suffix = string.ascii_lowercase[id_map[reversed_id]] if id_map[reversed_id] > 0 else ""
-            new_name = f"{base_name}{suffix}"
-
-            obj.name = new_name
-
-        # Remove any unwanted ".001", ".002", etc., suffixes
-        self.remove_numeric_suffixes(track_zone_objects)
-
-        self.report({'INFO'}, f"Reversed and renamed {len(track_zone_objects)} Track Zone objects.")
-        return {'FINISHED'}
-
-    def remove_numeric_suffixes(self, objects):
-        for obj in objects:
-            original_name = obj.name
-            # Check and remove Blender's automatic numeric suffix (like ".001")
-            if obj.name.endswith(".001") or obj.name.endswith(".002") or obj.name.endswith(".003"):  # and so on
-                base_name = obj.name.rsplit(".", 1)[0]
-                # Ensure the new name isn't already taken by another object
-                if not bpy.data.objects.get(base_name):
-                    obj.name = base_name
-    
-class CreateTrigger(bpy.types.Operator):
-    bl_idname = "mesh.create_trigger"
-    bl_label = "Create Trigger"
-
-    def execute(self, context):
-        scene = context.scene
-        trigger_type = int(scene.new_trigger_type)
-        
-        # Logic to create the trigger using the selected trigger type
-        trigger_obj = create_trigger(trigger_type=trigger_type)
-
-        # Ensure the TRIGGERS collection exists
-        triggers_collection_name = 'TRIGGERS'
-        if triggers_collection_name not in bpy.data.collections:
-            triggers_collection = bpy.data.collections.new(triggers_collection_name)
-            bpy.context.scene.collection.children.link(triggers_collection)
-        else:
-            triggers_collection = bpy.data.collections[triggers_collection_name]
-
-        # Check if the object is already linked to the collection
-        if trigger_obj.name not in triggers_collection.objects:
-            # Add the created trigger object to the TRIGGERS collection
-            triggers_collection.objects.link(trigger_obj)
-
-        # Unlink from the main scene collection if it is linked there
-        if trigger_obj.name in bpy.context.scene.collection.objects:
-            bpy.context.scene.collection.objects.unlink(trigger_obj)
-        
-        return {'FINISHED'}
-
-class DuplicateTrigger(bpy.types.Operator):
-    bl_idname = "object.duplicate_trigger"
-    bl_label = "Duplicate Trigger"
-    bl_description = "Duplicate the selected trigger object and copy its custom properties"
-
-    def execute(self, context):
-        obj = context.object
-        
-        if not obj or not obj.get("is_trigger"):
-            self.report({'WARNING'}, "No trigger object selected")
-            return {'CANCELLED'}
-        
-        # Duplicate the object
-        new_obj = obj.copy()
-        new_obj.data = obj.data.copy()
-        context.collection.objects.link(new_obj)
-
-        # Copy custom properties
-        new_obj.trigger_type_enum = obj.trigger_type_enum
-        new_obj.flag_low = obj.flag_low
-        new_obj.flag_high = obj.flag_high
-
-        # Ensure the TRIGGERS collection exists
-        triggers_collection_name = 'TRIGGERS'
-        if triggers_collection_name not in bpy.data.collections:
-            triggers_collection = bpy.data.collections.new(triggers_collection_name)
-            bpy.context.scene.collection.children.link(triggers_collection)
-        else:
-            triggers_collection = bpy.data.collections[triggers_collection_name]
-
-        # Add the duplicated trigger object to the TRIGGERS collection
-        triggers_collection.objects.link(new_obj)
-
-        # Ensure the object is unlinked from the main scene collection to avoid duplication
-        context.collection.objects.unlink(new_obj)
-        
-        # Select the new object and make it active
-        bpy.ops.object.select_all(action='DESELECT')
-        new_obj.select_set(True)
-        context.view_layer.objects.active = new_obj
-
-        self.report({'INFO'}, f"Duplicated Trigger: {new_obj.name}")
-        return {'FINISHED'}
-
-class CopyTrigger(bpy.types.Operator):
-    bl_idname = "object.copy_trigger"
-    bl_label = "Copy Trigger Properties"
-    bl_description = "Copy the trigger properties (type, flag low, flag high) from the selected object"
-
-    def execute(self, context):
-        obj = context.object
-        
-        if not obj or not obj.get("is_trigger"):
-            self.report({'WARNING'}, "No trigger object selected")
-            return {'CANCELLED'}
-        
-        # Store the properties in a temporary storage on the scene as a dictionary
-        context.scene['copied_trigger_properties'] = {
-            'trigger_type': obj.get("trigger_type"),
-            'flag_low': obj.get("flag_low"),
-            'flag_high': obj.get("flag_high"),
-        }
-
-        self.report({'INFO'}, "Trigger properties copied")
-        return {'FINISHED'}
-    
-class PasteTrigger(bpy.types.Operator):
-    bl_idname = "object.paste_trigger"
-    bl_label = "Paste Trigger Properties"
-    bl_description = "Paste the copied trigger properties (type, flag low, flag high) to the selected object"
-
-    def execute(self, context):
-        obj = context.object
-        
-        if not obj or not obj.get("is_trigger"):
-            self.report({'WARNING'}, "No trigger object selected")
-            return {'CANCELLED'}
-        
-        # Retrieve the stored properties from the scene
-        copied_properties = context.scene.get('copied_trigger_properties', None)
-        
-        if not copied_properties:
-            self.report({'WARNING'}, "No copied trigger properties found")
-            return {'CANCELLED'}
-        
-        # Paste the properties to the selected object
-        obj["trigger_type"] = copied_properties.get('trigger_type', obj.get("trigger_type"))
-        obj["flag_low"] = copied_properties.get('flag_low', obj.get("flag_low"))
-        obj["flag_high"] = copied_properties.get('flag_high', obj.get("flag_high"))
-        
-        # Optionally, you can trigger an update or redraw if necessary
-        context.area.tag_redraw()
-
-        self.report({'INFO'}, "Trigger properties pasted")
-        return {'FINISHED'}
-    
-class ButtonHullSphere(bpy.types.Operator):
-    bl_idname = "scene.add_hull_sphere"
-    bl_label = "Add Hull Sphere"
-    bl_description = "Creates a hull sphere at the 3D cursor's location"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    def execute(self, context):
-        center = bpy.context.scene.cursor.location
-        radius = to_revolt_scale(0.1)
-        filename = "Hull_Sphere"
-
-        ob = create_sphere(context.scene, center, radius, filename)
-
-        if ob.name not in context.collection.objects:
-            context.collection.objects.link(ob)
-        else:
-            self.report({'WARNING'}, f"Object '{ob.name}' is already in the collection")
-            return {'CANCELLED'}
-
-        ob["is_hull_sphere"] = True
-
-        ob.select_set(True)
-        context.view_layer.objects.active = ob
-
-        return {'FINISHED'}
-    
     
 """
 VERTEX COLORS -----------------------------------------------------------------
@@ -2412,7 +2438,7 @@ class SetVertexAlpha(bpy.types.Operator):
         return {'FINISHED'}
 
 def menu_func_import(self, context):
-    self.layout.operator(ImportRV.bl_idname, text="Re-Volt (.prm, .w, .ncp, .fin, .rim., .hul, .taz, .tri, parameters.txt)")
+    self.layout.operator(ImportRV.bl_idname, text="Re-Volt (.prm, .w, .ncp, .fin, .rim., .hul, .taz, .tri, .m, parameters.txt)")
 
 def menu_func_export(self, context):
-    self.layout.operator(ExportRV.bl_idname, text="Re-Volt (.prm, .w, .ncp, .fin, .rim, .hul, .taz, .tri)")
+    self.layout.operator(ExportRV.bl_idname, text="Re-Volt (.prm, .w, .ncp, .fin, .rim, .hul, .taz, .tri, .m)")

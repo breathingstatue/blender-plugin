@@ -60,10 +60,5 @@ def export_file(filepath, scene):
 
     print("Mirror planes:", rim.num_mirror_planes)
 
-    f = open(filepath, "wb")
-
-    rim.write(f)
-
-    f.close()
-
-    
+    with open(filepath, "wb") as f:
+        rim.write(f)

@@ -8,6 +8,7 @@ Mirror planes are used to determine reflective surfaces.
 """
 
 import bpy
+import bmesh
 
 if "common" in locals():
     import imp
@@ -28,7 +29,7 @@ def import_file(filepath, scene):
     # Extracts the base filename without path and extension
     base_filename = filepath.rsplit(os.sep, 1)[1].rsplit('.', 1)[0]
 
-    if rim.num_mirror_planes == 0 or rim.mirror_planes == []:
+    if rim.num_mirror_planes == 0 or not rim.mirror_planes:
         queue_error("importing mirror file", "File contains 0 mirror planes")
         return
 
@@ -51,4 +52,6 @@ def import_file(filepath, scene):
 
         ob = bpy.data.objects.new(unique_name, me)  # Use the unique name here
         ob["is_mirror_plane"] = True
+        
+        # Link the object to the scene
         scene.collection.objects.link(ob)

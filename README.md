@@ -15,10 +15,12 @@ Texture Animations Editor
 FULL CHANGELOG:
 
 20.24.8
-Pins import / export
-Spinner import / export
+.m (Model) import/export
+Pins import/export
+Spinner import/export
 Triggers import / export (value now Limited to 1024)
 Track Zones import / export (reversable Zone IDs)
+Texture Animations import/export (added set Max Slots)
 Light Baking to Col / Fin Env / RGB
 Vertex Color / Alpha / Env / EnvAlpha Layers (fixed bugs)
 Material Change (added Set to All / Set to Selected)
@@ -29,7 +31,7 @@ Copy Car Parameters to Clipboard fine-tuning to default values
 Export to top menu
 Some tool tips
 Fixed WorldCut bugs
-string.prm and axle.prm import/export
+spring.prm and axle.prm import/export
 
 20.24.6
 Added WorldCut

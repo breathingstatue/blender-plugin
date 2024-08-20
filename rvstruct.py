@@ -10,21 +10,22 @@ TODO:
 - Check for lengths on export
 
 Supported Formats:
-- .prm / .m (PRM)
+- .prm (Probe Mesh)
 - .w (World)
-- .fin (Instances)
-- .pan (PosNodes)
+- .fin (Instance)
+- .pan (PosNode)
 - .ncp (Collision)
 - .hul (Hull collision)
-- .rim (Mirrors) TODO: to_dict()
+- .rim (Mirrors)
+- .taz (Track Zones)
+- .tri (Triggers)
+- .m (Model)
 
 Missing Formats:
 - .fan (AiNodes)
-- .taz (TrackZones)
 - .fob (Objects)
 - .fld (ForceFields)
 - .lit (Lights)
-- .tri (Triggers)
 """
 
 import os
@@ -1392,28 +1393,49 @@ class RIM:
 class MirrorPlane:
     """ Mirror plane """
     def __init__(self, file=None):
-        self.flag = 0  # unused
+        self.flag = 1  # Set the default value of flag to 1
         self.plane = Plane()
         self.bounding_box = BoundingBox()
         self.vertices = []
 
         if file:
             self.read(file)
+        
+        # Initialize the dictionary with the class attributes
+        self._initialize_dict()
+
+    def _initialize_dict(self):
+        """Initializes the dictionary representation of the MirrorPlane."""
+        self.data_dict = {
+            "flag": self.flag,
+            "plane": self.plane,
+            "bounding_box": self.bounding_box,
+            "vertices": self.vertices
+        }
 
     def read(self, file):
-        self.flag = struct.unpack("<L", file.read(4))[0]
+        self.flag = struct.unpack("<L", file.read(4))[0]  # Read flag from file
         self.plane = Plane(file)
         self.bounding_box = BoundingBox(file)
         self.vertices = [Vector(file) for x in range(4)]
+        
+        # Update dictionary after reading from file
+        self._initialize_dict()
 
     def write(self, file):
-        file.write(struct.pack("<L", self.flag))
+        file.write(struct.pack("<L", self.flag))  # Pack and write the flag
         self.plane.write(file)
         self.bounding_box.write(file)
         for v in self.vertices:
             v.write(file)
-            
-            
+
+        # Optionally update the dictionary after writing if necessary
+        self._initialize_dict()
+
+    def as_dict(self):
+        """Returns the dictionary representation of the MirrorPlane."""
+        return self.data_dict
+    
 class TrackZones:
     """
     Reads a .taz file and stores all sub-structures
