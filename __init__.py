@@ -142,12 +142,12 @@ from .layers import get_face_property, set_face_property, update_fin_envcol, set
 from .layers import update_fin_env, update_rgb, update_no_envmapping, update_envmapping, remove_env_material
 from .operators import ImportRV, ExportRV, RVIO_OT_ReadCarParameters, RVIO_OT_SelectRevoltDirectory, ButtonReExport
 from .operators import VertexAndAlphaLayer, VertexColorRemove, SetVertexColor, BakeShadow, BakeVertex, BatchBakeVertexToEnv, BakeVertexToRGBModelColor
-from .operators import TexAnimDirection, SetVertexAlpha
+from .operators import SetVertexAlpha
 from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, MaterialAssignment, MaterialAssignmentAuto
 from .operators import SetInstanceProperty, RemoveInstanceProperty, LaunchRV, TexturesSave
 from .operators import TexturesRename, CarParametersExport, ButtonZoneHide, AddTrackZone, ReverseTrackZone, ButtonTriggerHide, CreateTrigger
 from .operators import DuplicateTrigger, CopyTrigger, PasteTrigger, SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere
-from .operators import ButtonCopyUvToFrame, ButtonCopyFrameToUv, TexAnimTransform, TexAnimGrid, OBJECT_OT_texanim_uv
+from .operators import ButtonCopyUvToFrame, ButtonCopyFrameToUv, PreviewNextFrame, PreviewPrevFrame, TexAnimTransform, TexAnimGrid
 from .operators import menu_func_import, menu_func_export
 from .rvstruct import World, PRM, Mesh, BoundingBox, Vector, Matrix, Polygon, Vertex, UV, BigCube, TexAnimation
 from .rvstruct import Frame, Color, Instances, Instance, PosNodes, PosNode, NCP, Polyhedron, Plane, LookupGrid
@@ -514,6 +514,30 @@ def register():
                       "All higher slots will be ignored on export"
     )
     
+    bpy.types.Scene.ta_frame_start = bpy.props.IntProperty(
+        name = "Start Frame",
+        min = 0,
+        max = 32768,
+        default = 0,
+        description = "Start frame of the animation"
+    )
+    
+    bpy.types.Scene.ta_frame_end = bpy.props.IntProperty(
+        name = "End Frame",
+        min = 0,
+        max = 32768,
+        default = 2,
+        description = "End frame of the animation",
+    )
+    
+    bpy.types.Scene.ta_texture = bpy.props.IntProperty(
+        name = "Texture",
+        default = 0,
+        min = -1,
+        max = TEX_PAGES_MAX-1,
+        description = "Texture for every frame"
+    )
+    
     bpy.types.Scene.ta_delay = bpy.props.FloatProperty(
         name="Frame Duration",
         description="Duration of every frame",
@@ -529,6 +553,14 @@ def register():
         max = TEX_ANIM_MAX-1,
         update = update_ta_current_slot,
         description = "Texture animation slot"
+    )
+    
+    bpy.types.Scene.ta_current_frame = bpy.props.IntProperty(
+        name = "Frame",
+        default = 0,
+        min = 0,
+        update = update_ta_current_frame,
+        description = "Current frame"
     )
     
     bpy.types.Scene.ta_current_frame_tex = bpy.props.IntProperty(
@@ -548,14 +580,6 @@ def register():
         description = "Duration of the current frame"
     )
     
-    bpy.types.Scene.ta_current_frame = bpy.props.IntProperty(
-        name = "Frame",
-        default = 1,
-        min = 0,
-        update = update_ta_current_frame,
-        description = "Current frame"
-    )
-        
     bpy.types.Scene.ta_current_frame_uv0 = bpy.props.FloatVectorProperty(
         name = "UV 0",
         size = 2,
@@ -611,9 +635,6 @@ def register():
         description="Amount of frames along the Y axis"
     )    
 
-    bpy.types.Scene.texanim_delta_u = bpy.props.FloatProperty(name="TexAnim Delta U")
-    bpy.types.Scene.texanim_delta_v = bpy.props.FloatProperty(name="TexAnim Delta V")
-    
     bpy.types.Mesh.select_material = bpy.props.EnumProperty(
         name = "Select Material",
         items = MATERIALS,
@@ -926,7 +947,6 @@ def register():
     bpy.utils.register_class(VertexAndAlphaLayer)
     bpy.utils.register_class(VertexColorRemove)
     bpy.utils.register_class(SetVertexColor)
-    bpy.utils.register_class(TexAnimDirection)
     bpy.utils.register_class(ButtonRenameAllObjects)
     bpy.utils.register_class(SelectByName)
     bpy.utils.register_class(SelectByData)
@@ -946,9 +966,10 @@ def register():
     bpy.utils.register_class(ButtonHullSphere)
     bpy.utils.register_class(ButtonCopyUvToFrame)
     bpy.utils.register_class(ButtonCopyFrameToUv)
+    bpy.utils.register_class(PreviewNextFrame)
+    bpy.utils.register_class(PreviewPrevFrame)
     bpy.utils.register_class(TexAnimTransform)
     bpy.utils.register_class(TexAnimGrid)
-    bpy.utils.register_class(OBJECT_OT_texanim_uv)
     bpy.utils.register_class(ButtonZoneHide)
     bpy.utils.register_class(AddTrackZone)
     bpy.utils.register_class(ReverseTrackZone)
@@ -1005,9 +1026,10 @@ def unregister():
     bpy.utils.unregister_class(ReverseTrackZone)
     bpy.utils.unregister_class(AddTrackZone)
     bpy.utils.unregister_class(ButtonZoneHide)
-    bpy.utils.unregister_class(OBJECT_OT_texanim_uv)
     bpy.utils.unregister_class(TexAnimGrid)
     bpy.utils.unregister_class(TexAnimTransform)
+    bpy.utils.unregister_class(PreviewPrevFrame)
+    bpy.utils.unregister_class(PreviewNextFrame)
     bpy.utils.unregister_class(ButtonCopyFrameToUv)
     bpy.utils.unregister_class(ButtonCopyUvToFrame)
     bpy.utils.unregister_class(ButtonHullSphere)
@@ -1027,7 +1049,6 @@ def unregister():
     bpy.utils.unregister_class(SelectByData)
     bpy.utils.unregister_class(SelectByName)
     bpy.utils.unregister_class(ButtonRenameAllObjects)
-    bpy.utils.unregister_class(TexAnimDirection)
     bpy.utils.unregister_class(VertexAndAlphaLayer)
     bpy.utils.unregister_class(VertexColorRemove)
     bpy.utils.unregister_class(SetVertexColor)
@@ -1038,7 +1059,6 @@ def unregister():
     bpy.utils.unregister_class(DialogOperator)
     
     del bpy.types.Scene.copied_trigger_properties
-    del bpy.types.Object.mirror_strength
     del bpy.types.Object.low_flag_slider
     del bpy.types.Object.flag_high
     del bpy.types.Object.flag_low
@@ -1081,19 +1101,20 @@ def unregister():
     del bpy.types.Mesh.face_texture
     del bpy.types.Mesh.face_material
     del bpy.types.Mesh.select_material
-    del bpy.types.Scene.texanim_delta_v
-    del bpy.types.Scene.texanim_delta_u
     del bpy.types.Scene.grid_y
     del bpy.types.Scene.grid_x
     del bpy.types.Scene.ta_current_frame_uv3
     del bpy.types.Scene.ta_current_frame_uv2
     del bpy.types.Scene.ta_current_frame_uv1
     del bpy.types.Scene.ta_current_frame_uv0
-    del bpy.types.Scene.ta_current_frame
     del bpy.types.Scene.ta_current_frame_delay
     del bpy.types.Scene.ta_current_frame_tex
+    del bpy.types.Scene.ta_current_frame
     del bpy.types.Scene.ta_current_slot  
     del bpy.types.Scene.ta_delay
+    del bpy.types.Scene.ta_texture
+    del bpy.types.Scene.ta_frame_end
+    del bpy.types.Scene.ta_frame_start
     del bpy.types.Scene.ta_max_frames
     del bpy.types.Scene.ta_max_slots
     del bpy.types.Scene.texture_animations

@@ -1999,202 +1999,125 @@ class BakeVertexToRGBModelColor(bpy.types.Operator):
 TEXTURE ANIMATIONS -------------------------------------------------------
 """
 
-class TexAnimDirection(bpy.types.Operator):
-    bl_idname = "uv.texanim_direction"
-    bl_label = "UV Animation Direction"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    direction: bpy.props.EnumProperty(
-        name="Direction",
-        description="Choose the direction of the UV animation",
-        items=[
-            ('RIGHT', "Right", "Move right"),
-            ('LEFT', "Left", "Move left"),
-            ('UP', "Up", "Move up"),
-            ('DOWN', "Down", "Move down"),
-            ('CUSTOM', "Custom", "Specify custom direction")
-        ],
-        default='RIGHT'
-    )
-
-    def execute(self, context):
-        scene = context.scene
-
-        # Retrieve the total number of frames for the animation
-        frame_start = scene.rvio_frame_start
-        frame_end = scene.rvio_frame_end
-        total_frames = frame_end - frame_start + 1
-
-        # Calculate the increment per frame to move across the UV space over the animation duration
-        delta_u = 1.0 / total_frames if total_frames > 0 else 0.0
-        delta_v = 1.0 / total_frames if total_frames > 0 else 0.0
-
-        if self.direction == 'RIGHT':
-            delta_v = 0.0
-        elif self.direction == 'LEFT':
-            delta_u = -delta_u
-            delta_v = 0.0
-        elif self.direction == 'UP':
-            delta_u = 0.0
-            delta_v = -delta_v  # Assuming UV (0,0) is bottom-left and (1,1) is top-right
-        elif self.direction == 'DOWN':
-            delta_u = 0.0
-
-        # Store the deltas in scene properties
-        scene.texanim_delta_u = delta_u
-        scene.texanim_delta_v = delta_v
-
-        self.report({'INFO'}, f"UV Animation Direction set: {self.direction} with ΔU={delta_u}, ΔV={delta_v}")
-        return {'FINISHED'}
-
-class OBJECT_OT_texanim_uv(bpy.types.Operator):
-    """Add a new texanim UV layer without creating new materials or images, to be used in Edit Mode"""
-    bl_idname = "object.add_texanim_uv"
-    bl_label = "Set Animation"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    def execute(self, context):
-        obj = context.edit_object  # Ensure we're getting the object in edit mode
-
-        if not obj or obj.type != 'MESH':
-            self.report({'ERROR'}, "Active object is not a mesh or not in edit mode")
-            return {'CANCELLED'}
-
-        bm = bmesh.from_edit_mesh(obj.data)
-        uv_layer = bm.loops.layers.uv.verify()
-
-        selected_faces = [f for f in bm.faces if f.select]
-        if not selected_faces:
-            self.report({'WARNING'}, "No faces selected")
-            return {'CANCELLED'}
-
-        self.analyze_uv_map(selected_faces, uv_layer)
-        self.create_animation_entry(context, selected_faces, uv_layer, obj)
-
-        return {'FINISHED'}
-
-    def analyze_uv_map(self, selected_faces, uv_layer):
-        u_min, v_min, u_max, v_max = (1.0, 1.0, 0.0, 0.0)
-        for face in selected_faces:
-            for loop in face.loops:
-                uv = loop[uv_layer].uv
-                u_min, v_min = min(uv.x, u_min), min(uv.y, v_min)
-                u_max, v_max = max(uv.x, u_max), max(uv.y, v_max)
-
-        self.report({'INFO'}, f"Analyzed UV Map (Selected) - U Min: {u_min}, V Min: {v_min}, U Max: {u_max}, V Max: {v_max}")
-
-    def create_animation_entry(self, context, selected_faces, uv_layer, obj):
-        scene = context.scene
-        slot = max(scene.ta_current_slot - 1, 0)  # Ensure slot is non-negative
-        frame_start = scene.rvio_frame_start
-        frame_end = scene.rvio_frame_end - 1
-
-        texture_name = scene.texture  # Use the scene property to get the texture name
-        texture = bpy.data.images.get(texture_name) if texture_name else None
-        delay = scene.ta_delay
-
-        # Initialize texture_animations if it doesn't exist or is empty
-
-        # Ensure the slot exists within the texture_animations array
-        while len(ta) <= slot:
-            ta.append({"frames": [], "slot": len(ta)})
-
-        frame_data = []
-        for frame_num in range(frame_start, frame_end + 1):
-            uv_data = []
-            for face in selected_faces:
-                for loop in face.loops:
-                    uv = loop[uv_layer].uv
-                    uv_data.append({"u": uv.x, "v": uv.y})
-
-            frame = {
-                "frame": frame_num,
-                "texture": texture.name if texture else "Default",
-                "delay": delay,
-                "uv": uv_data
-            }
-            frame_data.append(frame)
-
-        new_animation_entry = {
-            "slot": slot,
-            "frames": frame_data
-        }
-
-        ta[slot] = new_animation_entry
-    
 class ButtonCopyUvToFrame(bpy.types.Operator):
     bl_idname = "texanim.copy_uv_to_frame"
     bl_label = "UV to Frame"
     bl_description = "Copies the UV coordinates of the currently selected face to the texture animation frame"
 
     def execute(self, context):
-        if not copy_uv_to_frame(context):
-            self.report({'ERROR'}, "Failed to copy UVs to frame.")
-            return {'CANCELLED'}
-        
-        self.report({'INFO'}, "Successfully copied UVs to frame.")
-        return {'FINISHED'}
+        copy_uv_to_frame(context)
+        context.area.tag_redraw()
+        return{"FINISHED"}
 
 class ButtonCopyFrameToUv(bpy.types.Operator):
     bl_idname = "texanim.copy_frame_to_uv"
-    bl_label = "Copy Frame to UV"
+    bl_label = "Frame to UV"
     bl_description = "Copies the UV coordinates of the frame to the currently selected face"
 
     def execute(self, context):
         copy_frame_to_uv(context)
+        context.area.tag_redraw()
+        return{"FINISHED"}
 
-        # Redraw all 3D views to reflect the changes
-        for area in context.screen.areas:
-            if area.type == 'VIEW_3D':
-                area.tag_redraw()
+class PreviewNextFrame(bpy.types.Operator):
+    bl_idname = "texanim.prev_next"
+    bl_label = "Preview Next"
+    bl_description = "Loads the next frame and previews it on the selected face"
 
-        return {'FINISHED'}
+    def execute(self, context):
+        scene = context.scene
+
+        scene.ta_current_frame += 1
+        copy_frame_to_uv(context)
+        return{"FINISHED"}
+
+class PreviewPrevFrame(bpy.types.Operator):
+    bl_idname = "texanim.prev_prev"
+    bl_label = "Preview Previous"
+    bl_description = "Loads the previous frame and previews it on the selected face"
+
+    def execute(self, context):
+        scene = context.scene
+
+        scene.ta_current_frame -= 1
+        copy_frame_to_uv(context)
+        return{"FINISHED"}
 
 class TexAnimTransform(bpy.types.Operator):
     bl_idname = "texanim.transform"
     bl_label = "Transform Animation"
-    bl_description = "Creates a linear animation moving UVs in a specified direction"
+    bl_description = "Creates a linear animation from one frame to another"
 
     def execute(self, context):
         scene = context.scene
-        slot = scene.ta_current_slot - 1
-        frame_start = scene.rvio_frame_start
-        frame_end = scene.rvio_frame_end - 1
 
-        # Initialize ta with one slot if empty
-        if not ta:
-            ta.append({"frames": []})  # Append a default slot with an empty frames list
+        ta = eval(scene.texture_animations)
+        slot = scene.ta_current_slot
+        max_frames = scene.ta_max_frames
 
-        # Continue with debugging or actual logic
-        print(f"Current slot: {slot}")
-        print(f"Total slots available: {len(ta)}")
+        frame_start = scene.ta_frame_start
+        frame_end = scene.ta_frame_end
 
-        # Validate that the slot and frame data are properly set up
-        if slot < 0 or slot >= len(ta):
-            self.report({'WARNING'}, "Invalid animation slot.")
-            return {'CANCELLED'}
-        if 'frames' not in ta[slot] or not isinstance(ta[slot]['frames'], list):
-            self.report({'WARNING'}, "Invalid or missing frame data.")
-            return {'CANCELLED'}
+        if scene.ta_frame_end > max_frames - 1:
+            msg_box(
+                "Frame out of range.\n"
+                "Please set the amount of frames to {}.".format(
+                    frame_end + 1),
+                "ERROR"
+            )
 
-        # Iterate over the frames, ensuring we don't exceed the stored frame count
-        for frame_idx, frame_data in enumerate(ta[slot]["frames"]):
-            if frame_idx + frame_start > frame_end:
-                break  # Exit the loop if the current frame exceeds the end frame
+            return {'FINISHED'}
+        elif scene.ta_frame_start == scene.ta_frame_end:
+            msg_box("Frame range too short.", "ERROR")
+            return {'FINISHED'}
 
-            for uv_data in frame_data["uv"]:
-                # Calculate the progress and update UV coordinates
-                prog = frame_idx / (len(ta[slot]["frames"]) - 1)
-                uv_data["u"] = (uv_data["u"] + scene.texanim_delta_u * prog) % 1.0
-                uv_data["v"] = (uv_data["v"] + scene.texanim_delta_v * prog) % 1.0
 
-            # Optionally update other frame-specific data as needed
-            frame_data["texture"] = scene.ta_current_frame_tex
-            frame_data["delay"] = scene.ta_delay
+        uv_start = (
+            (ta[slot]["frames"][frame_start]["uv"][0]["u"],
+             ta[slot]["frames"][frame_start]["uv"][0]["v"]),
+            (ta[slot]["frames"][frame_start]["uv"][1]["u"],
+             ta[slot]["frames"][frame_start]["uv"][1]["v"]),
+            (ta[slot]["frames"][frame_start]["uv"][2]["u"],
+             ta[slot]["frames"][frame_start]["uv"][2]["v"]),
+            (ta[slot]["frames"][frame_start]["uv"][3]["u"],
+             ta[slot]["frames"][frame_start]["uv"][3]["v"])
+        )
 
-        # Update the animation data with the transformed frames
+        uv_end = (
+            (ta[slot]["frames"][frame_end]["uv"][0]["u"],
+             ta[slot]["frames"][frame_end]["uv"][0]["v"]),
+            (ta[slot]["frames"][frame_end]["uv"][1]["u"],
+             ta[slot]["frames"][frame_end]["uv"][1]["v"]),
+            (ta[slot]["frames"][frame_end]["uv"][2]["u"],
+             ta[slot]["frames"][frame_end]["uv"][2]["v"]),
+            (ta[slot]["frames"][frame_end]["uv"][3]["u"],
+             ta[slot]["frames"][frame_end]["uv"][3]["v"])
+        )
 
-        self.report({'INFO'}, "Animation updated.")
+        nframes = abs(frame_end - frame_start) + 1
+
+        for i in range(0, nframes):
+            current_frame = frame_start + i
+            prog = i / (frame_end - frame_start)
+
+            ta[slot]["frames"][frame_start + i]["delay"] = scene.ta_delay
+            ta[slot]["frames"][frame_start + i]["texture"] = scene.ta_texture
+
+            for j in range(0, 4):
+                new_u = uv_start[j][0] * (1 - prog) + uv_end[j][0] * prog
+                new_v = uv_start[j][1] * (1 - prog) + uv_end[j][1] * prog
+
+                ta[slot]["frames"][frame_start + i]["uv"][j]["u"] = new_u
+                ta[slot]["frames"][frame_start + i]["uv"][j]["v"] = new_v
+
+        scene.texture_animations = str(ta)
+        update_ta_current_frame(self, context)
+
+        msg_box("Animation from frame {} to {} completed.".format(
+            frame_start, frame_end),
+            icon = "FILE_TICK"
+        )
+
         return {'FINISHED'}
 
 class TexAnimGrid(bpy.types.Operator):
@@ -2204,54 +2127,56 @@ class TexAnimGrid(bpy.types.Operator):
 
     def execute(self, context):
         scene = context.scene
-        slot = scene.ta_current_slot - 1
+
+        ta = eval(scene.texture_animations)
+        slot = scene.ta_current_slot
         max_frames = scene.ta_max_frames
-        texture_name = scene.texture
-        frame_start = scene.rvio_frame_start - 1
-        frame_end = scene.rvio_frame_end
-        grid_x = context.scene.grid_x
-        grid_y = context.scene.grid_y
+
+        frame_start = scene.ta_frame_start
+        grid_x = scene.grid_x
+        grid_y = scene.grid_y
         nframes = grid_x * grid_y
 
-        # Check if the animation layer or required data is properly set up
-        if slot < 0 or slot >= len(ta) or 'frames' not in ta[slot] or not isinstance(ta[slot]['frames'], list):
-            self.report({'WARNING'}, "Animation layer or data is not properly set up.")
-            return {'CANCELLED'}
-
-        # Ensure the total frames do not exceed max_frames and the specified range
-        if nframes > max_frames or frame_start + nframes > frame_end:
-            self.report({'ERROR'}, "Frame out of range. Please adjust the grid size or frame range.")
-            return {'CANCELLED'}
+        if nframes > max_frames:
+            msg_box(
+                "Frame out of range.\n"
+                "Please set the amount of frames to {}.".format(
+                    nframes + 1),
+                "ERROR"
+            )
+            return {'FINISHED'}
 
         i = 0
-        for y in range(grid_y):
-            for x in range(grid_x):
-                if i >= max_frames or frame_start + i >= frame_end:
-                    self.report({'ERROR'}, "Exceeded maximum frames or frame range.")
-                    return {'CANCELLED'}
+        for y in range(grid_x):
+            for x in range(grid_y):
+                uv0 = (x/grid_x, y/grid_y)
+                uv1 = ((x+1)/grid_x, y/grid_y)
+                uv2 = ((x+1)/grid_x, (y+1)/grid_y)
+                uv3 = (x/grid_x, (y+1)/grid_y)
 
-                # Calculate UV coordinates for each vertex
-                uv0 = (x / grid_x, y / grid_y)
-                uv1 = ((x + 1) / grid_x, y / grid_y)
-                uv2 = ((x + 1) / grid_x, (y + 1) / grid_y)
-                uv3 = (x / grid_x, (y + 1) / grid_y)
+                ta[slot]["frames"][frame_start + i]["delay"] = scene.ta_delay
+                ta[slot]["frames"][frame_start + i]["texture"] = scene.ta_texture
 
-                # Update the UV mapping for each vertex in the frame data
-                frame_data = ta[slot]["frames"][frame_start + i]
-                frame_data["texture"] = texture_name
-                frame_data["delay"] = scene.ta_delay
-                frame_data["uv"][0] = {"u": uv0[0], "v": uv0[1]}
-                frame_data["uv"][1] = {"u": uv1[0], "v": uv1[1]}
-                frame_data["uv"][2] = {"u": uv2[0], "v": uv2[1]}
-                frame_data["uv"][3] = {"u": uv3[0], "v": uv3[1]}
+                ta[slot]["frames"][frame_start + i]["uv"][0]["u"] = uv0[0]
+                ta[slot]["frames"][frame_start + i]["uv"][0]["v"] = uv0[1]
+                ta[slot]["frames"][frame_start + i]["uv"][1]["u"] = uv1[0]
+                ta[slot]["frames"][frame_start + i]["uv"][1]["v"] = uv1[1]
+                ta[slot]["frames"][frame_start + i]["uv"][2]["u"] = uv2[0]
+                ta[slot]["frames"][frame_start + i]["uv"][2]["v"] = uv2[1]
+                ta[slot]["frames"][frame_start + i]["uv"][3]["u"] = uv3[0]
+                ta[slot]["frames"][frame_start + i]["uv"][3]["v"] = uv3[1]
 
                 i += 1
 
+        scene.texture_animations = str(ta)
         update_ta_current_frame(self, context)
-                
-        msg_box("Animation of {} frames completed.".format(nframes), icon="FILE_TICK")
 
-        return {'FINISHED'} 
+        msg_box("Animation of {} frames completed.".format(
+            nframes),
+            icon = "FILE_TICK"
+        )
+
+        return {'FINISHED'}
     
 """
 VERTEX COLORS -----------------------------------------------------------------

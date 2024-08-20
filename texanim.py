@@ -164,55 +164,68 @@ def update_ta_current_frame_uv(context, num):
 
 def copy_uv_to_frame(context):
     scene = context.scene
-    # Copies over UV coordinates from the mesh
-    if context.object.data:
-        bm = get_edit_bmesh(context.object)
-        uv_layer = bm.loops.layers.uv.get("UVMap")
-        sel_face = get_active_face(bm)
-        if not sel_face:
-            msg_box("Please select a face first")
-            return
-        if not uv_layer:
-            msg_box("Please create a UV layer first")
-            return
-        for lnum in range(len(sel_face.loops)):
-            uv = sel_face.loops[lnum][uv_layer].uv
-            if lnum == 0:
-                scene.ta_current_frame_uv0 = (uv[0], uv[1])
-            elif lnum == 1:
-                scene.ta_current_frame_uv1 = (uv[0], uv[1])
-            elif lnum == 2:
-                scene.ta_current_frame_uv2 = (uv[0], uv[1])
-            elif lnum == 3:
-                scene.ta_current_frame_uv3 = (uv[0], uv[1])
-    else:
-        print("No object for UV anim")
+    obj = context.object
+    if obj is None or obj.type != 'MESH':
+        print("No active mesh object")
+        return
 
+    if obj.mode != 'EDIT':
+        print("Object is not in edit mode")
+        return
+
+    bm = get_edit_bmesh(obj)
+    if bm is None:
+        print("Failed to get bmesh")
+        return
+
+    uv_layer = bm.loops.layers.uv.get("UVMap")
+    sel_face = get_active_face(bm)
+    if not sel_face:
+        msg_box("Please select a face first")
+        return
+    if not uv_layer:
+        msg_box("Please create a UV layer first")
+        return
+
+    # Copy UV coordinates from mesh to scene
+    for lnum in range(len(sel_face.loops)):
+        uv = sel_face.loops[lnum][uv_layer].uv
+        if lnum == 0:
+            scene.ta_current_frame_uv0 = (uv[0], uv[1])
+        elif lnum == 1:
+            scene.ta_current_frame_uv1 = (uv[0], uv[1])
+        elif lnum == 2:
+            scene.ta_current_frame_uv2 = (uv[0], uv[1])
+        elif lnum == 3:
+            scene.ta_current_frame_uv3 = (uv[0], uv[1])
 
 def copy_frame_to_uv(context):
     scene = context.scene
-    if context.object.data:
-        bm = get_edit_bmesh(context.object)
-        uv_layer = bm.loops.layers.uv.get("UVMap")
-        sel_face = get_active_face(bm)
-        if not sel_face:
-            msg_box("Please select a face first")
-            return
-        if not uv_layer:
-            msg_box("Please create a UV layer first")
-            return
-        for lnum in range(len(sel_face.loops)):
-            uv0 = scene.ta_current_frame_uv0
-            uv1 = scene.ta_current_frame_uv1
-            uv2 = scene.ta_current_frame_uv2
-            uv3 = scene.ta_current_frame_uv3
-            if lnum == 0:
-                sel_face.loops[lnum][uv_layer].uv = uv0
-            elif lnum == 1:
-                sel_face.loops[lnum][uv_layer].uv = uv1
-            elif lnum == 2:
-                sel_face.loops[lnum][uv_layer].uv = uv2
-            elif lnum == 3:
-                sel_face.loops[lnum][uv_layer].uv = uv3
-    else:
-        print("No object for UV anim")
+    obj = context.object
+    if obj is None or obj.type != 'MESH':
+        print("No active mesh object")
+        return
+
+    if obj.mode != 'EDIT':
+        print("Object is not in edit mode")
+        return
+
+    bm = get_edit_bmesh(obj)
+    if bm is None:
+        print("Failed to get bmesh")
+        return
+
+    uv_layer = bm.loops.layers.uv.get("UVMap")
+    sel_face = get_active_face(bm)
+    if not sel_face:
+        msg_box("Please select a face first")
+        return
+    if not uv_layer:
+        msg_box("Please create a UV layer first")
+        return
+
+    # Copy UV coordinates from scene to mesh
+    uv_coords = [scene.ta_current_frame_uv0, scene.ta_current_frame_uv1, scene.ta_current_frame_uv2, scene.ta_current_frame_uv3]
+    for lnum, uv in enumerate(uv_coords):
+        if lnum < len(sel_face.loops):
+            sel_face.loops[lnum][uv_layer].uv = uv
