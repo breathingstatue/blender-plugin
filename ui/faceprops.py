@@ -26,6 +26,8 @@ class RVIO_PT_RevoltFacePropertiesPanel(bpy.types.Panel):
         row = col.row(align=True)
         row.operator("object.assign_materials_auto", text="Set to All")
         row.operator("object.assign_materials", text="Set to Selected")
+        col = box.column(align=True)
+        col.operator("object.assign_texture", text="Car Skin")
 
         if obj.mode == 'EDIT':
             box = layout.box()
@@ -33,6 +35,7 @@ class RVIO_PT_RevoltFacePropertiesPanel(bpy.types.Panel):
             col = box.column(align=True)
             col.prop(mesh, "face_double_sided", text="Double sided")
             col.prop(mesh, "face_translucent", text="Translucent")
+            col.prop(mesh, "face_texture_animation", text="Animated")
             col.prop(mesh, "face_mirror", text="Mirror")
             col.prop(mesh, "face_additive", text="Additive blending")
             col.prop(mesh, "face_no_envmapping", text="No EnvMap")
@@ -53,6 +56,7 @@ class RVIO_PT_RevoltFacePropertiesPanel(bpy.types.Panel):
             col.prop(mesh, "face_ncp_double", text="Double sided NCP")
             col.prop(mesh, "face_ncp_no_skid", text="No Skid Marks")
             col.prop(mesh, "face_ncp_oil", text="Oil")
+            col.prop(mesh, "face_ncp_non_planar", text="Non-Planar")
             col.prop(mesh, "face_ncp_object_only", text="Object Only")
             col.prop(mesh, "face_ncp_camera_only", text="Camera Only")
             col.prop(mesh, "face_ncp_nocoll", text="No Collision")
