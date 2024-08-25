@@ -16,7 +16,7 @@ FULL CHANGELOG:
 20.24.8
 Texture Animations editor
 Car Skin Selector
-Car Import (fetch the whole car skin list for parameteres.ini)
+Car Import (import all skins list via parameteres.txt)
 Improved Car Shadow baking
 Texture animations for .m file (experimental)
 Improved import/export modules

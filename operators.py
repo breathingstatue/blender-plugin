@@ -1300,7 +1300,9 @@ class TextureAssigner(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def get_texture_items(self, context):
-        items = [(img.name, img.name, "") for img in bpy.data.images]
+        # Filter out specific images including "Render Result", "Viewer Node", "carbox.bmp", and "shadow.bmp"
+        excluded_images = {"Render Result", "Viewer Node", "carbox.bmp", "shadow.bmp"}
+        items = [(img.name, img.name, "") for img in bpy.data.images if img.name not in excluded_images]
         if not items:
             items.append(('None', 'No Textures Available', ''))
         return items
