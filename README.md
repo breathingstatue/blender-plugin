@@ -18,7 +18,7 @@ Texture Animations editor
 Car Skin Selector
 Car Import (import all skins list via parameteres.txt)
 Improved Car Shadow baking
-Texture animations for .m file (experimental)
+Texture animations for .m file
 Improved import/export modules
 Added some face properties (face_texture_animation, face_ncp_no_planar)
 Deleted some duplicate code (Vertex Light Baking had some duplicate code)

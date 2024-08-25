@@ -8,6 +8,7 @@ Moved from operators and panels here to reduce script line amount
 
 import bmesh
 import bpy
+import os
 from . import common
 from . import rvstruct
 
@@ -175,28 +176,30 @@ def copy_frame_to_uv(context):
     if obj.data:
         bm = get_edit_bmesh(obj)
         
+        # Check if bm is None
+        if bm is None:
+            msg_box("No BMesh data available. Ensure the object is in edit mode and has a valid mesh.", "ERROR")
+            return
+        
         # Get the texture number from the current frame
         texture_number = scene.ta_current_frame_tex
         
         # Generate the texture letter using the int_to_texture function
         texture_letter = int_to_texture(texture_number)
         
-        # Generate the base name for the texture
-        base_name = get_base_name_for_texture(obj)
+        # Find the matching texture image
+        texture_image = find_matching_texture(texture_letter)
         
-        # Combine base name and texture letter to find the material
-        material_name = f"{base_name}{texture_letter}"
-        
-        # Look for the existing material by name
-        material = bpy.data.materials.get(material_name)
-        
-        if not material:
-            msg_box(f"Material '{material_name}' not found!", "ERROR")
+        if not texture_image:
+            msg_box(f"Texture ending with '{texture_letter}' not found in images!", "ERROR")
             return
         
-        # Ensure the material is assigned to the object
-        if material.name not in obj.data.materials:
-            obj.data.materials.append(material)
+        # Look for the material that uses this texture image
+        material = find_material_using_texture(obj, texture_image)
+        
+        if not material:
+            msg_box(f"Material using texture '{texture_image.name}' not found!", "ERROR")
+            return
         
         # Get the index of the material in the object's material slots
         material_index = obj.data.materials.find(material.name)
@@ -227,18 +230,30 @@ def copy_frame_to_uv(context):
     else:
         print("No object for UV anim")
 
-def get_base_name_for_texture(obj):
-    """Generate the base name for the texture based on the object name without any file extension."""
-    base_name = obj.name.split('.')[0]
-    return base_name
-
-def find_matching_texture(base_name, texture_letter):
-    # Combine the base name with the texture letter to form the expected name
-    expected_texture_name = f"{base_name}{texture_letter}".lower()
-
+def find_matching_texture(texture_letter):
+    # Remove the file extension if present in the texture letter
+    texture_letter = texture_letter.replace(".bmp", "").lower()
+    print(f"Looking for texture ending with: {texture_letter}")
+    
     # Iterate through all images in bpy.data.images
     for image in bpy.data.images:
-        # Check if the image name starts with the expected name
-        if image.name.lower().startswith(expected_texture_name):
+        image_name_lower = image.name.lower()
+        base_name, extension = os.path.splitext(image_name_lower)
+        print(f"Checking image: {image.name}, base_name: {base_name}, extension: {extension}")
+        
+        # Check if the base name ends with the texture letter
+        if base_name.endswith(texture_letter):
+            print(f"Found matching texture: {image.name}")
             return image
+
+    return None
+
+def find_material_using_texture(obj, texture_image):
+    """Find a material on the object that uses the given texture image."""
+    for material_slot in obj.material_slots:
+        material = material_slot.material
+        if material and material.use_nodes:
+            for node in material.node_tree.nodes:
+                if node.type == 'TEX_IMAGE' and node.image == texture_image:
+                    return material
     return None

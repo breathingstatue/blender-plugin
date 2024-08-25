@@ -529,6 +529,14 @@ def register():
         default = 2,
         description = "End frame of the animation",
     )
+
+    bpy.types.Scene.ta_texture = bpy.props.IntProperty(
+        name = "Texture",
+        default = 0,
+        min = -1,
+        max = TEX_PAGES_MAX-1,
+        description = "The texture of every frame"
+    )
     
     bpy.types.Scene.ta_delay = bpy.props.FloatProperty(
         name="Frame Duration",
@@ -1106,6 +1114,7 @@ def unregister():
     del bpy.types.Scene.ta_current_frame
     del bpy.types.Scene.ta_current_slot  
     del bpy.types.Scene.ta_delay
+    del bpy.types.Scene.ta_texture
     del bpy.types.Scene.ta_frame_end
     del bpy.types.Scene.ta_frame_start
     del bpy.types.Scene.ta_max_frames

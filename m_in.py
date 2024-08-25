@@ -27,12 +27,8 @@ if "bpy" in locals():
     importlib.reload(img_in)
 
 def import_file(filepath, scene):
-    """
-    Imports an .m file and links it to the scene as a Blender object.
-    It also imports all LoDs of a M file, which can be sequentially written
-    to the file. There is no indicator for it, the file end has to be checked.
-    """
     meshes = []
+    obj = None
 
     with open(filepath, 'rb') as file:
         filename = os.path.basename(filepath)
@@ -45,6 +41,10 @@ def import_file(filepath, scene):
 
     dprint(f"Imported {filename} ({len(meshes)} meshes)")
 
+    if not meshes:
+        print("No meshes found in the file.")
+        return None
+
     for index, model in enumerate(meshes):
         me = import_m_mesh(model, filename, filepath, scene)
         
@@ -56,17 +56,17 @@ def import_file(filepath, scene):
             bname, number = me.name.rsplit(".", 1)
             me.name = "{}|q{}".format(bname, meshes.index(model))
             
-        if meshes.index(model) == 0:
-            dprint("Creating Blender object for {}...".format(filename))
-            
+        if index == 0:
+            dprint(f"Creating Blender object for {filename}...")
             obj = bpy.data.objects.new(filename, me)
             bpy.context.scene.collection.objects.link(obj)
             bpy.context.view_layer.objects.active = obj
             assign_uv_tex_material(obj)
-    
-    texture_animations = [animation.as_dict() for animation in model.animations]
-    scene.texture_animations = str(texture_animations)
-    scene.ta_max_slots = model.animation_count
+
+    if obj:  # Only proceed if an object was successfully created
+        texture_animations = [animation.as_dict() for animation in model.animations]
+        scene.texture_animations = str(texture_animations)
+        scene.ta_max_slots = model.animation_count
     
     return obj
 

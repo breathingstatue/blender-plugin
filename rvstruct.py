@@ -173,6 +173,7 @@ class Model:
         return "Model"
 
     def read(self, file):
+        # Reads polygon and vertex counts as 2 bytes
         self.polygon_count = struct.unpack("<H", file.read(2))[0]
         self.vertex_count = struct.unpack("<H", file.read(2))[0]
 
@@ -181,13 +182,27 @@ class Model:
 
         for vertex in range(self.vertex_count):
             self.vertices.append(Vertex(file))
-            
-        # Reads all animations
-        for anim in range(self.animation_count):
-            self.animations.append(TexAnimation(file))
+        
+        # Attempt to read the texture animation count as 4 bytes
+        animation_count_bytes = file.read(4)
+        if len(animation_count_bytes) == 4:
+            self.animation_count = struct.unpack("<l", animation_count_bytes)[0]
+        else:
+            print("Warning: Failed to read texture animation count. Continuing without texture animations.")
+            self.animation_count = 0  # Set to 0 to skip reading animations
+
+        # Reads all animations if count is valid
+        if self.animation_count > 0:
+            for anim in range(self.animation_count):
+                try:
+                    self.animations.append(TexAnimation(file))
+                except Exception as e:
+                    print(f"Warning: Failed to read texture animation {anim}. Error: {e}")
+                    self.animation_count = len(self.animations)
+                    break
 
     def write(self, file):
-        # Writes amount of polygons/vertices and the structures themselves
+        # Writes polygon and vertex counts as 2 bytes
         file.write(struct.pack("<H", self.polygon_count))
         file.write(struct.pack("<H", self.vertex_count))
 
@@ -196,7 +211,7 @@ class Model:
         for vertex in self.vertices:
             vertex.write(file)
             
-        # Writes the count of texture animations
+        # Writes the count of texture animations as 4 bytes
         file.write(struct.pack("<l", self.animation_count))
 
         # Writes all texture animations
