@@ -20,19 +20,35 @@ from . import prm_out
 from .rvstruct import Instances, Instance, Vector, Color, Matrix
 from .common import to_revolt_coord, FIN_SET_MODEL_RGB, to_or_matrix, FIN_ENV, FIN_HIDE, FIN_NO_MIRROR, FIN_NO_LIGHTS
 from .common import FIN_NO_CAMERA_COLLISION, FIN_NO_OBJECT_COLLISION
+from .tools import set_material_to_col_for_object, set_material_to_texture_for_object
 
 if "bpy" in locals():
     import imp
     imp.reload(common)
     imp.reload(rvstruct)
 
-
 def export_file(filepath, scene):
     scene = bpy.context.scene
-    fin = Instances()
+    fin = rvstruct.Instances()
 
-    # Gathers list of instance objects
-    objs = [obj for obj in scene.objects if obj.get("is_instance", False) and obj.type == 'MESH']
+    # Ensure we're in object mode before any operations
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    # Select all mesh objects in the scene
+    bpy.ops.object.select_all(action='SELECT')
+    mesh_objects = [obj for obj in bpy.context.selected_objects if obj.type == 'MESH']
+    
+    if not mesh_objects:
+        print("No mesh objects available for export.")
+        return
+
+    # Apply material settings using the imported utility functions
+    for obj in mesh_objects:
+        set_material_to_col_for_object(obj)
+        set_material_to_texture_for_object(obj)
+
+    # Perform the export process
+    objs = [obj for obj in mesh_objects if obj.get("is_instance", False)]
 
     # Dictionary to keep track of objects by their base name
     objects_by_base_name = {}
@@ -49,7 +65,7 @@ def export_file(filepath, scene):
         for obj in objects:
             instance = Instance()
 
-            # Use the base mesh name for the instance name
+            # Use the cleaned base name for the instance name
             instance.name = base_name[:8].upper()
 
             # Access custom properties with a fallback default
@@ -106,7 +122,12 @@ def export_file(filepath, scene):
                 instance.flag |= FIN_NO_OBJECT_COLLISION
 
             folder = os.sep.join(filepath.split(os.sep)[:-1])
-            prm_fname = "{}.prm".format(instance.name).lower()
+
+            # Ensure the base name ends with .prm but avoid adding .prm twice
+            if not base_name.endswith(".prm"):
+                prm_fname = f"{base_name}.prm"
+            else:
+                prm_fname = base_name
 
             # Ensure the objects with the same base name are exported as a single .prm file
             if prm_fname not in exported_prms:
@@ -132,19 +153,75 @@ def export_file(filepath, scene):
         fin.write(fd)
 
     print(f"Exported {len(fin.instances)} instances to {filepath}")
+
+def set_material_to_col():
+    """Sets the material to Vertex Colour (_Col) for all selected mesh objects."""
+    mesh_objects = [obj for obj in bpy.context.selected_objects if obj.type == 'MESH']
+    
+    if not mesh_objects:
+        print("No mesh objects selected for material assignment.")
+        return
+
+    for obj in mesh_objects:
+        bpy.context.view_layer.objects.active = obj
+        obj.data.material_choice = 'COL'
+
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.select_all(action='SELECT')
+        bpy.ops.object.assign_materials_auto()
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+def set_material_to_texture():
+    """Sets the material to Texture (UV_TEX) for all selected mesh objects."""
+    mesh_objects = [obj for obj in bpy.context.selected_objects if obj.type == 'MESH']
+    
+    if not mesh_objects:
+        print("No mesh objects selected for material assignment.")
+        return
+
+    for obj in mesh_objects:
+        bpy.context.view_layer.objects.active = obj
+        obj.data.material_choice = 'UV_TEX'
+
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.select_all(action='SELECT')
+        bpy.ops.object.assign_materials_auto()
+        bpy.ops.object.mode_set(mode='OBJECT')
         
 def get_base_name_for_layers(obj):
-    """Generates a base name for the object by removing numeric suffixes and delimiters."""
-    name = obj.name
-    # Regular expression to remove numeric suffixes like .001, _01, etc.
+    """Generates a clean base name for the object by removing unnecessary suffixes and handling extensions."""
+    name = obj.name.lower()
+
+    # Remove any numeric suffixes like .001, _01, etc.
     base_name = re.sub(r'[\._-]\d+$', '', name)
+
+    # If the name ends with .prm, remove it temporarily for further processing
+    if base_name.endswith('.prm'):
+        base_name = base_name[:-4]  # Remove the .prm extension
+
+    # Now, remove any additional dots or segments after the base name
+    base_name = base_name.split('.')[0]
+
+    # Reattach the .prm extension only if it's not already there
+    return base_name, ''
+
+def clean_instance_name(name):
+    """
+    Cleans the instance name by removing unnecessary suffixes after a dot,
+    while preserving the .prm extension.
+    """
+    # Lowercase the name to ensure consistency
+    name = name.lower()
     
-    extension = ""
-    specific_parts = ["body", "wheel", "axle", "spring"]
-
-    if ".w" in name:
-        extension = ".w"
-    elif ".prm" in name or any(part in name for part in specific_parts):
-        extension = ".prm"
-
-    return f"{base_name}{extension}", ''
+    # If the name ends with '.prm', strip it temporarily to clean up the base name
+    if name.endswith(".prm"):
+        base_name = name[:-4]  # Strip off the '.prm' part
+    else:
+        base_name = name
+    
+    # Find the first dot in the base name and strip anything after it
+    if '.' in base_name:
+        base_name = base_name.split('.')[0]
+    
+    # Reattach the .prm extension if it was originally there
+    return f"{base_name}.prm" if name.endswith(".prm") else base_name

@@ -246,3 +246,21 @@ def get_high_flag(self):
 def set_high_flag(self, value):
     """Set the high flag value."""
     self["flag_high"] = int(value)
+    
+def set_material_to_col_for_object(obj):
+    """Sets the material to Vertex Colour (_Col) for a specific object."""
+    bpy.context.view_layer.objects.active = obj
+    obj.data.material_choice = 'COL'
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.object.assign_materials_auto()
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+def set_material_to_texture_for_object(obj):
+    """Sets the material to Texture (UV_TEX) for a specific object."""
+    bpy.context.view_layer.objects.active = obj
+    obj.data.material_choice = 'UV_TEX'
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.object.assign_materials_auto()
+    bpy.ops.object.mode_set(mode='OBJECT')

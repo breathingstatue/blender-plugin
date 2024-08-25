@@ -18,7 +18,7 @@ from . import rvstruct
 from . import img_in
 from . import w_in
 from .rvstruct import PRM
-from .common import to_blender_coord, to_blender_axis, FACE_QUAD, reverse_quad, FACE_ENV
+from .common import to_blender_coord, to_blender_axis, FACE_QUAD, reverse_quad, FACE_ENV, dprint
 
 # Reload imports if 'bpy' is already in locals
 if "bpy" in locals():
@@ -43,7 +43,7 @@ def import_file(filepath, scene):
         while file.tell() < file_end:
             meshes.append(PRM(file))
 
-    print(f"Imported {filename} ({len(meshes)} meshes)")
+    dprint(f"Imported {filename} ({len(meshes)} meshes)")
 
     for index, prm in enumerate(meshes):
         me = import_prm_mesh(prm, filename, filepath, scene)
@@ -57,7 +57,7 @@ def import_file(filepath, scene):
             me.name = "{}|q{}".format(bname, meshes.index(prm))
             
         if meshes.index(prm) == 0:
-            print("Creating Blender object for {}...".format(filename))
+            dprint("Creating Blender object for {}...".format(filename))
             
             obj = bpy.data.objects.new(filename, me)
             bpy.context.scene.collection.objects.link(obj)
@@ -119,7 +119,7 @@ def add_rvmesh_to_bmesh(prm, bm, me, filepath, scene, envlist=None):
             face = bm.faces.new(verts)
             created_faces.append(face)
         except ValueError as e:
-            print(f"Could not create face: {e}")
+            dprint(f"Could not create face: {e}")
             continue
 
         if poly.texture >= 0:

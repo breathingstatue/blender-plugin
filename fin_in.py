@@ -6,7 +6,6 @@ Description:
 Imports Instance files.
 
 """
-
 import os
 import bpy
 import bmesh
@@ -40,31 +39,43 @@ def import_instance(filepath, scene, instance):
 
     folder = os.sep.join(filepath.split(os.sep)[:-1])
 
-    prm_fname = "{}.prm".format(instance.name).lower()
+    # Clean up the instance name
+    instance_name = clean_instance_name(instance.name)
 
-    # Searches for files that are longer than 8 chars
-    if not prm_fname in os.listdir(folder):
+    # Determine the expected PRM filename
+    expected_prm_fname = instance_name if instance_name.endswith(".prm") else f"{instance_name}.prm"
+
+    # Try to find the exact file name
+    prm_fname = None
+    for f in os.listdir(folder):
+        if f == expected_prm_fname:
+            prm_fname = f
+            break
+
+    # If no exact match was found, try to find a file that starts with the cleaned instance name
+    if not prm_fname:
         for f in os.listdir(folder):
-            if f.startswith(instance.name.lower()) and ".prm" in f:
+            if f.startswith(instance_name) and f.endswith(".prm"):
                 prm_fname = f
                 break
 
+    # Check if the object with this name already exists in the scene
     if prm_fname in [ob.name for ob in scene.objects]:
         data = scene.objects[prm_fname].data
 
-        # Creates a duplicate object and links it to the scene
+        # Create a duplicate object and link it to the scene
         instance_obj = bpy.data.objects.new(name=prm_fname, object_data=data)
         if instance_obj is not None:
             scene.collection.objects.link(instance_obj)
 
-    elif prm_fname in os.listdir(folder):
+    elif prm_fname:
         prm_path = os.path.join(folder, prm_fname)
-        # Creates the object and links it to the scene
+        # Create the object and link it to the scene
         instance_obj = prm_in.import_file(prm_path, scene)
 
     else:
-        # Creates an empty object instead
-        instance_obj = bpy.data.objects.new("prm_fname", None)
+        # Create an empty object if no PRM file was found
+        instance_obj = bpy.data.objects.new(instance_name, None)
         if instance_obj is not None:
             scene.collection.objects.link(instance_obj)
         instance_obj.empty_display_type = "SPHERE"
@@ -209,11 +220,31 @@ def get_base_name_for_layers(obj):
         suffix = f".{name_parts[-1]}"
 
     extension = ""
-    specific_parts = ["body", "wheel", "axle", "spring"]
 
     if ".w" in obj.name:
         extension = ".w"
-    elif ".prm" in obj.name or any(part in obj.name for part in specific_parts):
+    elif ".prm" in obj.name:
         extension = ".prm"
 
     return f"{base_name}{extension}", suffix
+
+def clean_instance_name(name):
+    """
+    Cleans the instance name by removing unnecessary suffixes after a dot,
+    while preserving the .prm extension.
+    """
+    # Lowercase the name to ensure consistency
+    name = name.lower()
+    
+    # If the name ends with '.prm', strip it temporarily to clean up the base name
+    if name.endswith(".prm"):
+        base_name = name[:-4]  # Strip off the '.prm' part
+    else:
+        base_name = name
+    
+    # Find the first dot in the base name and strip anything after it
+    if '.' in base_name:
+        base_name = base_name.split('.')[0]
+    
+    # Reattach the .prm extension if it was originally there
+    return f"{base_name}.prm" if name.endswith(".prm") else base_name

@@ -22,7 +22,8 @@ from mathutils import Color, Matrix
 from . import common
 from . import rvstruct
 
-from .common import *
+from .common import dprint, triangulate_ngons, apply_trs, NCP_NOCOLL, queue_error, DEBUG, NCP_PROP_MASK, to_revolt_axis, to_revolt_coord
+from .common import NCP_QUAD, rvbbox_from_verts
 from .rvstruct import (
     BoundingBox,
     LookupGrid,

@@ -17,8 +17,8 @@ from .layers import set_face_env
 from . import rvstruct
 from . import img_in
 from . import w_in
-from .rvstruct import PRM
-from .common import to_blender_coord, to_blender_axis, FACE_QUAD, reverse_quad, FACE_ENV
+from .rvstruct import Model
+from .common import to_blender_coord, to_blender_axis, FACE_QUAD, reverse_quad, FACE_ENV, dprint
 
 # Reload imports if 'bpy' is already in locals
 if "bpy" in locals():
@@ -41,9 +41,9 @@ def import_file(filepath, scene):
         file.seek(0, os.SEEK_SET)
 
         while file.tell() < file_end:
-            meshes.append(PRM(file))
+            meshes.append(Model(file))
 
-    print(f"Imported {filename} ({len(meshes)} meshes)")
+    dprint(f"Imported {filename} ({len(meshes)} meshes)")
 
     for index, model in enumerate(meshes):
         me = import_m_mesh(model, filename, filepath, scene)
@@ -57,12 +57,17 @@ def import_file(filepath, scene):
             me.name = "{}|q{}".format(bname, meshes.index(model))
             
         if meshes.index(model) == 0:
-            print("Creating Blender object for {}...".format(filename))
+            dprint("Creating Blender object for {}...".format(filename))
             
             obj = bpy.data.objects.new(filename, me)
             bpy.context.scene.collection.objects.link(obj)
             bpy.context.view_layer.objects.active = obj
             assign_uv_tex_material(obj)
+    
+    texture_animations = [animation.as_dict() for animation in model.animations]
+    scene.texture_animations = str(texture_animations)
+    scene.ta_max_slots = model.animation_count
+    
     return obj
 
 def import_m_mesh(model, filename, filepath, scene, envlist=None):
@@ -106,7 +111,7 @@ def add_rvmesh_to_bmesh(model, bm, me, filepath, scene, envlist=None):
             face = bm.faces.new(verts)
             created_faces.append(face)
         except ValueError as e:
-            print(f"Could not create face: {e}")
+            dprint(f"Could not create face: {e}")
             continue
 
         if poly.texture >= 0:

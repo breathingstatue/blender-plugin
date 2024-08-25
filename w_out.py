@@ -25,10 +25,8 @@ from . import (
     prm_out
 )
 from .common import *
-from .prm_out import (
-    export_mesh,
-    get_texture_from_material
-)
+from .prm_out import export_mesh, get_texture_from_material
+from .tools import set_material_to_texture_for_object
 
 def create_split_mesh(original_mesh, face_indices, original_obj_name, created_objects):
     new_mesh = bpy.data.meshes.new(name=f"{original_obj_name}_split_mesh")
@@ -44,12 +42,14 @@ def create_split_mesh(original_mesh, face_indices, original_obj_name, created_ob
 
     for face_index in face_indices:
         face = original_bm.faces[face_index]
-        used_materials.add(face.material_index)
+        if face.material_index < len(original_mesh.materials):
+            used_materials.add(face.material_index)
 
     material_map = {old_idx: idx for idx, old_idx in enumerate(used_materials)}
     new_mesh.materials.clear()
     for old_idx in used_materials:
-        new_mesh.materials.append(original_mesh.materials[old_idx])
+        if old_idx < len(original_mesh.materials):
+            new_mesh.materials.append(original_mesh.materials[old_idx])
 
     uv_layers = {layer.name: split_bm.loops.layers.uv.new(layer.name) for layer in original_bm.loops.layers.uv}
     vc_layers = {layer.name: split_bm.loops.layers.color.new(layer.name) for layer in original_bm.loops.layers.color} if original_bm.loops.layers.color else {}
@@ -82,7 +82,11 @@ def create_split_mesh(original_mesh, face_indices, original_obj_name, created_ob
             print(f"Skipping invalid face creation for vertices: {[v.index for v in new_verts]}")
             continue
 
-        new_face.material_index = material_map[face.material_index]
+        # Ensure the material index is valid before assigning it
+        if face.material_index in material_map:
+            new_face.material_index = material_map[face.material_index]
+        else:
+            new_face.material_index = 0  # Fallback to the first material if out of bounds
 
         for l, loop in enumerate(face.loops):
             new_loop = new_face.loops[l]
@@ -256,4 +260,14 @@ def export_file(filepath, scene):
     if getattr(scene, 'export_worldcut', False):
         export_split_world(filepath, scene, split_size_faces)
     else:
+        # Ensure we're in object mode before any operations
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+        # Apply the material assignment logic to all mesh objects before exporting
+        mesh_objects = [obj for obj in scene.objects if obj.type == 'MESH']
+
+        # Then, assign Texture (UV_TEX) material where applicable
+        for obj in mesh_objects:
+            set_material_to_texture_for_object(obj)
+
         export_standard_world(filepath, scene)

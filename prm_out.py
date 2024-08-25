@@ -24,14 +24,22 @@ from . import rvstruct
 from . import img_in
 from . import layers
 
-from .common import *
+from .common import dprint, get_all_lod, triangulate_ngons, queue_error, FACE_QUAD, FACE_PROP_MASK, texture_to_int, FACE_ENV
+from .common import to_revolt_coord, to_revolt_axis, rvbbox_from_bm, center_from_rvbbox, radius_from_bmesh
 from .layers import *
+from .tools import set_material_to_texture_for_object
 
 
 def export_file(filepath, scene):
     obj = bpy.context.view_layer.objects.active
     print("Exporting PRM for {}...".format(obj.name))
     meshes = []
+
+    # Ensure we're in object mode before any operations
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    # Then, assign Texture (UV_TEX) material where applicable
+    set_material_to_texture_for_object(obj)
 
     # Checks if other LoDs are present
     if "|q" in obj.data.name:

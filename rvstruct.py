@@ -151,7 +151,67 @@ class World:
                "env_list": self.env_list
         }
         return dic
+    
+class Model:
+    """
+    Similar to Mesh, reads, stores and writes Model files
+    """
+    def __init__(self, file=None):
+        self.polygon_count = 0
+        self.vertex_count = 0
 
+        self.polygons = []
+        self.vertices = []
+        
+        self.animation_count = 0        # rvlong, amount of Texture Animations
+        self.animations = []            # sequence of TexAnimation structures
+
+        if file:
+            self.read(file)
+
+    def __repr__(self):
+        return "Model"
+
+    def read(self, file):
+        self.polygon_count = struct.unpack("<H", file.read(2))[0]
+        self.vertex_count = struct.unpack("<H", file.read(2))[0]
+
+        for polygon in range(self.polygon_count):
+            self.polygons.append(Polygon(file))
+
+        for vertex in range(self.vertex_count):
+            self.vertices.append(Vertex(file))
+            
+        # Reads all animations
+        for anim in range(self.animation_count):
+            self.animations.append(TexAnimation(file))
+
+    def write(self, file):
+        # Writes amount of polygons/vertices and the structures themselves
+        file.write(struct.pack("<H", self.polygon_count))
+        file.write(struct.pack("<H", self.vertex_count))
+
+        for polygon in self.polygons:
+            polygon.write(file)
+        for vertex in self.vertices:
+            vertex.write(file)
+            
+        # Writes the count of texture animations
+        file.write(struct.pack("<l", self.animation_count))
+
+        # Writes all texture animations
+        for anim in self.animations:
+            anim.write(file)
+
+    def as_dict(self):
+        dic = { "polygon_count": self.polygon_count,
+                "vertex_count": self.vertex_count,
+                "polygons": self.polygons,
+                "vertices": self.vertices,
+                "animation_count": self.animation_count,
+                "animations": self.animations,
+        }
+        return dic
 
 class PRM:
     """
@@ -840,7 +900,7 @@ class Instance:
     """
     def __init__(self, file=None):
         self.name = ""                            # first 8 letters of file name
-        self.color = (0, 0, 0)       # model % RGB color
+        self.color = (0, 0, 0)                    # model % RGB color
         self.env_color = Color(color=[0, 0, 0], alpha=True) # envMap color
         self.priority = 0                         # priority for multiplayer
         self.flag = 0                             # flag with properties

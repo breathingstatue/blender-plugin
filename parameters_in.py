@@ -26,6 +26,11 @@ def import_file(filepath, scene):
     PARAMETERS.pop(filepath)
 
 def import_car(params, filepath, scene):
+    folder = os.sep.join(filepath.split(os.sep)[:-1])
+    imported_objects = []  # List to keep track of all imported objects
+    # Import all .bmp files as textures
+    import_all_textures(folder)
+    
     body = params["model"][params["body"]["modelnum"]]
     body_loc = to_blender_coord(params["body"]["offset"])
     wheel0loc = to_blender_coord(params["wheel"][0]["offset1"])
@@ -58,8 +63,6 @@ def import_car(params, filepath, scene):
     pin3length = to_blender_scale(params["pin"][3]["length"])
     aerial_loc = to_blender_coord(params["aerial"]["offset"])
 
-    folder = os.sep.join(filepath.split(os.sep)[:-1])
-    
     def get_single_file_with_keyword(keyword):
         files = [f for f in os.listdir(folder) if keyword in f.lower() and f.lower().endswith('.prm')]
         return files[0] if len(files) == 1 else None
@@ -180,6 +183,47 @@ def import_car(params, filepath, scene):
     aerial.empty_display_type = 'PLAIN_AXES'
     aerial.empty_display_size = 0.1
     aerial.parent = body_obj
+    
+    # Apply UV maps to textures for all imported objects
+    for obj in imported_objects:
+        apply_uv_maps_to_textures(obj)
+
+    return imported_objects
+    
+def import_all_textures(folder):
+    """
+    Import all .bmp files in the given folder as textures.
+    """
+    for image_file in os.listdir(folder):
+        if image_file.lower().endswith('.bmp'):
+            img_path = os.path.join(folder, image_file)
+            img_name = os.path.splitext(image_file)[0]
+            if img_name not in bpy.data.images:
+                bpy.data.images.load(img_path)
+                print(f"Imported texture: {img_name}")
+                
+def apply_uv_maps_to_textures(obj):
+    """
+    Apply UV maps to the object similar to how car.bmp is mapped.
+    """
+    if not obj.data.uv_layers:
+        print(f"No UV maps found for {obj.name}, skipping UV assignment.")
+        return
+
+    uv_map = obj.data.uv_layers.active.name if obj.data.uv_layers else None
+    if not uv_map:
+        print(f"No active UV map found for {obj.name}.")
+        return
+
+    for material_slot in obj.material_slots:
+        mat = material_slot.material
+        if not mat or not mat.node_tree:
+            continue
+        
+        for node in mat.node_tree.nodes:
+            if node.type == 'TEX_IMAGE':
+                node.image_user.uv_map = uv_map
+                print(f"Applied UV map {uv_map} to {node.image.name} in {obj.name}")
 
 def create_placeholder(name):
     obj = bpy.data.objects.new(name, None)

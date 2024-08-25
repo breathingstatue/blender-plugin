@@ -7,6 +7,7 @@ Mirror planes are used to determine reflective surfaces.
 
 """
 
+import os
 import bpy
 import bmesh
 
@@ -18,7 +19,7 @@ if "common" in locals():
 from . import common
 from . import rvstruct
 from .rvstruct import RIM, MirrorPlane
-from .common import *
+from .common import dprint, queue_error, to_blender_coord
 
 def import_file(filepath, scene):
     with open(filepath, "rb") as f:

@@ -24,14 +24,22 @@ from . import rvstruct
 from . import img_in
 from . import layers
 
-from .common import *
+from .common import dprint, get_all_lod, triangulate_ngons, queue_error, FACE_PROP_MASK, FACE_QUAD, texture_to_int, FACE_ENV, to_revolt_coord
+from. common import to_revolt_axis, rvbbox_from_bm, center_from_rvbbox, radius_from_bmesh
 from .layers import *
+from .tools import set_material_to_texture_for_object
 
 
 def export_file(filepath, scene):
     obj = bpy.context.view_layer.objects.active
     print("Exporting M for {}...".format(obj.name))
     meshes = []
+
+    # Ensure we're in object mode before any operations
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    # Then, assign Texture (UV_TEX) material where applicable
+    set_material_to_texture_for_object(obj)
 
     # Checks if other LoDs are present
     if "|q" in obj.data.name:
@@ -41,6 +49,16 @@ def export_file(filepath, scene):
     else:
         dprint("No LOD present.")
         meshes.append(obj.data)
+        
+    model = rvstruct.Model
+        
+    # Exports the texture animation
+    animations = eval(scene.texture_animations)
+    for animdict in animations:
+        anim = rvstruct.TexAnimation()
+        anim.from_dict(animdict)
+        model.animations.append(anim)
+    model.animation_count = scene.ta_max_slots
 
     # Exports all meshes to the M file
     with open(filepath, "wb") as file:

@@ -31,6 +31,7 @@ from .common import FORMAT_TAZ, FORMAT_TRI, FORMAT_UNK
 from .common import get_errors, msg_box, FORMATS, to_revolt_scale, FORMAT_CAR, TEX_PAGES_MAX, int_to_texture
 from .layers import set_face_env, create_or_assign_env_material
 from .taz_in import create_zone
+from .texanim import copy_frame_to_uv, copy_uv_to_frame
 from .tri_in import create_trigger
 
 from bpy.props import (
@@ -1292,6 +1293,76 @@ class MaterialAssignment(bpy.types.Operator):
         # Update the mesh to reflect changes
         bmesh.update_edit_mesh(obj.data)
         
+class TextureAssigner(bpy.types.Operator):
+    """Assign selected texture to all selected mesh objects"""
+    bl_idname = "object.assign_texture"
+    bl_label = "Assign Texture to Meshes"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def get_texture_items(self, context):
+        items = [(img.name, img.name, "") for img in bpy.data.images]
+        if not items:
+            items.append(('None', 'No Textures Available', ''))
+        return items
+
+    texture_name: bpy.props.EnumProperty(
+        name="Texture",
+        description="Select a texture to assign",
+        items=get_texture_items
+    )
+
+    def execute(self, context):
+        selected_objects = [obj for obj in context.selected_objects if obj.type == 'MESH']
+        
+        if not selected_objects:
+            # Display the message box if no mesh objects are selected
+            msg_box("Select the car parts to apply skin", icon="ERROR")
+            return {'CANCELLED'}
+
+        image = bpy.data.images.get(self.texture_name)
+        if not image:
+            msg_box(f"Texture {self.texture_name} not found.", icon="ERROR")
+            return {'CANCELLED'}
+
+        for obj in selected_objects:
+            if obj.type == 'MESH':
+                self.assign_texture_to_object(obj, image)
+
+        return {'FINISHED'}
+
+    def assign_texture_to_object(self, obj, image):
+        if obj.data.materials:
+            mat = obj.data.materials[0]  # Assuming first material is the one to modify
+        else:
+            mat = bpy.data.materials.new(name="Material")
+            obj.data.materials.append(mat)
+
+        if not mat.use_nodes:
+            mat.use_nodes = True
+        
+        nodes = mat.node_tree.nodes
+        links = mat.node_tree.links
+
+        # Remove any existing texture nodes
+        for node in nodes:
+            if node.type == 'TEX_IMAGE':
+                nodes.remove(node)
+
+        # Add new texture node
+        tex_image_node = nodes.new(type='ShaderNodeTexImage')
+        tex_image_node.image = image
+        tex_image_node.label = "Assigned Texture"
+
+        # Connect to the principled BSDF node
+        bsdf_node = nodes.get("Principled BSDF")
+        if bsdf_node:
+            links.new(tex_image_node.outputs['Color'], bsdf_node.inputs['Base Color'])
+
+        print(f"Assigned texture {image.name} to {obj.name}")
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+
 """
 OBJECTS -----------------------------------------------------------------------
 """
@@ -1344,40 +1415,64 @@ class BakeShadow(bpy.types.Operator):
     bl_label = "Bake Shadow"
     bl_description = "Creates a shadow plane beneath the selected object"
     
+    def find_body_object(self, context):
+        # Iterate over selected objects and set the active object to 'body' or 'body.prm'
+        for obj in context.selected_objects:
+            if obj.name.lower() in ["body", "body.prm"]:
+                context.view_layer.objects.active = obj
+                return obj
+        # Fallback to the first selected object if none are named 'body' or 'body.prm'
+        return context.selected_objects[0]
+    
+    def create_unique_material(self, base_name="ShadowMaterial"):
+        # Create a unique material name with an incremented suffix if necessary
+        material_name = base_name
+        index = 1
+        
+        while material_name in bpy.data.materials:
+            material_name = f"{base_name}.{index:03d}"
+            index += 1
+        
+        # Create the new material
+        new_material = bpy.data.materials.new(name=material_name)
+        new_material.use_nodes = True
+        
+        return new_material, material_name
+
     def bake_shadow(self, context):
         original_active = context.view_layer.objects.active
-        original_location = original_active.location
         scene = context.scene
         original_engine = scene.render.engine
+        
         # Activate Cycles
-        bpy.context.scene.render.engine = 'CYCLES'
+        scene.render.engine = 'CYCLES'
         scene.cycles.samples = scene.shadow_quality  # Set sampling for baking quality
-        scene.cycles.max_bounces = 4  # Total maximum bounces
-        scene.cycles.diffuse_bounces = 2  # Diffuse bounces
-        scene.cycles.glossy_bounces = 2  # Glossy bounces
-        scene.cycles.transmission_bounces = 2  # Transmission bounces
-        scene.cycles.transparent_max_bounces = 2  # Transparency bounces
-        scene.cycles.volume_bounces = 1  # Volume bounces
-        shade_obj = context.object
-        resolution = scene.shadow_resolution
+        scene.cycles.max_bounces = 1  # Minimal bounces to capture direct shadows
+        scene.cycles.diffuse_bounces = 0  # No diffuse bounces, direct light only
+        scene.cycles.glossy_bounces = 0  # No glossy bounces, we don't need reflections
+        scene.cycles.transmission_bounces = 0  # No transmission bounces, no need for transparency
+        scene.cycles.transparent_max_bounces = 0  # No transparency handling required
+        scene.cycles.volume_bounces = 0  # No volume scattering required
+        
+        # Set the active object to the body or body.prm
+        shade_obj = self.find_body_object(context)
 
+        # Use SUN light for clear borders
         lamp_data_pos = bpy.data.lights.new(name="ShadePositive", type="AREA")
         lamp_data_pos.energy = 1.0
-        lamp_data_pos.size = scene.shadow_softness
+        lamp_data_pos.size = scene.shadow_softness  # Light size to control shadow softness
         lamp_positive = bpy.data.objects.new(name="ShadePositive", object_data=lamp_data_pos)
 
-        # Link lights to the scene
+        # Link light to the scene
         scene.collection.objects.link(lamp_positive)
 
         all_objs = [ob_child for ob_child in context.scene.objects if ob_child.parent == shade_obj] + [shade_obj]
         
-        # Get the bounds taking in account all child objects (wheels, etc.)
-        # Using the world matrix here to get positions from child objects
+        # Get the bounds taking into account all child objects (wheels, etc.)
         far_left = min([min([(ob.matrix_world[0][3] + ob.bound_box[i][0] * shade_obj.scale[0]) for i in range(0, 8)]) for ob in all_objs])
         far_right = max([max([(ob.matrix_world[0][3] + ob.bound_box[i][0] * shade_obj.scale[0]) for i in range(0, 8)]) for ob in all_objs])
         far_front = max([max([(ob.matrix_world[1][3] + ob.bound_box[i][1] * shade_obj.scale[1]) for i in range(0, 8)]) for ob in all_objs])
         far_back = min([min([(ob.matrix_world[1][3] + ob.bound_box[i][1] * shade_obj.scale[1]) for i in range(0, 8)]) for ob in all_objs])
-        far_top = max([max([(ob.matrix_world[2][3] + ob.bound_box[i][2] * shade_obj.scale[2]) for i in range(0, 8)]) for ob in all_objs])
         far_bottom = min([min([(ob.matrix_world[2][3] + ob.bound_box[i][2] * shade_obj.scale[2]) for i in range(0, 8)]) for ob in all_objs])
         
         # Get the dimensions to set the scale
@@ -1395,70 +1490,10 @@ class BakeShadow(bpy.types.Operator):
         shadow_plane = context.active_object
         shadow_plane.name = 'ShadowPlane'
         
-        # Scale the shadow plane
-        scale = max(dim_x, dim_y)
-        shadow_plane.scale.x = scale / 1.5
-        shadow_plane.scale.y = scale / 1.5
-
-        # Prepare material and texture for the shadow plane
-        mat = bpy.data.materials.new(name="ShadowMaterial")
-        shadow_plane.data.materials.append(mat)
-        mat.use_nodes = True
-        nodes = mat.node_tree.nodes
-        nodes.clear()
-
-        texture_node = nodes.new('ShaderNodeTexImage')
-        shadow_tex = bpy.data.images.new("Shadow", width=context.scene.shadow_resolution, height=context.scene.shadow_resolution)
-        texture_node.image = shadow_tex
-        nodes.active = texture_node
-
-        # Bake the shadow onto the plane
-        context.view_layer.objects.active = shadow_plane
-        shadow_plane.select_set(True)
-
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.uv.unwrap(method='ANGLE_BASED', margin=0.001)
-        bpy.ops.object.mode_set(mode='OBJECT')
-        bpy.ops.object.bake(type='AO')
-        
-        # Access the baked image and invert its colors
-        for pixel in range(0, len(shadow_tex.pixels), 4):  # Iterate over each pixel, skipping alpha
-            for channel in range(3):  # Only invert RGB, leave A as is
-                shadow_tex.pixels[pixel + channel] = 1.0 - shadow_tex.pixels[pixel + channel]
-
-        shadow_tex.update()  # Update the image to reflect the changes
-
-        # Prepare the material and nodes again (if the material was cleared after baking)
-        mat = bpy.data.materials.get("ShadowMaterial")
-        if not mat:
-            mat = bpy.data.materials.new(name="ShadowMaterial")
-            shadow_plane.data.materials.append(mat)
-
-        mat.use_nodes = True
-        nodes = mat.node_tree.nodes
-        links = mat.node_tree.links
-        nodes.clear()
-
-        # Re-create the texture node and assign the inverted image
-        texture_node = nodes.new('ShaderNodeTexImage')
-        texture_node.image = shadow_tex
-
-        # Create a diffuse shader node and connect the texture to it
-        diffuse_node = nodes.new('ShaderNodeBsdfDiffuse')
-        links.new(texture_node.outputs['Color'], diffuse_node.inputs['Color'])
-
-        # Create and connect the Material Output node
-        material_output_node = nodes.new('ShaderNodeOutputMaterial')
-        links.new(diffuse_node.outputs['BSDF'], material_output_node.inputs['Surface'])
-
-        if "shadow_table" not in scene.keys():
-            scene["shadow_table"] = ""
-
-        # space between the car body center and the edge of the shadow plane
+        # Generate shadow table using the initial plane dimensions
         sphor = (shadow_plane.location[0] - (shadow_plane.dimensions[0]/2))
         spver = ((shadow_plane.dimensions[1]/2) - shadow_plane.location[1])
 
-        # Generates shadowtable
         sleft = (sphor - shade_obj.location[0]) * 100
         sright = (shade_obj.location[0] - sphor) * 100
         sfront = (spver - shade_obj.location[1]) * 100
@@ -1471,28 +1506,65 @@ class BakeShadow(bpy.types.Operator):
         # Update the scene's shadow_table property
         scene["shadow_table"] = shtable
         scene.shadow_table = shtable
-        
+
+        # Scale the shadow plane by 1.5 times in X and Y
+        shadow_plane.scale.x *= 1.5
+        shadow_plane.scale.y *= 1.5
+
+        # Create a new unique material and assign it to the shadow plane
+        mat, material_name = self.create_unique_material("ShadowMaterial")
+        shadow_plane.data.materials.append(mat)
+        nodes = mat.node_tree.nodes
+        links = mat.node_tree.links
+        nodes.clear()
+
+        # Create a new texture for the shadow
+        texture_name = f"Shadow_{material_name}"
+        shadow_tex = bpy.data.images.new(texture_name, width=scene.shadow_resolution, height=scene.shadow_resolution)
+
+        # Setup the nodes
+        texture_node = nodes.new('ShaderNodeTexImage')
+        texture_node.image = shadow_tex
+        diffuse_node = nodes.new('ShaderNodeBsdfDiffuse')
+        material_output_node = nodes.new('ShaderNodeOutputMaterial')
+
+        links.new(texture_node.outputs['Color'], diffuse_node.inputs['Color'])
+        links.new(diffuse_node.outputs['BSDF'], material_output_node.inputs['Surface'])
+
+        # Set render settings for baking
+        scene.render.bake.use_pass_direct = True
+        scene.render.bake.use_pass_indirect = False
+        scene.render.bake.use_pass_color = True
+        scene.render.bake.use_clear = True
+
+        # Bake the shadow onto the plane
+        context.view_layer.objects.active = shadow_plane
+        shadow_plane.select_set(True)
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.uv.unwrap(method='ANGLE_BASED', margin=0.001)
+        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.bake(type='AO')
+
+        # Invert the baked shadow texture for Re-Volt
+        for pixel in range(0, len(shadow_tex.pixels), 4):
+            for channel in range(3):
+                shadow_tex.pixels[pixel + channel] = 1.0 - shadow_tex.pixels[pixel + channel]
+
+        shadow_tex.update()
+
+        # Save the baked image
+        shadow_tex.filepath_raw = f"//{texture_name}.png"
+        shadow_tex.file_format = 'PNG'
+        shadow_tex.save()
+
+        # Remove the light after baking
+        bpy.data.objects.remove(lamp_positive)
+
+        # Restore the original render engine
         scene.render.engine = original_engine
         
-        # And finally, cleanup: deselect everything first
+        # Cleanup: deselect everything first
         bpy.ops.object.select_all(action='DESELECT')
-        
-        # Select and delete the shadow plane specifically by name
-        shadow_plane = bpy.data.objects.get('Plane')
-        if shadow_plane:
-            shadow_plane.select_set(True)
-            context.view_layer.objects.active = shadow_plane
-            bpy.ops.object.delete()
-            
-        # Deselect all to ensure no unintended object gets deleted
-        bpy.ops.object.select_all(action='DESELECT')
-
-        # Check if the lamp object exists and then select and delete it
-        if lamp_positive:
-            bpy.ops.object.select_all(action='DESELECT')  # Ensure only the lamp object gets selected
-            lamp_positive.select_set(True)
-            context.view_layer.objects.active = lamp_positive
-            bpy.ops.object.delete()  # This will delete the selected lamp object
 
     def execute(self, context):
         self.bake_shadow(context)
@@ -1552,19 +1624,6 @@ class BakeVertex(bpy.types.Operator):
         if obj.mode != 'OBJECT':
             self.report({'WARNING'}, "You must be in Object Mode to bake vertex colors.")
             msg_box("You must be in Object Mode to bake vertex colors.", 'ERROR')
-            return {'CANCELLED'}
-
-    def execute(self, context):
-        scene = context.scene
-        obj = context.active_object
-        if not obj or obj.type != 'MESH':
-            self.report({'WARNING'}, "Active object is not a mesh")
-            return {'CANCELLED'}
-
-        # Check if the object is in Object mode
-        if obj.mode != 'OBJECT':
-            self.report({'WARNING'}, "You must be in Object Mode to bake vertex colors.")
-            self.show_message_box("You must be in Object Mode to bake vertex colors.", "Error", 'ERROR')
             return {'CANCELLED'}
 
         # Ensure the object has a vertex color layer named 'Col'
@@ -2018,7 +2077,7 @@ class ButtonCopyFrameToUv(bpy.types.Operator):
         copy_frame_to_uv(context)
         context.area.tag_redraw()
         return{"FINISHED"}
-
+    
 class PreviewNextFrame(bpy.types.Operator):
     bl_idname = "texanim.prev_next"
     bl_label = "Preview Next"
@@ -2027,9 +2086,18 @@ class PreviewNextFrame(bpy.types.Operator):
     def execute(self, context):
         scene = context.scene
 
-        scene.ta_current_frame += 1
+        # Ensure we don't go beyond the maximum number of frames
+        if scene.ta_current_frame < scene.ta_max_frames - 1:
+            scene.ta_current_frame += 1
+        else:
+            scene.ta_current_frame = 0  # Optionally loop back to the first frame
+
         copy_frame_to_uv(context)
-        return{"FINISHED"}
+
+        # Update the UI to reflect the changes
+        context.area.tag_redraw()
+        
+        return {"FINISHED"}
 
 class PreviewPrevFrame(bpy.types.Operator):
     bl_idname = "texanim.prev_prev"
@@ -2039,9 +2107,18 @@ class PreviewPrevFrame(bpy.types.Operator):
     def execute(self, context):
         scene = context.scene
 
-        scene.ta_current_frame -= 1
+        # Ensure we don't go below the first frame
+        if scene.ta_current_frame > 0:
+            scene.ta_current_frame -= 1
+        else:
+            scene.ta_current_frame = scene.ta_max_frames - 1  # Optionally loop to the last frame
+
         copy_frame_to_uv(context)
-        return{"FINISHED"}
+
+        # Update the UI to reflect the changes
+        context.area.tag_redraw()
+
+        return {"FINISHED"}
 
 class TexAnimTransform(bpy.types.Operator):
     bl_idname = "texanim.transform"
@@ -2050,27 +2127,26 @@ class TexAnimTransform(bpy.types.Operator):
 
     def execute(self, context):
         scene = context.scene
+        
+        # Check if the slot limit is 0
+        if scene.ta_max_slots == 0:
+            msg_box("Slot limit is 0. Please increase the slot limit before creating an animation.", "ERROR")
+            return {'FINISHED'}
 
         ta = eval(scene.texture_animations)
         slot = scene.ta_current_slot
-        max_frames = scene.ta_max_frames
 
+        if slot >= len(ta):
+            msg_box("Slot index out of range.", "ERROR")
+            return {'FINISHED'}
+
+        max_frames = scene.ta_max_frames
         frame_start = scene.ta_frame_start
         frame_end = scene.ta_frame_end
 
-        if scene.ta_frame_end > max_frames - 1:
-            msg_box(
-                "Frame out of range.\n"
-                "Please set the amount of frames to {}.".format(
-                    frame_end + 1),
-                "ERROR"
-            )
-
+        if frame_start >= max_frames or frame_end >= max_frames:
+            msg_box("Frame index out of range.", "ERROR")
             return {'FINISHED'}
-        elif scene.ta_frame_start == scene.ta_frame_end:
-            msg_box("Frame range too short.", "ERROR")
-            return {'FINISHED'}
-
 
         uv_start = (
             (ta[slot]["frames"][frame_start]["uv"][0]["u"],
@@ -2127,6 +2203,11 @@ class TexAnimGrid(bpy.types.Operator):
 
     def execute(self, context):
         scene = context.scene
+
+        # Check if the slot limit is 0
+        if scene.ta_max_slots == 0:
+            msg_box("Slot limit is 0. Please increase the slot limit before creating a grid animation.", "ERROR")
+            return {'FINISHED'}
 
         ta = eval(scene.texture_animations)
         slot = scene.ta_current_slot

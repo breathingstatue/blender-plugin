@@ -135,7 +135,7 @@ if "w_out" in locals():
 
 from .common import DialogOperator, TEX_ANIM_MAX, TEX_PAGES_MAX
 from .common import FACE_DOUBLE, FACE_TRANSLUCENT, FACE_MIRROR, FACE_TRANSL_TYPE, FACE_TEXANIM, FACE_NOENV, FACE_ENV, FACE_CLOTH, FACE_SKIP
-from .common import NCP_DOUBLE, NCP_NO_SKID, NCP_OIL, NCP_OBJECT_ONLY, NCP_CAMERA_ONLY, NCP_NOCOLL, MATERIALS
+from .common import NCP_DOUBLE, NCP_NO_SKID, NCP_OIL, NCP_NON_PLANAR, NCP_OBJECT_ONLY, NCP_CAMERA_ONLY, NCP_NOCOLL, MATERIALS
 from .layers import select_ncp_material, get_face_material, set_face_material, set_face_texture, get_face_texture, update_envmapping, update_no_envmapping
 from .layers import set_face_ncp_property, get_face_ncp_property, get_face_env, set_face_env, update_face_env, get_fin_envcol, set_fin_envcol
 from .layers import get_face_property, set_face_property, update_fin_envcol, set_rgb, get_rgb, update_fin_col, get_alpha_items
@@ -143,7 +143,7 @@ from .layers import update_fin_env, update_rgb, update_no_envmapping, update_env
 from .operators import ImportRV, ExportRV, RVIO_OT_ReadCarParameters, RVIO_OT_SelectRevoltDirectory, ButtonReExport
 from .operators import VertexAndAlphaLayer, VertexColorRemove, SetVertexColor, BakeShadow, BakeVertex, BatchBakeVertexToEnv, BakeVertexToRGBModelColor
 from .operators import SetVertexAlpha
-from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, MaterialAssignment, MaterialAssignmentAuto
+from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, MaterialAssignment, MaterialAssignmentAuto, TextureAssigner
 from .operators import SetInstanceProperty, RemoveInstanceProperty, LaunchRV, TexturesSave
 from .operators import TexturesRename, CarParametersExport, ButtonZoneHide, AddTrackZone, ReverseTrackZone, ButtonTriggerHide, CreateTrigger
 from .operators import DuplicateTrigger, CopyTrigger, PasteTrigger, SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere
@@ -156,7 +156,7 @@ from .rvstruct import Triggers, Trigger
 from .texanim import update_ta_max_frames, update_ta_current_slot, update_ta_current_frame, update_ta_current_frame_uv
 from .texanim import update_ta_current_frame_delay, update_ta_current_frame_tex, update_ta_max_slots
 from .tools import get_trigger_type_items, get_trigger_type, set_trigger_type, get_low_flag_items, get_low_flag, set_low_flag, get_high_flag_items
-from .tools import get_high_flag, set_high_flag
+from .tools import get_high_flag, set_high_flag, set_material_to_col_for_object, set_material_to_texture_for_object
 from .ui.faceprops import RVIO_PT_RevoltFacePropertiesPanel
 from .ui.headers import RVIO_PT_RevoltIOToolPanel
 from .ui.helpers import RVIO_PT_RevoltHelpersPanelMesh
@@ -517,7 +517,7 @@ def register():
     bpy.types.Scene.ta_frame_start = bpy.props.IntProperty(
         name = "Start Frame",
         min = 0,
-        max = 32768,
+        max = 32766,
         default = 0,
         description = "Start frame of the animation"
     )
@@ -525,17 +525,9 @@ def register():
     bpy.types.Scene.ta_frame_end = bpy.props.IntProperty(
         name = "End Frame",
         min = 0,
-        max = 32768,
+        max = 32766,
         default = 2,
         description = "End frame of the animation",
-    )
-    
-    bpy.types.Scene.ta_texture = bpy.props.IntProperty(
-        name = "Texture",
-        default = 0,
-        min = -1,
-        max = TEX_PAGES_MAX-1,
-        description = "Texture for every frame"
     )
     
     bpy.types.Scene.ta_delay = bpy.props.FloatProperty(
@@ -674,7 +666,7 @@ def register():
     )
     
     bpy.types.Mesh.material_choice = bpy.props.EnumProperty(
-        name="Material Layer",
+        name="Layer",
         items=[
             ('UV_TEX', "Texture", "Assign UV Texture"),
             ('COL', "Color", "Assign Color Material"),
@@ -957,6 +949,7 @@ def register():
     bpy.utils.register_class(TexturesRename)
     bpy.utils.register_class(MaterialAssignment)
     bpy.utils.register_class(MaterialAssignmentAuto)
+    bpy.utils.register_class(TextureAssigner)
     bpy.utils.register_class(CarParametersExport)
     bpy.utils.register_class(ButtonHullGenerate)  
     bpy.utils.register_class(BakeShadow)
@@ -1039,6 +1032,7 @@ def unregister():
     bpy.utils.unregister_class(BakeShadow)
     bpy.utils.unregister_class(ButtonHullGenerate) 
     bpy.utils.unregister_class(CarParametersExport)
+    bpy.utils.unregister_class(TextureAssigner)
     bpy.utils.unregister_class(MaterialAssignmentAuto)
     bpy.utils.unregister_class(MaterialAssignment)
     bpy.utils.unregister_class(TexturesRename)
@@ -1112,7 +1106,6 @@ def unregister():
     del bpy.types.Scene.ta_current_frame
     del bpy.types.Scene.ta_current_slot  
     del bpy.types.Scene.ta_delay
-    del bpy.types.Scene.ta_texture
     del bpy.types.Scene.ta_frame_end
     del bpy.types.Scene.ta_frame_start
     del bpy.types.Scene.ta_max_frames

@@ -16,7 +16,7 @@ from . import img_in
 from . import prm_in
 
 from .rvstruct import World
-from .common import *
+from .common import int_to_texture, msg_box, to_blender_coord, COL_BBOX, create_material, to_blender_scale, COL_BCUBE, COL_CUBE
 
 if "bpy" in locals():
     import importlib

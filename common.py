@@ -25,7 +25,6 @@ global ERRORS
 ERRORS = {}  # Dictionary that holds error messages
 PARAMETERS = {}  # Glocal dict to hold parameters
 
-
 # If True, more debug messages will be printed
 DEBUG =             True
 

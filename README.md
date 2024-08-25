@@ -10,11 +10,20 @@ TO DO LIST:
 
 20.24.?
 Objects (.fob)
-Texture Animations Editor
 
 FULL CHANGELOG:
 
 20.24.8
+Texture Animations editor
+Car Skin Selector
+Car Import (fetch the whole car skin list for parameteres.ini)
+Improved Car Shadow baking
+Texture animations for .m file (experimental)
+Improved import/export modules
+Added some face properties (face_texture_animation, face_ncp_no_planar)
+Deleted some duplicate code (Vertex Light Baking had some duplicate code)
+
+20.24.8 (older version)
 .m (Model) import/export
 Pins import/export
 Spinner import/export
@@ -41,6 +50,6 @@ Import to top menu
 First release
 
 20.24.3
-I don't include props modules or custom attribute revolts, I'll see if bpy.context.scene works in import/export.
+Deleted props modules and removed custom property "revolt"
 
-Changes: new panels and buttons, structural changes, operator labeling, registrations
+Changes from the start: new panels and buttons, structural changes, operator labeling, registrations
