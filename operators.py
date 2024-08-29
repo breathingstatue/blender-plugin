@@ -1365,6 +1365,72 @@ class TextureAssigner(bpy.types.Operator):
     def invoke(self, context, event):
         return context.window_manager.invoke_props_dialog(self)
 
+class SetFaceTextureNumber(bpy.types.Operator):
+    bl_idname = "mesh.set_face_texnum"
+    bl_label = "Calculate Texture Number"
+    bl_description = "Sets the texture number based on the suffix (a-bz) of the assigned texture"
+
+    def execute(self, context):
+        for obj in context.scene.objects:
+            if obj.type == 'MESH':
+                # If the object is in edit mode, use from_edit_mesh and update_edit_mesh
+                if obj.mode == 'EDIT':
+                    bm = bmesh.from_edit_mesh(obj.data)
+                else:
+                    bm = bmesh.new()
+                    bm.from_mesh(obj.data)
+
+                # Check for the existence of the "Texture Number" layer
+                texnum_layer = bm.faces.layers.int.get("Texture Number")
+                if not texnum_layer:
+                    texnum_layer = bm.faces.layers.int.new("Texture Number")
+
+                # Iterate over all faces in the mesh
+                for face in bm.faces:
+                    # Get the material index for the face
+                    mat_index = face.material_index
+                    if mat_index >= len(obj.material_slots):
+                        continue
+
+                    # Retrieve the material from the object's material slots
+                    material = obj.material_slots[mat_index].material
+
+                    if not material or not material.use_nodes:
+                        continue
+
+                    # Iterate over the nodes in the material's node tree to find a texture node
+                    texture_name = None
+                    for node in material.node_tree.nodes:
+                        if node.type == 'TEX_IMAGE':
+                            texture_name = node.image.name
+                            break
+
+                    if texture_name:
+                        # Extract the suffix before the file extension
+                        suffix = texture_name.split('.')[-2][-1].lower() if '.' in texture_name else ''
+
+                        # Map the suffix to a texture number (e.g., 'a' -> 0, 'b' -> 1)
+                        if suffix.isalpha():
+                            texture_num = ord(suffix) - ord('a')
+                            if texture_num < 0 or texture_num >= TEX_PAGES_MAX:
+                                texture_num = -1  # Set to -1 if the suffix is out of range
+                        else:
+                            texture_num = -1  # No valid suffix found
+
+                        # Assign the texture number to the "Texture Number" layer
+                        face[texnum_layer] = texture_num
+
+                # Update the mesh with the changes
+                if obj.mode == 'EDIT':
+                    bmesh.update_edit_mesh(obj.data)
+                else:
+                    bm.to_mesh(obj.data)
+                    bm.free()
+
+                self.report({'INFO'}, f"Textures set for {obj.name}.")
+
+        return {'FINISHED'}
+
 """
 OBJECTS -----------------------------------------------------------------------
 """
@@ -2403,7 +2469,7 @@ class SetVertexColor(bpy.types.Operator):
                 for face in bm.faces:
                     for loop in face.loops:
                         if (selmode[0] and loop.vert.select) or (selmode[1] and loop.edge.select) or (selmode[2] and face.select):
-                            loop[vc_layer] = (color[0], color[1], color[2], 1.0)  # Include alpha
+                            loop[vc_layer] = (color[0], color[1], color[2], 1.0)  # Set the alpha to 1.0
 
                 bmesh.update_edit_mesh(eo.data, destructive=False)
                 self.report({'INFO'}, f"Vertex color set for {eo.name}.")

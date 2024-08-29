@@ -142,7 +142,7 @@ from .layers import get_face_property, set_face_property, update_fin_envcol, set
 from .layers import update_fin_env, update_rgb, update_no_envmapping, update_envmapping, remove_env_material
 from .operators import ImportRV, ExportRV, RVIO_OT_ReadCarParameters, RVIO_OT_SelectRevoltDirectory, ButtonReExport
 from .operators import VertexAndAlphaLayer, VertexColorRemove, SetVertexColor, BakeShadow, BakeVertex, BatchBakeVertexToEnv, BakeVertexToRGBModelColor
-from .operators import SetVertexAlpha
+from .operators import SetVertexAlpha, SetFaceTextureNumber
 from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, MaterialAssignment, MaterialAssignmentAuto, TextureAssigner
 from .operators import SetInstanceProperty, RemoveInstanceProperty, LaunchRV, TexturesSave
 from .operators import TexturesRename, CarParametersExport, ButtonZoneHide, AddTrackZone, ReverseTrackZone, ButtonTriggerHide, CreateTrigger
@@ -820,10 +820,10 @@ def register():
     bpy.types.Scene.vertex_color_picker = bpy.props.FloatVectorProperty(
         name="Vertex Color Picker",
         subtype='COLOR',
-        size=4,
+        size=3,  # Only RGB components
         min=0.0,
         max=1.0,
-        default=(1.0, 1.0, 1.0, 1.0),
+        default=(1.0, 1.0, 1.0),
         description="Color picker for setting vertex colors"
     )
 
@@ -981,6 +981,7 @@ def register():
     bpy.utils.register_class(PasteTrigger)
     bpy.utils.register_class(SetBCubeMeshIndices)
     bpy.utils.register_class(SetVertexAlpha)
+    bpy.utils.register_class(SetFaceTextureNumber)
     bpy.utils.register_class(RVIO_OT_SelectRevoltDirectory)
     
     # Register UI
@@ -1017,6 +1018,7 @@ def unregister():
     
     # Unregister Operators
     bpy.utils.unregister_class(RVIO_OT_SelectRevoltDirectory)
+    bpy.utils.unregister_class(SetFaceTextureNumber)
     bpy.utils.unregister_class(SetVertexAlpha)
     bpy.utils.unregister_class(SetBCubeMeshIndices)
     bpy.utils.unregister_class(PasteTrigger)

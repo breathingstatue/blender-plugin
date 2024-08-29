@@ -14,6 +14,7 @@ Objects (.fob)
 FULL CHANGELOG:
 
 20.24.8
+Texture Number Assigner
 Texture Animations editor
 Car Skin Selector
 Car Import (import all skins list via parameteres.txt)
