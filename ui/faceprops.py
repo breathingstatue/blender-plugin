@@ -28,6 +28,7 @@ class RVIO_PT_RevoltFacePropertiesPanel(bpy.types.Panel):
         row.operator("object.assign_materials", text="Set to Selected")
         col = box.column(align=True)
         col.operator("object.assign_texture", text="Car Skin")
+        col.operator("mesh.set_face_texnum")
 
         if obj.mode == 'EDIT':
             box = layout.box()
