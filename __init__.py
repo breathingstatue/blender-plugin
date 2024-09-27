@@ -3,7 +3,7 @@ Name:    init
 Purpose: Init file for the Blender Add-On
 
 Description:
-Marv's Add-On for Re-Volt with Theman's Update 
+Marv's Add-On for Re-Volt with Theman's update 
 """
 
 from collections import defaultdict
@@ -133,7 +133,7 @@ if "w_in" in locals():
 if "w_out" in locals():
     importlib.reload(w_out)
 
-from .common import DialogOperator, TEX_ANIM_MAX, TEX_PAGES_MAX
+from .common import DialogOperator, ShadowSaveOperator, ConfirmShadowSaveOperator, TEX_ANIM_MAX, TEX_PAGES_MAX
 from .common import FACE_DOUBLE, FACE_TRANSLUCENT, FACE_MIRROR, FACE_TRANSL_TYPE, FACE_TEXANIM, FACE_NOENV, FACE_ENV, FACE_CLOTH, FACE_SKIP
 from .common import NCP_DOUBLE, NCP_NO_SKID, NCP_OIL, NCP_NON_PLANAR, NCP_OBJECT_ONLY, NCP_CAMERA_ONLY, NCP_NOCOLL, MATERIALS
 from .layers import select_ncp_material, get_face_material, set_face_material, set_face_texture, get_face_texture, update_envmapping, update_no_envmapping
@@ -171,8 +171,8 @@ from .ui.migpanel import RVIO_PT_RevoltMIGPanel
 bl_info = {
 "name": "Re-Volt",
 "author": "Marvin Thiel & Theman",
-"version": (20, 24, 8),
-"blender": (4, 1, 0),
+"version": (20, 24, 9),
+"blender": (4, 2, 2),
 "location": "File > Import-Export",
 "description": "Import and export Re-Volt file formats.",
 "wiki_url": "https://re-volt.github.io/re-volt-addon/",
@@ -366,6 +366,12 @@ def register():
         description = "Applies the object location on export. Should be disabled for single/instance ncp files"
     )
     
+    bpy.types.Scene.export_camber = bpy.props.BoolProperty(
+        name="Export Camber",
+        description="Include camber values in the parameters.txt export",
+        default=False
+    )
+    
     bpy.types.Object.is_hull_sphere = bpy.props.BoolProperty(
         name = "Is Interior Sphere",
         default = False,
@@ -455,31 +461,29 @@ def register():
         default=False
     )
     
-    bpy.types.Scene.shadow_quality = bpy.props.IntProperty(
+    bpy.types.Scene.shadow_quality = bpy.props.EnumProperty(
         name = "Quality",
-        min = 0,
-        max = 32,
-        default = 15,
+        items = [
+            ('32', "32 Samples", "Render with 32 samples"),
+            ('64', "64 Samples", "Render with 64 samples"),
+            ('128', "128 Samples", "Render with 128 samples"),
+            ('256', "256 Samples", "Render with 256 samples"),
+            ('512', "512 Samples", "Render with 512 samples"),
+        ],
+        default = '128',
         description = "The amount of samples the shadow is rendered with "
                       "(number of samples taken extra)"
     )
     
-    bpy.types.Scene.shadow_resolution = bpy.props.IntProperty(
+    bpy.types.Scene.shadow_resolution = bpy.props.EnumProperty(
         name = "Resolution",
-        min = 32,
-        max = 8192,
-        default = 128,
-        description = "Texture resolution of the shadow.\n"
-                      "Default: 128x128 pixels"
-    )
-    
-    bpy.types.Scene.shadow_softness = bpy.props.FloatProperty(
-        name = "Softness",
-        min = 0.1,
-        max = 100.0,
-        default = 1,
-        description = "Softness of the shadow "
-                      "(Light size for ray shadow sampling)"
+        description = "The resolution of the shadow.bmp",
+        items = [
+            ('128', "128x128", "128x128 Resolution"),
+            ('256', "256x256", "256x256 Resolution"),
+            ('512', "512x512", "512x512 Resolution")
+        ],
+        default = '128'
     )
     
     bpy.types.Scene.shadow_table = bpy.props.StringProperty(
@@ -940,6 +944,8 @@ def register():
     
     #Register Operators
     bpy.utils.register_class(DialogOperator)
+    bpy.utils.register_class(ShadowSaveOperator)
+    bpy.utils.register_class(ConfirmShadowSaveOperator)
     bpy.utils.register_class(ImportRV)
     bpy.utils.register_class(ExportRV)
     bpy.utils.register_class(RVIO_OT_ReadCarParameters)
@@ -1060,6 +1066,8 @@ def unregister():
     bpy.utils.unregister_class(RVIO_OT_ReadCarParameters)
     bpy.utils.unregister_class(ExportRV)
     bpy.utils.unregister_class(ImportRV)
+    bpy.utils.unregister_class(ConfirmShadowSaveOperator)
+    bpy.utils.unregister_class(ShadowSaveOperator)
     bpy.utils.unregister_class(DialogOperator)
     
     del bpy.types.Scene.copied_trigger_properties
@@ -1123,7 +1131,7 @@ def unregister():
     del bpy.types.Scene.ta_max_slots
     del bpy.types.Scene.texture_animations
     del bpy.types.Scene.shadow_table
-    del bpy.types.Scene.shadow_softness
+    del bpy.types.Scene.blur_strength
     del bpy.types.Scene.shadow_resolution
     del bpy.types.Scene.shadow_quality
     del bpy.types.Object.ignore_ncp
@@ -1140,6 +1148,7 @@ def unregister():
     del bpy.types.Object.bcube_mesh_indices
     del bpy.types.Object.is_hull_convex
     del bpy.types.Object.is_hull_sphere
+    del bpy.types.Scene.export_camber
     del bpy.types.Scene.apply_rotation
     del bpy.types.Scene.apply_scale
     del bpy.types.Scene.use_tex_num

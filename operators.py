@@ -15,6 +15,7 @@ import time
 import subprocess
 import shutil
 import bmesh
+import math
 import mathutils
 from mathutils import Vector as BlenderVector
 from bpy_extras.io_utils import ExportHelper
@@ -1102,18 +1103,35 @@ class MaterialAssignmentAuto(bpy.types.Operator):
 
     def assign_regular_materials(self, obj, material_suffix):
         base_name = self.get_base_name_for_layers(obj)
+
+        # First, try to find materials with the exact base name + material suffix
         prefixed_material_name = f"{base_name}{material_suffix}"
-        generic_material_name = material_suffix
 
-        material = bpy.data.materials.get(prefixed_material_name) or bpy.data.materials.get(generic_material_name)
+        # Check if the material exists
+        material = bpy.data.materials.get(prefixed_material_name)
 
+        # If the specific material (e.g., "spring0.prm_Col") is not found, try without the number (e.g., "spring.prm_Col")
         if not material:
-            self.report({'WARNING'}, f"Material {prefixed_material_name} or {generic_material_name} not found.")
+            # Try without numbers (e.g., "spring.prm_Col")
+            base_name_no_number = ''.join([i for i in base_name if not i.isdigit()])
+            prefixed_material_name_no_number = f"{base_name_no_number}{material_suffix}"
+            material = bpy.data.materials.get(prefixed_material_name_no_number)
+
+        # If still no material, try a generic material suffix (e.g., "_Col" or "_Env")
+        if not material:
+            generic_material_name = material_suffix
+            material = bpy.data.materials.get(generic_material_name)
+
+        # If no material was found, report a warning
+        if not material:
+            self.report({'WARNING'}, f"Material {prefixed_material_name} or {prefixed_material_name_no_number} or {generic_material_name} not found.")
             return
 
+        # Ensure material is in the object's material slots
         if material.name not in obj.data.materials:
             obj.data.materials.append(material)
 
+        # Assign the material to all selected faces
         bm = bmesh.from_edit_mesh(obj.data)
         if bm is None:
             return
@@ -1123,6 +1141,7 @@ class MaterialAssignmentAuto(bpy.types.Operator):
             if face.select:
                 face.material_index = material_index
 
+        # Update the mesh to reflect changes
         bmesh.update_edit_mesh(obj.data)
     
 class MaterialAssignment(bpy.types.Operator):
@@ -1266,21 +1285,35 @@ class MaterialAssignment(bpy.types.Operator):
 
     def assign_regular_materials(self, obj, material_suffix):
         base_name = self.get_base_name_for_layers(obj)
+
+        # First, try to find materials with the exact base name + material suffix
         prefixed_material_name = f"{base_name}{material_suffix}"
-        generic_material_name = material_suffix
 
-        # Check for materials with and without prefixes
-        material = bpy.data.materials.get(prefixed_material_name) or bpy.data.materials.get(generic_material_name)
+        # Check if the material exists
+        material = bpy.data.materials.get(prefixed_material_name)
 
+        # If the specific material (e.g., "spring0.prm_Col") is not found, try without the number (e.g., "spring.prm_Col")
         if not material:
-            self.report({'WARNING'}, f"Material {prefixed_material_name} or {generic_material_name} not found.")
+            # Try without numbers (e.g., "spring.prm_Col")
+            base_name_no_number = ''.join([i for i in base_name if not i.isdigit()])
+            prefixed_material_name_no_number = f"{base_name_no_number}{material_suffix}"
+            material = bpy.data.materials.get(prefixed_material_name_no_number)
+
+        # If still no material, try a generic material suffix (e.g., "_Col" or "_Env")
+        if not material:
+            generic_material_name = material_suffix
+            material = bpy.data.materials.get(generic_material_name)
+
+        # If no material was found, report a warning
+        if not material:
+            self.report({'WARNING'}, f"Material {prefixed_material_name} or {prefixed_material_name_no_number} or {generic_material_name} not found.")
             return
 
-        # Ensure material is in object material slot
+        # Ensure material is in the object's material slots
         if material.name not in obj.data.materials:
             obj.data.materials.append(material)
 
-        # Set the material to all selected faces
+        # Assign the material to all selected faces
         bm = bmesh.from_edit_mesh(obj.data)
         if bm is None:
             return
@@ -1300,11 +1333,18 @@ class TextureAssigner(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def get_texture_items(self, context):
-        # Filter out specific images including "Render Result", "Viewer Node", "carbox.bmp", and "shadow.bmp"
-        excluded_images = {"Render Result", "Viewer Node", "carbox.bmp", "shadow.bmp"}
-        items = [(img.name, img.name, "") for img in bpy.data.images if img.name not in excluded_images]
+        # Update the exclusion filter to check for partial names like 'carbox' and 'shadow' in the image name
+        excluded_keywords = ["Render Result", "Viewer Node", "carbox", "shadow"]
+    
+        items = [
+            (img.name, img.name, "") 
+            for img in bpy.data.images 
+            if not any(keyword in img.name for keyword in excluded_keywords)
+        ]
+    
         if not items:
             items.append(('None', 'No Textures Available', ''))
+    
         return items
 
     texture_name: bpy.props.EnumProperty(
@@ -1482,85 +1522,242 @@ class BakeShadow(bpy.types.Operator):
     bl_idname = "lighttools.bake_shadow"
     bl_label = "Bake Shadow"
     bl_description = "Creates a shadow plane beneath the selected object"
-    
-    def find_body_object(self, context):
-        # Iterate over selected objects and set the active object to 'body' or 'body.prm'
-        for obj in context.selected_objects:
-            if obj.name.lower() in ["body", "body.prm"]:
-                context.view_layer.objects.active = obj
-                return obj
-        # Fallback to the first selected object if none are named 'body' or 'body.prm'
-        return context.selected_objects[0]
-    
+
+    def check_for_selected(self, context):
+        """Checks if objects are selected. If none are selected, prompts the user to select a car."""
+        if not context.selected_objects:
+            msg_box("Select Car first", "INFO")
+            return False  # Indicates that the operation should be canceled
+        return True  # Indicates that there are selected objects and the operation can continue
+
     def create_unique_material(self, base_name="ShadowMaterial"):
-        # Create a unique material name with an incremented suffix if necessary
         material_name = base_name
         index = 1
-        
         while material_name in bpy.data.materials:
             material_name = f"{base_name}.{index:03d}"
             index += 1
-        
-        # Create the new material
         new_material = bpy.data.materials.new(name=material_name)
         new_material.use_nodes = True
-        
         return new_material, material_name
+
+    def assign_texture_to_material(self, mat, image):
+        """Assigns a texture image to the material for baking."""
+        nodes = mat.node_tree.nodes
+        links = mat.node_tree.links
+
+        # Add image texture node
+        tex_image_node = nodes.new('ShaderNodeTexImage')
+        tex_image_node.image = image
+        links.clear()  # Clear existing links to avoid any issues
+
+        # Set the image node as active for baking
+        mat.node_tree.nodes.active = tex_image_node
+
+    def adjust_brightness(self, texture, factor):
+        for i in range(0, len(texture.pixels), 4):
+            for j in range(3):
+                texture.pixels[i + j] = min(texture.pixels[i + j] * factor, 1.0)
+        texture.update()
+
+    def darken_shadow(self, texture, threshold=0.99):
+        for i in range(0, len(texture.pixels), 4):
+            is_shadow_pixel = all(texture.pixels[i + j] < threshold for j in range(3))
+            if is_shadow_pixel:
+                for j in range(3):
+                    texture.pixels[i + j] = 0.0
+        texture.update()
+
+    def invert_shadow(self, texture):
+        for i in range(0, len(texture.pixels), 4):
+            for j in range(3):
+                texture.pixels[i + j] = 1.0 - texture.pixels[i + j]
+        texture.update()
+
+    def blur_texture_edges(self, material, image):
+        """Applies a blur on the shadow edges using a gradient texture with a fixed blur scale."""
+        nodes = material.node_tree.nodes
+        links = material.node_tree.links
+
+        # Clear existing nodes
+        nodes.clear()
+
+        # Add the image texture node (this is the texture being blurred)
+        tex_image_node = nodes.new('ShaderNodeTexImage')
+        tex_image_node.image = image
+
+        # Add a gradient texture for edge softening
+        gradient_node = nodes.new('ShaderNodeTexGradient')
+        gradient_node.gradient_type = 'RADIAL'
+
+        # Add a mapping node to control the gradient scale (fixed blur strength)
+        mapping_node = nodes.new('ShaderNodeMapping')
+        mapping_node.inputs['Scale'].default_value = (1.5, 1.5, 1.5)  # Fixed blur scale, adjust if necessary
+
+        # Add the color ramp to control the blending of black and white
+        color_ramp_node = nodes.new('ShaderNodeValToRGB')
+        color_ramp_node.color_ramp.interpolation = 'LINEAR'
+
+        # Set the black (background) value
+        color_ramp_node.color_ramp.elements[0].position = 0.5  # Adjust as needed
+        color_ramp_node.color_ramp.elements[0].color = (0.0, 0.0, 0.0, 1.0)  # Black
+
+        # Set the white (shadow) value
+        color_ramp_node.color_ramp.elements[1].position = 0.99  # Keep the shadow white
+        color_ramp_node.color_ramp.elements[1].color = (1.0, 1.0, 1.0, 1.0)  # White
+
+        # Add a mix node to blend the shadow and the gradient for softening edges
+        mix_node = nodes.new('ShaderNodeMixRGB')
+        mix_node.blend_type = 'MIX'
+        mix_node.inputs['Fac'].default_value = 1.0  # Full opacity
+
+        # Connect the gradient to the mix shader
+        links.new(mapping_node.outputs['Vector'], gradient_node.inputs['Vector'])
+        links.new(gradient_node.outputs['Color'], color_ramp_node.inputs['Fac'])  # Mask for edges
+
+        # Connect the shadow texture to the mix shader
+        links.new(tex_image_node.outputs['Color'], mix_node.inputs[2])
+
+        # Connect the color ramp to the mix node to ensure the shadow stays white
+        links.new(color_ramp_node.outputs['Color'], mix_node.inputs[1])
+
+        # Connect the final mix to the material output
+        output_node = nodes.new('ShaderNodeOutputMaterial')
+        links.new(mix_node.outputs['Color'], output_node.inputs['Surface'])
+
+    def bake_and_process(self, context, margin, brightness_factor, darken_threshold, texture_name_suffix, material):
+        """Bake and process the texture with given margin and brightness settings."""
+        shadow_resolution = int(context.scene.shadow_resolution)
+        shadow_tex = bpy.data.images.new(f"Shadow_{texture_name_suffix}", width=shadow_resolution, height=shadow_resolution, alpha=True)
+
+        # Assign the texture to the material and make it active for baking
+        self.assign_texture_to_material(material, shadow_tex)
+
+        # Unwrap with specified margin and bake
+        bpy.ops.uv.unwrap(method='ANGLE_BASED', margin=margin)
+        bpy.ops.object.bake(type='AO')
+
+        # Adjust brightness
+        self.adjust_brightness(shadow_tex, brightness_factor)
+
+        # Darken the shadow based on the threshold
+        self.darken_shadow(shadow_tex, darken_threshold)
+
+        # Invert the colors
+        self.invert_shadow(shadow_tex)
+
+        return shadow_tex
+
+    def bake_blurred_texture_to_image(self, context, shadow_plane, material):
+        """Bakes the material with the blur effect to a UV image and assigns it to the shadow plane."""
+        shadow_resolution = int(context.scene.shadow_resolution)
+
+        # Create a new image to store the baked blur
+        shadow_image = bpy.data.images.new(name="shadow", width=shadow_resolution, height=shadow_resolution, alpha=True)
+
+        # Ensure the shadow_plane has a UV map
+        if not shadow_plane.data.uv_layers:
+            bpy.ops.mesh.uv_texture_add()
+
+        # Set the new image as active in the material for baking
+        nodes = material.node_tree.nodes
+        links = material.node_tree.links
+
+        # Create the texture image node for baking
+        tex_image_node = nodes.new('ShaderNodeTexImage')
+        tex_image_node.image = shadow_image
+        nodes.active = tex_image_node  # Set the image texture node as active
+
+        # Ensure the shadow plane is the active object
+        context.view_layer.objects.active = shadow_plane
+        shadow_plane.select_set(True)
+
+        # Bake the material to the image (using 'COMBINED' to include all shaders)
+        bpy.ops.object.bake(type='COMBINED')
+
+        # The blurred image will now appear in Blender's texture image list
+        # Assign the baked image to the shadow plane for final output
+        self.assign_final_texture(shadow_plane, shadow_image)
+
+        return shadow_image
+
+    def assign_final_texture(self, shadow_plane, shadow_tex):
+        """Assigns the final baked shadow texture to the shadow plane."""
+        mat = shadow_plane.active_material
+        nodes = mat.node_tree.nodes
+        links = mat.node_tree.links
+
+        # Add Image Texture node and assign the baked texture
+        tex_image_node = nodes.new('ShaderNodeTexImage')
+        tex_image_node.image = shadow_tex
+
+        # Link texture to the material output
+        bsdf_node = nodes.get("Principled BSDF")  # Assuming you're using Principled BSDF
+        if bsdf_node:
+            links.new(tex_image_node.outputs['Color'], bsdf_node.inputs['Base Color'])
+
+        shadow_plane.active_material.use_nodes = True
 
     def bake_shadow(self, context):
         original_active = context.view_layer.objects.active
         scene = context.scene
         original_engine = scene.render.engine
-        
-        # Activate Cycles
+
+        # Check for selected objects
+        if not self.check_for_selected(context):
+            return {'CANCELLED'}
+
+        # Use shadow quality from scene
         scene.render.engine = 'CYCLES'
-        scene.cycles.samples = scene.shadow_quality  # Set sampling for baking quality
-        scene.cycles.max_bounces = 1  # Minimal bounces to capture direct shadows
-        scene.cycles.diffuse_bounces = 0  # No diffuse bounces, direct light only
-        scene.cycles.glossy_bounces = 0  # No glossy bounces, we don't need reflections
-        scene.cycles.transmission_bounces = 0  # No transmission bounces, no need for transparency
-        scene.cycles.transparent_max_bounces = 0  # No transparency handling required
-        scene.cycles.volume_bounces = 0  # No volume scattering required
-        
-        # Set the active object to the body or body.prm
-        shade_obj = self.find_body_object(context)
+        scene.cycles.samples = int(scene.shadow_quality)
+        scene.cycles.max_bounces = 1
+        scene.cycles.diffuse_bounces = 0
+        scene.cycles.glossy_bounces = 0
+        scene.cycles.transmission_bounces = 0
+        scene.cycles.transparent_max_bounces = 0
+        scene.cycles.volume_bounces = 0
 
-        # Use SUN light for clear borders
+        # Proceed with baking if objects are selected
+        shade_obj = context.selected_objects[0]
+
+        # Setup light
         lamp_data_pos = bpy.data.lights.new(name="ShadePositive", type="AREA")
-        lamp_data_pos.energy = 1.0
-        lamp_data_pos.size = scene.shadow_softness  # Light size to control shadow softness
+        lamp_data_pos.energy = 2000.0
+        lamp_data_pos.size = 2.0
         lamp_positive = bpy.data.objects.new(name="ShadePositive", object_data=lamp_data_pos)
-
-        # Link light to the scene
         scene.collection.objects.link(lamp_positive)
 
         all_objs = [ob_child for ob_child in context.scene.objects if ob_child.parent == shade_obj] + [shade_obj]
-        
-        # Get the bounds taking into account all child objects (wheels, etc.)
+
         far_left = min([min([(ob.matrix_world[0][3] + ob.bound_box[i][0] * shade_obj.scale[0]) for i in range(0, 8)]) for ob in all_objs])
         far_right = max([max([(ob.matrix_world[0][3] + ob.bound_box[i][0] * shade_obj.scale[0]) for i in range(0, 8)]) for ob in all_objs])
         far_front = max([max([(ob.matrix_world[1][3] + ob.bound_box[i][1] * shade_obj.scale[1]) for i in range(0, 8)]) for ob in all_objs])
         far_back = min([min([(ob.matrix_world[1][3] + ob.bound_box[i][1] * shade_obj.scale[1]) for i in range(0, 8)]) for ob in all_objs])
         far_bottom = min([min([(ob.matrix_world[2][3] + ob.bound_box[i][2] * shade_obj.scale[2]) for i in range(0, 8)]) for ob in all_objs])
-        
-        # Get the dimensions to set the scale
+        far_top = max([(ob.matrix_world @ BlenderVector(corner))[2] for ob in all_objs for corner in ob.bound_box])
+
         dim_x = abs(far_left - far_right)
         dim_y = abs(far_front - far_back)
 
-        # Location for the shadow plane
-        loc = ((far_right + far_left)/2,
-               (far_front + far_back)/2,
-                far_bottom)
-        
-        # Create and position the shadow plane
+        loc = ((far_right + far_left) / 2, (far_front + far_back) / 2, far_bottom)
+
+        object_height = far_top - far_bottom
+        light_height = far_top + object_height * 0.5
+        lamp_positive.location = (loc[0], loc[1], light_height)
+        lamp_positive.rotation_euler = (math.radians(0), 0, 0)
+
+        # Ensure we're in object mode before running selection
+        if context.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        # Deselect all objects
         bpy.ops.object.select_all(action='DESELECT')
+
         bpy.ops.mesh.primitive_plane_add(size=1, enter_editmode=False, align='WORLD', location=loc)
         shadow_plane = context.active_object
         shadow_plane.name = 'ShadowPlane'
-        
-        # Generate shadow table using the initial plane dimensions
-        sphor = (shadow_plane.location[0] - (shadow_plane.dimensions[0]/2))
-        spver = ((shadow_plane.dimensions[1]/2) - shadow_plane.location[1])
+
+        sphor = (shadow_plane.location[0] - (shadow_plane.dimensions[0] / 2))
+        spver = ((shadow_plane.dimensions[1] / 2) - shadow_plane.location[1])
 
         sleft = (sphor - shade_obj.location[0]) * 100
         sright = (shade_obj.location[0] - sphor) * 100
@@ -1568,74 +1765,79 @@ class BakeShadow(bpy.types.Operator):
         sback = (shade_obj.location[1] - spver) * 100
         sheight = (far_bottom - shade_obj.location[2]) * 100
         shtable = ";)SHADOWTABLE {:.4f} {:.4f} {:.4f} {:.4f} {:.4f}".format(
-            sleft, sright, sfront, sback, sheight
-        )
+            sleft, sright, sfront, sback, sheight)
 
-        # Update the scene's shadow_table property
         scene["shadow_table"] = shtable
         scene.shadow_table = shtable
 
-        # Scale the shadow plane by 1.5 times in X and Y
         shadow_plane.scale.x *= 1.5
         shadow_plane.scale.y *= 1.5
 
-        # Create a new unique material and assign it to the shadow plane
+        # Apply scale
+        bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+
         mat, material_name = self.create_unique_material("ShadowMaterial")
         shadow_plane.data.materials.append(mat)
-        nodes = mat.node_tree.nodes
-        links = mat.node_tree.links
-        nodes.clear()
 
-        # Create a new texture for the shadow
-        texture_name = f"Shadow_{material_name}"
-        shadow_tex = bpy.data.images.new(texture_name, width=scene.shadow_resolution, height=scene.shadow_resolution)
-
-        # Setup the nodes
-        texture_node = nodes.new('ShaderNodeTexImage')
-        texture_node.image = shadow_tex
-        diffuse_node = nodes.new('ShaderNodeBsdfDiffuse')
-        material_output_node = nodes.new('ShaderNodeOutputMaterial')
-
-        links.new(texture_node.outputs['Color'], diffuse_node.inputs['Color'])
-        links.new(diffuse_node.outputs['BSDF'], material_output_node.inputs['Surface'])
-
-        # Set render settings for baking
-        scene.render.bake.use_pass_direct = True
-        scene.render.bake.use_pass_indirect = False
-        scene.render.bake.use_pass_color = True
-        scene.render.bake.use_clear = True
-
-        # Bake the shadow onto the plane
+        # Prepare for first bake
         context.view_layer.objects.active = shadow_plane
         shadow_plane.select_set(True)
         bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.uv.unwrap(method='ANGLE_BASED', margin=0.001)
-        bpy.ops.object.mode_set(mode='OBJECT')
-        bpy.ops.object.bake(type='AO')
 
-        # Invert the baked shadow texture for Re-Volt
-        for pixel in range(0, len(shadow_tex.pixels), 4):
-            for channel in range(3):
-                shadow_tex.pixels[pixel + channel] = 1.0 - shadow_tex.pixels[pixel + channel]
+        # First bake
+        shadow_tex1 = self.bake_and_process(context, margin=0.01, brightness_factor=1.7, darken_threshold=0.99, texture_name_suffix="Bake1", material=mat)
 
-        shadow_tex.update()
-
-        # Save the baked image
-        shadow_tex.filepath_raw = f"//{texture_name}.png"
-        shadow_tex.file_format = 'PNG'
-        shadow_tex.save()
-
-        # Remove the light after baking
-        bpy.data.objects.remove(lamp_positive)
-
-        # Restore the original render engine
-        scene.render.engine = original_engine
+        # Apply edge softening effect
+        self.blur_texture_edges(mat, shadow_tex1)
         
-        # Cleanup: deselect everything first
+        # Assign final texture to ShadowPlane material
+        self.assign_final_texture(shadow_plane, shadow_tex1)
+
+        # Bake the blurred texture to a UV image and assign it to the shadow plane
+        blurred_texture_image = self.bake_blurred_texture_to_image(context, shadow_plane, mat)
+
+        # **Remove Shadow_bake1 texture after baking**
+        if "Shadow_Bake1" in bpy.data.images:
+            bpy.data.images.remove(bpy.data.images["Shadow_Bake1"])
+            
+        # Remove ShadowPlane after baking is done
+        bpy.data.objects.remove(shadow_plane, do_unlink=True)
+
+        # Cleanup
+        bpy.data.objects.remove(lamp_positive)
+        scene.render.engine = original_engine
+
+        # Deselect objects
+        if context.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
         bpy.ops.object.select_all(action='DESELECT')
 
+    def restore_selection(self, context, original_selection, original_active):
+        """Restores the original selection and active object after baking."""
+        # Deselect all objects first
+        bpy.ops.object.select_all(action='DESELECT')
+        
+        # Reselect the original objects
+        for obj in original_selection:
+            obj.select_set(True)
+            
+        # Restore the original active object
+        context.view_layer.objects.active = original_active
+
     def execute(self, context):
+        # Store the original selection and active object
+        original_active = context.view_layer.objects.active
+        original_selection = context.selected_objects[:]
+
+        # Perform shadow baking
         self.bake_shadow(context)
+        
+        # Restore the original selection and active object
+        self.restore_selection(context, original_selection, original_active)
+        
+        # Ask if the user wants to save the shadow
+        bpy.ops.lighttools.confirm_shadow_save('INVOKE_DEFAULT')
+
         return {"FINISHED"}
     
 class BakeVertex(bpy.types.Operator):

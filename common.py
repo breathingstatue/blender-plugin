@@ -304,6 +304,16 @@ Axes are saved differently and many indices are saved in reverse order.
 def to_blender_axis(vec):
 	return (vec[0], vec[2], -vec[1])
 
+# Converts camber angle from degrees to radians
+def to_blender_angle(camber_angle):
+    return math.radians(camber_angle)
+
+def to_revolt_camber(camber_in_radians):
+    # Convert radians to degrees for Re-Volt
+    camber_in_degrees = math.degrees(camber_in_radians)
+
+    # Optionally apply any transformations if needed for Re-Volt's system
+    return camber_in_degrees
 
 def to_blender_coord(vec):
 	return (vec[0] * SCALE, vec[2] * SCALE, -vec[1] * SCALE)
@@ -618,7 +628,75 @@ class DialogOperator(bpy.types.Operator):
 		column = row.column()
 		for line in str.split(dialog_message, "\n"):
 			column.label(text=line)
+			
+class ConfirmShadowSaveOperator(bpy.types.Operator):
+    bl_idname = "lighttools.confirm_shadow_save"
+    bl_label = "Save Shadow?"
+    bl_description = "Do you want to save the shadow?"
 
+    def execute(self, context):
+        """Run the save shadow image confirmation."""
+        bpy.ops.lighttools.save_shadow('INVOKE_DEFAULT')
+        return {'FINISHED'}
+
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text="Save shadow as .bmp or .png?")  # Message in the dialog
+    
+    def invoke(self, context, event):
+        """Invoke the props_dialog method, which automatically adds OK/Cancel buttons."""
+        return context.window_manager.invoke_props_dialog(self)
+
+class ShadowSaveOperator(bpy.types.Operator):
+    bl_idname = "lighttools.save_shadow"
+    bl_label = "Save Shadow Confirmation"
+    
+    # Property to hold the path where the image will be saved
+    filepath: bpy.props.StringProperty(subtype="FILE_PATH", default="//shadow")
+    
+    # Property for choosing between BMP and PNG
+    file_format: bpy.props.EnumProperty(
+        name="File Format",
+        description="Choose file format",
+        items=[
+            ('BMP', "BMP", "Save as .bmp"),
+            ('PNG', "PNG", "Save as .png")
+        ],
+        default='BMP'
+    )
+    
+    def execute(self, context):
+        """Save the shadow image after confirmation."""
+        shadow_image = bpy.data.images.get("shadow")
+        if shadow_image:
+            # Set the file format and filepath extension accordingly
+            shadow_image.filepath_raw = self.filepath
+            shadow_image.file_format = self.file_format
+
+            # Update the extension based on the selected file format
+            if self.file_format == 'BMP' and not self.filepath.lower().endswith(".bmp"):
+                shadow_image.filepath_raw += ".bmp"
+            elif self.file_format == 'PNG' and not self.filepath.lower().endswith(".png"):
+                shadow_image.filepath_raw += ".png"
+
+            shadow_image.save()
+            self.report({'INFO'}, f"Shadow saved to {shadow_image.filepath_raw}")
+        else:
+            self.report({'ERROR'}, "Shadow image not found")
+        return {'FINISHED'}
+    
+    def draw(self, context):
+        """Draw the file format selection in the file browser."""
+        layout = self.layout
+        layout.prop(self, "file_format", text="File Format")
+    
+    def invoke(self, context, event):
+        """Open file browser for saving when 'OK' is clicked."""
+        self.filepath = "//shadow"
+        
+        wm = context.window_manager
+        wm.fileselect_add(self)  # Opens file browser for saving the file
+        return {'RUNNING_MODAL'}
 
 def msg_box(message, icon="INFO"):
 	global dialog_message

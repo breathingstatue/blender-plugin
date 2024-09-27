@@ -10,8 +10,16 @@ TO DO LIST:
 
 20.24.?
 Objects (.fob)
+Replays (.rpl)
 
 FULL CHANGELOG:
+
+20.24.9
+Bugfixes for Car import and Material Preview
+UI improvement
+Improved Car Shadow Baking
+Improved Car Texture Selector
+camber import / export for Cars
 
 20.24.8
 Texture Number Assigner
@@ -23,8 +31,6 @@ Texture animations for .m file
 Improved import/export modules
 Added some face properties (face_texture_animation, face_ncp_no_planar)
 Deleted some duplicate code (Vertex Light Baking had some duplicate code)
-
-20.24.8 (older version)
 .m (Model) import/export
 Pins import/export
 Spinner import/export

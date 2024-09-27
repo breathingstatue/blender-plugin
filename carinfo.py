@@ -274,7 +274,22 @@ def process_words(fd):
     
     return struct
 
+def read_camber(fd):
+    """ Reads camber angle, accounting for optional ;)Camber tag """
+    flt = ""
+    ch = fd.read(1)
 
+    while is_space(ch):
+        ch = fd.read(1)
+        
+    while not is_space(ch):
+        flt += ch
+        ch = fd.read(1)
+
+    # Remove the ;) and return the float value
+    flt = flt.replace(";", "").replace(")", "").strip()
+
+    return float(flt)
 
 """ Helper functions for processing files """
 
@@ -366,6 +381,7 @@ dispatcher = {
     "maxpos":          read_float,
     "skidwidth":       read_float,
     "toein":           read_float,
+    "camber":          read_camber,
     "axlefriction":    read_float,
 
     # Spring data
@@ -401,26 +417,8 @@ dispatcher = {
     "aggression":      read_float
 }
 
-
-
 def read_parameters(filepath):
     print("Reading {}...".format(filepath))
     with open(filepath) as fd:
         parameters = read_struct(fd)
         return parameters
-
-
-
-# filepath = "/home/marv/.rvgl/online/cars/"
-def test():
-    for folder in os.listdir(filepath):
-        print("Testing", folder)
-        for f in os.listdir(os.path.join(filepath, folder)):
-            if f == "parameters.txt":
-                # with open(os.path.join(filepath, folder, f), "r") as fd:
-
-                with open(os.path.join(filepath, folder, f)) as fd:
-                    parameters = read_struct(fd)
-                    print(len(parameters))
-
-# test()

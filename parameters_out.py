@@ -14,7 +14,7 @@ from math import radians
 from mathutils import Vector, Matrix, Euler
 import numpy as np
 from . import common
-from .common import to_revolt_coord, to_revolt_scale
+from .common import to_revolt_coord, to_revolt_scale, to_revolt_camber
 from .layers import get_average_vcol2
 
 # Check if 'bpy' is already in locals to determine if this is a reload scenario
@@ -138,7 +138,6 @@ def append_front_left_wheel(params, body, processed):
     ]
     wheels = get_objects_by_exact_names(wheel_names, parent_object=body)
 
-    # Check for any of the matching keys
     child = wheels.get("wheelfl") or wheels.get("wheelfl.prm") or wheels.get("wheell.prm")
     if child and child.name not in processed:
         params += f";====================\n"
@@ -157,6 +156,9 @@ def append_front_left_wheel(params, body, processed):
         params += f"MaxPos\t\t5.000000\n"
         params += f"SkidWidth\t10.000000\n"
         params += f"ToeIn\t\t0.000000\n"
+        camber_value = get_camber_for_wheel(child, 0)
+        if camber_value is not None:
+            params += f";)Camber\t{camber_value:.6f}\n"
         params += f"AxleFriction\t0.020000\n"
         params += f"Grip\t\t0.014000\n"
         params += f"StaticFriction\t1.500000\nKineticFriction\t1.500000\n"
@@ -189,6 +191,9 @@ def append_front_right_wheel(params, body, processed):
         params += f"MaxPos\t\t5.000000\n"
         params += f"SkidWidth\t10.000000\n"
         params += f"ToeIn\t\t0.000000\n"
+        camber_value = get_camber_for_wheel(child, 1)
+        if camber_value is not None:
+            params += f";)Camber\t{camber_value:.6f}\n"
         params += f"AxleFriction\t0.020000\n"
         params += f"Grip\t\t0.014000\n"
         params += f"StaticFriction\t1.500000\nKineticFriction\t1.500000\n"
@@ -221,6 +226,9 @@ def append_back_left_wheel(params, body, processed):
         params += f"MaxPos\t\t5.000000\n"
         params += f"SkidWidth\t10.000000\n"
         params += f"ToeIn\t\t0.000000\n"
+        camber_value = get_camber_for_wheel(child, 2)
+        if camber_value is not None:
+            params += f";)Camber\t{camber_value:.6f}\n"
         params += f"AxleFriction\t0.050000\n"
         params += f"Grip\t\t0.014000\n"
         params += f"StaticFriction\t1.500000\nKineticFriction\t1.500000\n"
@@ -253,6 +261,9 @@ def append_back_right_wheel(params, body, processed):
         params += f"MaxPos\t\t5.000000\n"
         params += f"SkidWidth\t10.000000\n"
         params += f"ToeIn\t\t0.000000\n"
+        camber_value = get_camber_for_wheel(child, 3)
+        if camber_value is not None:
+            params += f";)Camber\t{camber_value:.6f}\n"
         params += f"AxleFriction\t0.050000\n"
         params += f"Grip\t\t0.014000\n"
         params += f"StaticFriction\t1.500000\nKineticFriction\t1.500000\n"
@@ -548,6 +559,23 @@ def get_body_env_rgb():
     bpy.ops.object.mode_set(mode='OBJECT')
 
     return env_rgb
+
+def get_camber_for_wheel(wheel_obj, wheel_index):
+    # Check if the camber should be exported
+    if bpy.context.scene.export_camber:
+        # Assuming the camber is applied as a rotation around the Y-axis
+        camber_in_radians = wheel_obj.rotation_euler.y
+
+        # Convert the camber to the Re-Volt format
+        camber_in_revolt = to_revolt_camber(camber_in_radians)
+
+        # Invert camber for left-side wheels (0 and 2)
+        if wheel_index in [0, 2]:
+            camber_in_revolt = -camber_in_revolt
+
+        return camber_in_revolt
+    else:
+        return None  # If camber is not exported, return None
     
 def export_file(car_name="car", filepath=None, scene=None):
     params = f"{{\n\n;============================================================\n"
