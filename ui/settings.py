@@ -28,8 +28,9 @@ class RVIO_PT_RevoltSettingsPanel(bpy.types.Panel):
         layout.separator()
 
         # PRM Export settings
-        # layout.label("Export PRM (.prm/.m):")
-        # layout.separator()
+        layout.label(text="Export Car (.prm):")
+        layout.prop(scene, "export_camber", text="Copy Wheel Camber")
+        layout.separator()
 
         # World Import settings
         layout.label(text="Import World (.w):")
