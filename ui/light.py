@@ -33,6 +33,7 @@ class RVIO_PT_RevoltLightPanel(bpy.types.Panel):
         col = box.column(align=True)
         col.prop(scene, "shadow_quality")
         col.prop(scene, "shadow_resolution")
+        col.prop(scene, "shadow_strength")
         col.operator("lighttools.bake_shadow")
         layout.prop(scene, "shadow_table")
 
