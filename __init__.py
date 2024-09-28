@@ -485,6 +485,15 @@ def register():
         ],
         default = '128'
     )
+
+    bpy.types.Scene.shadow_strength = bpy.props.IntProperty(
+        name="Shadow Strength",
+        description="Adjust the brightness of the shadow",
+        default=4,
+        min=1,
+        max=8,
+        subtype='FACTOR'
+    )
     
     bpy.types.Scene.shadow_table = bpy.props.StringProperty(
         name = "Shadowtable",
@@ -1131,7 +1140,7 @@ def unregister():
     del bpy.types.Scene.ta_max_slots
     del bpy.types.Scene.texture_animations
     del bpy.types.Scene.shadow_table
-    del bpy.types.Scene.blur_strength
+    del bpy.types.Scene.shadow_strength
     del bpy.types.Scene.shadow_resolution
     del bpy.types.Scene.shadow_quality
     del bpy.types.Object.ignore_ncp

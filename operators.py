@@ -1524,9 +1524,17 @@ class BakeShadow(bpy.types.Operator):
     bl_description = "Creates a shadow plane beneath the selected object"
 
     def check_for_selected(self, context):
-        """Checks if objects are selected. If none are selected, prompts the user to select a car."""
-        if not context.selected_objects:
+        """Checks if exactly one object is selected and it is the car's body. If not, prompts the user."""
+        selected_objects = context.selected_objects
+    
+        # Check if no objects are selected
+        if not selected_objects:
             msg_box("Select Car first", "INFO")
+            return False  # Indicates that the operation should be canceled
+
+        # Check if multiple objects are selected
+        if len(selected_objects) > 1:
+            msg_box("Select Car's body only", "INFO")
             return False  # Indicates that the operation should be canceled
         return True  # Indicates that there are selected objects and the operation can continue
 
@@ -1558,6 +1566,20 @@ class BakeShadow(bpy.types.Operator):
             for j in range(3):
                 texture.pixels[i + j] = min(texture.pixels[i + j] * factor, 1.0)
         texture.update()
+
+    def get_brightness_factor(scene):
+        # Map the slider value (1-8) to brightness factors from 2.0 to 1.3
+        factor_mapping = {
+            1: 2.0,
+            2: 1.9,
+            3: 1.8,
+            4: 1.7,
+            5: 1.6,
+            6: 1.5,
+            7: 1.4,
+            8: 1.3
+        }
+        return factor_mapping.get(scene.shadow_strength, 1.6)
 
     def darken_shadow(self, texture, threshold=0.99):
         for i in range(0, len(texture.pixels), 4):
@@ -1784,8 +1806,11 @@ class BakeShadow(bpy.types.Operator):
         shadow_plane.select_set(True)
         bpy.ops.object.mode_set(mode='EDIT')
 
+       # Get the brightness factor from the scene
+        brightness_factor = self.get_brightness_factor(scene)
+
         # First bake
-        shadow_tex1 = self.bake_and_process(context, margin=0.01, brightness_factor=1.7, darken_threshold=0.99, texture_name_suffix="Bake1", material=mat)
+        shadow_tex1 = self.bake_and_process(context, margin=0.01, brightness_factor=brightness_factor, darken_threshold=0.99, texture_name_suffix="Bake1", material=mat)
 
         # Apply edge softening effect
         self.blur_texture_edges(mat, shadow_tex1)
@@ -1825,16 +1850,20 @@ class BakeShadow(bpy.types.Operator):
         context.view_layer.objects.active = original_active
 
     def execute(self, context):
+        # Check if the selection is valid
+        if not self.check_for_selected(context):
+            return {'CANCELLED'}  # Stop execution if the check fails
+
         # Store the original selection and active object
         original_active = context.view_layer.objects.active
         original_selection = context.selected_objects[:]
 
         # Perform shadow baking
         self.bake_shadow(context)
-        
+    
         # Restore the original selection and active object
         self.restore_selection(context, original_selection, original_active)
-        
+    
         # Ask if the user wants to save the shadow
         bpy.ops.lighttools.confirm_shadow_save('INVOKE_DEFAULT')
 
