@@ -63,6 +63,10 @@ def import_file(filepath, scene):
             bpy.context.scene.collection.objects.link(obj)
             bpy.context.view_layer.objects.active = obj
             assign_uv_tex_material(obj)
+    
+    # Assign materials after importing
+    assign_material_to_all(scene)
+    
     return obj
 
 def import_prm_mesh(prm, filename, filepath, scene, envlist=None):
@@ -283,3 +287,40 @@ def apply_env_data(mesh_data, world, polygons, envlist, obj_name):
     bm.to_mesh(mesh_data)
     mesh_data.update()
     bm.free()
+    
+def assign_material_to_all(scene):
+    """Assign material to all imported objects for both COL and UV_TEX."""
+    # Get all mesh objects in the scene
+    mesh_objects = [obj for obj in scene.objects if obj.type == 'MESH']
+    
+    # Run texture assignment for both material choices
+    set_material_to_col(mesh_objects)
+    set_material_to_texture(mesh_objects)
+
+def set_material_to_col(mesh_objects):
+    """Sets the material to Vertex Colour (_Col) for all mesh objects."""
+    if not mesh_objects:
+        print("No mesh objects selected for material assignment.")
+        return
+
+    for obj in mesh_objects:
+        obj.data.material_choice = 'COL'
+        bpy.context.view_layer.objects.active = obj
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.select_all(action='SELECT')
+        bpy.ops.object.assign_materials_auto()
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+def set_material_to_texture(mesh_objects):
+    """Sets the material to Texture (UV_TEX) for all mesh objects."""
+    if not mesh_objects:
+        print("No mesh objects selected for material assignment.")
+        return
+
+    for obj in mesh_objects:
+        obj.data.material_choice = 'UV_TEX'
+        bpy.context.view_layer.objects.active = obj
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.select_all(action='SELECT')
+        bpy.ops.object.assign_materials_auto()
+        bpy.ops.object.mode_set(mode='OBJECT')

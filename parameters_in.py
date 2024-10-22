@@ -24,17 +24,15 @@ def import_file(filepath, scene):
     """
     PARAMETERS[filepath] = carinfo.read_parameters(filepath)
     # Extract the car name directly from the parameters.txt file
-    car_name = extract_car_name(filepath)
-    print(f"Car Name extracted: {car_name}")
-    import_car(PARAMETERS[filepath], filepath, scene, car_name)
+    import_car(PARAMETERS[filepath], filepath, scene)
     PARAMETERS.pop(filepath)
 
-def import_car(params, filepath, scene, car_name):
+def import_car(params, filepath, scene):
     folder = os.sep.join(filepath.split(os.sep)[:-1])
     imported_objects = []  # List to keep track of all imported objects
 
     # Import all textures with car name appended
-    import_all_textures(folder, car_name)
+    import_all_textures(folder)
     
     body = params["model"][params["body"]["modelnum"]]
     body_loc = to_blender_coord(params["body"]["offset"])
@@ -258,22 +256,20 @@ def extract_car_name(filepath):
                 return line.split('\"')[1].strip()  # Get the text between the quotes
     return "Unknown Car"  # Default if not found
     
-def import_all_textures(folder, car_name):
+def import_all_textures(folder):
     """
-    Import all .bmp files in the given folder as textures and append car name.
+    Import all .bmp files in the given folder as textures without appending car name.
     """
     for image_file in os.listdir(folder):
         if image_file.lower().endswith('.bmp'):
             img_path = os.path.join(folder, image_file)
             img_name = os.path.splitext(image_file)[0]
 
-            # Append car name to the texture
-            img_name_with_car = f"{img_name} ({car_name})"
-
-            if img_name_with_car not in bpy.data.images:
+            # Import texture without appending car name
+            if img_name not in bpy.data.images:
                 img = bpy.data.images.load(img_path)
-                img.name = img_name_with_car
-                print(f"Imported texture: {img_name_with_car}")
+                img.name = img_name  # Use the original name
+                print(f"Imported texture: {img_name}")
                 
 def apply_uv_maps_to_textures(obj):
     """

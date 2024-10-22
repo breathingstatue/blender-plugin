@@ -31,8 +31,12 @@ def import_file(filepath, scene):
         fin = Instances(file)
         print("Imported FIN file.")
 
+    # Import each instance
     for instance in fin.instances:
         import_instance(filepath, scene, instance)
+
+    # After importing all instances, run the texture assignment
+    assign_material_to_all(scene)
 
 def import_instance(filepath, scene, instance):
     scene = bpy.context.scene
@@ -248,3 +252,40 @@ def clean_instance_name(name):
     
     # Reattach the .prm extension if it was originally there
     return f"{base_name}.prm" if name.endswith(".prm") else base_name
+
+def assign_material_to_all(scene):
+    """Assign material to all imported objects for both COL and UV_TEX."""
+    # Get all mesh objects in the scene
+    mesh_objects = [obj for obj in scene.objects if obj.type == 'MESH']
+    
+    # Run texture assignment for both material choices
+    set_material_to_col(mesh_objects)
+    set_material_to_texture(mesh_objects)
+
+def set_material_to_col(mesh_objects):
+    """Sets the material to Vertex Colour (_Col) for all mesh objects."""
+    if not mesh_objects:
+        print("No mesh objects selected for material assignment.")
+        return
+
+    for obj in mesh_objects:
+        obj.data.material_choice = 'COL'
+        bpy.context.view_layer.objects.active = obj
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.select_all(action='SELECT')
+        bpy.ops.object.assign_materials_auto()
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+def set_material_to_texture(mesh_objects):
+    """Sets the material to Texture (UV_TEX) for all mesh objects."""
+    if not mesh_objects:
+        print("No mesh objects selected for material assignment.")
+        return
+
+    for obj in mesh_objects:
+        obj.data.material_choice = 'UV_TEX'
+        bpy.context.view_layer.objects.active = obj
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.select_all(action='SELECT')
+        bpy.ops.object.assign_materials_auto()
+        bpy.ops.object.mode_set(mode='OBJECT')

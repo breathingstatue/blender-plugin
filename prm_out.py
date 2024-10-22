@@ -38,8 +38,12 @@ def export_file(filepath, scene):
     # Ensure we're in object mode before any operations
     bpy.ops.object.mode_set(mode='OBJECT')
 
-    # Then, assign Texture (UV_TEX) material where applicable
-    set_material_to_texture_for_object(obj)
+    # Get all mesh objects in the scene
+    mesh_objects = [obj for obj in scene.objects if obj.type == 'MESH']
+
+    # Run material assignment for both COL and UV_TEX
+    set_material_to_col(mesh_objects)
+    set_material_to_texture(mesh_objects)
 
     # Checks if other LoDs are present
     if "|q" in obj.data.name:
@@ -68,13 +72,43 @@ def get_texture_from_material(face, obj):
         if face.material_index < len(obj.material_slots):
             # Get the material from the corresponding slot
             mat = obj.material_slots[face.material_index].material
+
             if mat and mat.node_tree:
                 # Iterate over all nodes in the material
                 for node in mat.node_tree.nodes:
                     # Check if the node is an image texture node
                     if node.type == 'TEX_IMAGE':
-                        # Return the first image texture found
-                        return node.image
+                        image = node.image
+                        # Return the image if found
+                        if image:
+                            return image
+                        else:
+                            print(f"No image found for material: {mat.name} on {obj.name}")
+
+            # Ensure material is added to object data if not already present
+            if mat.name not in obj.data.materials:
+                obj.data.materials.append(mat)
+
+            # Assign the material index to the face
+            face.material_index = obj.data.materials.find(mat.name)
+
+            # Explicitly assign the material to the object mesh data
+            for f in obj.data.polygons:
+                if f.select:
+                    f.material_index = face.material_index
+
+    # Fallback to car.bmp material logic for car parts
+    car_part_prefixes = ["body", "wheel", "axle", "spring", "pin"]
+    if any(obj.name.startswith(prefix) for prefix in car_part_prefixes):
+        # Ensure car.bmp is used as a fallback for car parts
+        print(f"Assigning fallback car texture for {obj.name}")
+        car_texture = bpy.data.images.get('car')
+        if car_texture:
+            print(f"Assigned car texture image to {obj.name}")
+            return car_texture
+        else:
+            print(f"Error: car texture image not found for {obj.name}")
+
     return None
 
 def export_mesh(me, obj, scene, filepath, world=None):
@@ -267,3 +301,31 @@ def export_mesh(me, obj, scene, filepath, world=None):
 
     bm.free()
     return prm
+
+def set_material_to_col(mesh_objects):
+    """Sets the material to Vertex Colour (_Col) for all mesh objects."""
+    if not mesh_objects:
+        print("No mesh objects selected for material assignment.")
+        return
+
+    for obj in mesh_objects:
+        obj.data.material_choice = 'COL'
+        bpy.context.view_layer.objects.active = obj
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.select_all(action='SELECT')
+        bpy.ops.object.assign_materials_auto()
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+def set_material_to_texture(mesh_objects):
+    """Sets the material to Texture (UV_TEX) for all mesh objects."""
+    if not mesh_objects:
+        print("No mesh objects selected for material assignment.")
+        return
+
+    for obj in mesh_objects:
+        obj.data.material_choice = 'UV_TEX'
+        bpy.context.view_layer.objects.active = obj
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.select_all(action='SELECT')
+        bpy.ops.object.assign_materials_auto()
+        bpy.ops.object.mode_set(mode='OBJECT')

@@ -26,7 +26,6 @@ from . import (
 )
 from .common import *
 from .prm_out import export_mesh, get_texture_from_material
-from .tools import set_material_to_texture_for_object
 
 def create_split_mesh(original_mesh, face_indices, original_obj_name, created_objects):
     new_mesh = bpy.data.meshes.new(name=f"{original_obj_name}_split_mesh")
@@ -257,17 +256,60 @@ def obj_conditions(obj):
 
 def export_file(filepath, scene):
     split_size_faces = getattr(scene, 'split_size_faces', 100) * 2
+    
+    # Ensure we're in object mode before any operations
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    # Get all mesh objects in the scene
+    mesh_objects = [obj for obj in scene.objects if obj.type == 'MESH']
+
+    # Run batch material assignment for both COL and UV_TEX
+    fast_batch_assign_materials(mesh_objects, 'COL')
+    fast_batch_assign_materials(mesh_objects, 'UV_TEX')
+
+    # Proceed with export if everything is okay
     if getattr(scene, 'export_worldcut', False):
         export_split_world(filepath, scene, split_size_faces)
     else:
-        # Ensure we're in object mode before any operations
-        bpy.ops.object.mode_set(mode='OBJECT')
-
-        # Apply the material assignment logic to all mesh objects before exporting
-        mesh_objects = [obj for obj in scene.objects if obj.type == 'MESH']
-
-        # Then, assign Texture (UV_TEX) material where applicable
-        for obj in mesh_objects:
-            set_material_to_texture_for_object(obj)
-
         export_standard_world(filepath, scene)
+
+    # Debug print to confirm export completion
+    print(f"Export completed to {filepath}")
+    
+def fast_batch_assign_materials(mesh_objects, material_choice):
+    """
+    Optimized batch processing of material assignment.
+    Processes all selected objects in a single batch operation.
+    """
+    if not mesh_objects:
+        print("No mesh objects selected for material assignment.")
+        return
+
+    # Set all objects to the desired material choice
+    for obj in mesh_objects:
+        obj.data.material_choice = material_choice
+
+    # Switch to edit mode for all objects at once
+    bpy.ops.object.select_all(action='DESELECT')
+    for obj in mesh_objects:
+        obj.select_set(True)
+    
+    # Switch to edit mode for all selected objects
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+
+    # Apply material assignment for all selected objects
+    bpy.ops.object.assign_materials_auto()
+
+    # Switch back to object mode after processing
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    print(f"Assigned materials ({material_choice}) to all mesh objects.")
+
+def set_material_to_col(mesh_objects):
+    """Legacy function for backward compatibility (Uses batch processing now)."""
+    fast_batch_assign_materials(mesh_objects, 'COL')
+
+def set_material_to_texture(mesh_objects):
+    """Legacy function for backward compatibility (Uses batch processing now)."""
+    fast_batch_assign_materials(mesh_objects, 'UV_TEX')

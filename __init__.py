@@ -133,9 +133,9 @@ if "w_in" in locals():
 if "w_out" in locals():
     importlib.reload(w_out)
 
-from .common import DialogOperator, ShadowSaveOperator, ConfirmShadowSaveOperator, TEX_ANIM_MAX, TEX_PAGES_MAX
-from .common import FACE_DOUBLE, FACE_TRANSLUCENT, FACE_MIRROR, FACE_TRANSL_TYPE, FACE_TEXANIM, FACE_NOENV, FACE_ENV, FACE_CLOTH, FACE_SKIP
-from .common import NCP_DOUBLE, NCP_NO_SKID, NCP_OIL, NCP_NON_PLANAR, NCP_OBJECT_ONLY, NCP_CAMERA_ONLY, NCP_NOCOLL, MATERIALS
+from .common import DialogOperator, ShadowSaveOperator, ConfirmShadowSaveOperator, TEX_ANIM_MAX
+from .common import TEX_PAGES_MAX, FACE_DOUBLE, FACE_TRANSLUCENT, FACE_MIRROR, FACE_TRANSL_TYPE, FACE_TEXANIM, FACE_NOENV, FACE_ENV, FACE_CLOTH
+from .common import FACE_SKIP, NCP_DOUBLE, NCP_NO_SKID, NCP_OIL, NCP_NON_PLANAR, NCP_OBJECT_ONLY, NCP_CAMERA_ONLY, NCP_NOCOLL, MATERIALS
 from .layers import select_ncp_material, get_face_material, set_face_material, set_face_texture, get_face_texture, update_envmapping, update_no_envmapping
 from .layers import set_face_ncp_property, get_face_ncp_property, get_face_env, set_face_env, update_face_env, get_fin_envcol, set_fin_envcol
 from .layers import get_face_property, set_face_property, update_fin_envcol, set_rgb, get_rgb, update_fin_col, get_alpha_items
@@ -171,7 +171,7 @@ from .ui.migpanel import RVIO_PT_RevoltMIGPanel
 bl_info = {
 "name": "Re-Volt",
 "author": "Marvin Thiel & Theman",
-"version": (20, 24, 9),
+"version": (20, 24, 10),
 "blender": (4, 2, 2),
 "location": "File > Import-Export",
 "description": "Import and export Re-Volt file formats.",

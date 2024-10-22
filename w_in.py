@@ -82,6 +82,12 @@ def import_file(filepath, scene):
     texture_animations = [animation.as_dict() for animation in world.animations]
     scene.texture_animations = str(texture_animations)
     scene.ta_max_slots = world.animation_count
+    
+    # Run fast batch material assignment after importing the objects
+    fast_batch_assign_materials(scene)
+
+    # Return the scene object
+    return scene
 
 def create_bound_box(scene, bbox, filename):
     me = bpy.data.meshes.new("RVBBox_{}".format(filename))
@@ -168,3 +174,38 @@ def create_cube(scene, sptype, center, radius, filename):
     ob.show_wire = True
 
     return ob
+
+def fast_batch_assign_materials(scene):
+    """Assign materials to all imported mesh objects using batch processing."""
+    mesh_objects = [obj for obj in scene.objects if obj.type == 'MESH']
+
+    # Assign Vertex Color materials (COL)
+    fast_batch_assign_material_choice(mesh_objects, 'COL')
+
+    # Assign UV Texture materials (UV_TEX)
+    fast_batch_assign_material_choice(mesh_objects, 'UV_TEX')
+
+def fast_batch_assign_material_choice(mesh_objects, material_choice):
+    """Batch process material assignment for all objects in the scene."""
+    if not mesh_objects:
+        print("No mesh objects selected for material assignment.")
+        return
+
+    # Set all objects to the desired material choice
+    for obj in mesh_objects:
+        obj.data.material_choice = material_choice
+
+    # Switch to edit mode for all objects at once
+    bpy.ops.object.select_all(action='DESELECT')
+    for obj in mesh_objects:
+        obj.select_set(True)
+
+    # Enter edit mode, select all faces, and apply material assignment
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.object.assign_materials_auto()
+
+    # Return to object mode after processing
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    print(f"Assigned {material_choice} materials to all mesh objects.")

@@ -394,30 +394,30 @@ def reverse_quad(quad, tri=False):
 
 
 def texture_to_int(string):
-	# Assigns texture A to cars
-	if "car.bmp" in string:
-		return 0
+    # Assigns texture A to cars
+    if "car" in string:
+        return 0
 
-	if ".bmp" in string:
-		base, ext = string.split(".", 1)
-		try:
-			num = int(base)
-		except:
-			# Checks if the last letter of the file name matches old naming convention
-			if base[-1].isalpha():
-				num = ord(base[-1]) - 97
-			else:
-				return -1
+    if ".bmp" in string:
+        base, ext = string.split(".", 1)
+        try:
+            num = int(base)
+        except:
+            # Checks if the last letter of the file name matches old naming convention
+            if base[-1].isalpha():
+                num = ord(base[-1]) - 97
+            else:
+                return -1
 
-		# Returns texture A if it's not a fitting track texture
-		if num >= TEX_PAGES_MAX or num < 0:
-			return 0
+        # Returns texture A if it's not a fitting track texture
+        if num >= TEX_PAGES_MAX or num < 0:
+            return 0
 
-		return num
+        return num
 
-	# .bmp is not in the texture name, assumes no texture
-	else:
-		return -1
+    # .bmp is not in the texture name, assumes no texture
+    else:
+        return -1
 
 def int_to_texture(tex_num, name=""):
 	# The first suffix cycles through a-z repeatedly
@@ -705,7 +705,6 @@ def msg_box(message, icon="INFO"):
 	dialog_message = message
 	dialog_icon = icon
 	bpy.ops.revolt.dialog("INVOKE_DEFAULT")
-
 
 def queue_error(action, error_message):
 	""" Adds an error message to the error dict """
