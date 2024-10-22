@@ -23,7 +23,7 @@ class RVIO_PT_RevoltSettingsPanel(bpy.types.Panel):
         layout.prop(scene, "triangulate_ngons", text="Triangluate Ngons")
         layout.prop(scene, "use_tex_num", text="Export w/o Texture")
         layout.prop(scene, "apply_scale", text="Apply Scale")
-        layout.prop(scene, "apply_rotation", text= "Apply Rotation")
+        layout.prop(scene, "apply_rotation", text= "Apply Rotation (disable for axle/pin/spring)")
         layout.prop(scene, "apply_translation", text= "Apply Translation")
         layout.separator()
 

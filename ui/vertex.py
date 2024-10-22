@@ -22,7 +22,7 @@ class RVIO_PT_VertexPanel(bpy.types.Panel):
         if obj.mode == 'EDIT':
             box = layout.box()
             col = box.column(align=True)
-            col.operator("mesh.vertex_color_and_alpha_setup", text="Create Vertex Colour (Alpha)")
+            col.operator("mesh.vertex_color_and_alpha_setup", text="Create Vertex Colour (+Alpha)")
             col.operator("vertexcolor.remove_layer", text="Remove Col/Alpha")
             col.prop(scene, "vertex_color_picker")
             col.operator("vertexcolor.set_color", text="Set Color")
