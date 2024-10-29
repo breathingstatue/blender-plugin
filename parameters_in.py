@@ -34,37 +34,65 @@ def import_car(params, filepath, scene):
     # Import all textures with car name appended
     import_all_textures(folder)
     
-    body = params["model"][params["body"]["modelnum"]]
-    body_loc = to_blender_coord(params["body"]["offset"])
-    wheel0loc = to_blender_coord(params["wheel"][0]["offset1"])
-    wheel1loc = to_blender_coord(params["wheel"][1]["offset1"])
-    wheel2loc = to_blender_coord(params["wheel"][2]["offset1"])
-    wheel3loc = to_blender_coord(params["wheel"][3]["offset1"])
-    spring0loc = to_blender_coord(params["spring"][0]["offset"])
-    spring1loc = to_blender_coord(params["spring"][1]["offset"])
-    spring2loc = to_blender_coord(params["spring"][2]["offset"])
-    spring3loc = to_blender_coord(params["spring"][3]["offset"])
-    spring0length = to_blender_scale(params["spring"][0]["length"])
-    spring1length = to_blender_scale(params["spring"][1]["length"])
-    spring2length = to_blender_scale(params["spring"][2]["length"])
-    spring3length = to_blender_scale(params["spring"][3]["length"])
-    axle0loc = to_blender_coord(params["axle"][0]["offset"])
-    axle1loc = to_blender_coord(params["axle"][1]["offset"])
-    axle2loc = to_blender_coord(params["axle"][2]["offset"])
-    axle3loc = to_blender_coord(params["axle"][3]["offset"])
-    axle0length = to_blender_scale(params["axle"][0]["length"])
-    axle1length = to_blender_scale(params["axle"][1]["length"])
-    axle2length = to_blender_scale(params["axle"][2]["length"])
-    axle3length = to_blender_scale(params["axle"][3]["length"])
-    pin0loc = to_blender_coord(params["pin"][0]["offset"]) if params["pin"][0]["offset"] != (0.0, 0.0, 0.0) else spring0loc
-    pin1loc = to_blender_coord(params["pin"][1]["offset"]) if params["pin"][1]["offset"] != (0.0, 0.0, 0.0) else spring1loc
-    pin2loc = to_blender_coord(params["pin"][2]["offset"]) if params["pin"][2]["offset"] != (0.0, 0.0, 0.0) else spring2loc
-    pin3loc = to_blender_coord(params["pin"][3]["offset"]) if params["pin"][3]["offset"] != (0.0, 0.0, 0.0) else spring3loc
-    pin0length = to_blender_scale(params["pin"][0]["length"])
-    pin1length = to_blender_scale(params["pin"][1]["length"])
-    pin2length = to_blender_scale(params["pin"][2]["length"])
-    pin3length = to_blender_scale(params["pin"][3]["length"])
-    aerial_loc = to_blender_coord(params["aerial"]["offset"])
+    if 'body' in params and "model" in params:
+        body = params["model"][params["body"]["modelnum"]]
+        body_loc = to_blender_coord(params["body"]["offset"])
+    else:
+        body = None
+        body_loc = (0, 0, 0)
+        print("Warning: 'body' data missing in parameters.txt. Skipping body import.")
+    if 'wheel' in params:
+        wheel0loc = to_blender_coord(params["wheel"][0]["offset1"])
+        wheel1loc = to_blender_coord(params["wheel"][1]["offset1"])
+        wheel2loc = to_blender_coord(params["wheel"][2]["offset1"])
+        wheel3loc = to_blender_coord(params["wheel"][3]["offset1"])
+    else:
+        wheel0loc = wheel1loc = wheel2loc = wheel3loc = (0, 0, 0)
+        print("Warning: 'wheel' data missing in parameters.txt. Skipping wheel imports.")
+    if 'spring' in params:
+        spring0loc = to_blender_coord(params["spring"][0]["offset"])
+        spring1loc = to_blender_coord(params["spring"][1]["offset"])
+        spring2loc = to_blender_coord(params["spring"][2]["offset"])
+        spring3loc = to_blender_coord(params["spring"][3]["offset"])
+        spring0length = to_blender_scale(params["spring"][0]["length"])
+        spring1length = to_blender_scale(params["spring"][1]["length"])
+        spring2length = to_blender_scale(params["spring"][2]["length"])
+        spring3length = to_blender_scale(params["spring"][3]["length"])
+    else:
+        spring0loc = spring1loc = spring2loc = spring3loc = (0, 0, 0)
+        spring0length = spring1length = spring2length = spring3length = 0
+        print("Warning: 'spring' data missing in parameters.txt. Skipping all springs.")
+    if 'axle' in params:
+        axle0loc = to_blender_coord(params["axle"][0]["offset"])
+        axle1loc = to_blender_coord(params["axle"][1]["offset"])
+        axle2loc = to_blender_coord(params["axle"][2]["offset"])
+        axle3loc = to_blender_coord(params["axle"][3]["offset"])
+        axle0length = to_blender_scale(params["axle"][0]["length"])
+        axle1length = to_blender_scale(params["axle"][1]["length"])
+        axle2length = to_blender_scale(params["axle"][2]["length"])
+        axle3length = to_blender_scale(params["axle"][3]["length"])
+    else:
+        axle0loc = axle1loc = axle2loc = axle3loc = (0, 0, 0)
+        axle0length = axle1length = axle2length = axle3length = 0
+        print("Warning: 'axle' data missing in parameters.txt. Skipping axle imports.")
+    if 'pin' in params:
+        pin0loc = to_blender_coord(params["pin"][0]["offset"]) if params["pin"][0]["offset"] != (0.0, 0.0, 0.0) else spring0loc
+        pin1loc = to_blender_coord(params["pin"][1]["offset"]) if params["pin"][1]["offset"] != (0.0, 0.0, 0.0) else spring1loc
+        pin2loc = to_blender_coord(params["pin"][2]["offset"]) if params["pin"][2]["offset"] != (0.0, 0.0, 0.0) else spring2loc
+        pin3loc = to_blender_coord(params["pin"][3]["offset"]) if params["pin"][3]["offset"] != (0.0, 0.0, 0.0) else spring3loc
+        pin0length = to_blender_scale(params["pin"][0]["length"])
+        pin1length = to_blender_scale(params["pin"][1]["length"])
+        pin2length = to_blender_scale(params["pin"][2]["length"])
+        pin3length = to_blender_scale(params["pin"][3]["length"])
+    else:
+        pin0loc = pin1loc = pin2loc = pin3loc = (0, 0, 0)
+        pin0length = pin1length = pin2length = pin3length = 0
+        print("Warning: 'pin' data missing in parameters.txt. Skipping pin imports.")
+    if 'aerial' in params:
+        aerial_loc = to_blender_coord(params["aerial"]["offset"])
+    else:
+        aerial_loc = (0, 0, 0)
+        print("Warning: 'aerial' data missing in parameters.txt. Skipping aerial import.")
     if "camber" in params['wheel'][0]:
         camber_0 = to_blender_angle(params['wheel'][0]["camber"])
     else:
@@ -100,8 +128,6 @@ def import_car(params, filepath, scene):
             if model_file is None:
                 print(f"Error: 'model_file' is None for model_num {model_num}")
                 return None
-        
-            # Added logging to catch if model_file is None or empty
             print(f"Model file before split: {model_file}")
         
             model_path = os.path.join(folder, model_file.split(os.sep)[-1])
@@ -130,114 +156,161 @@ def import_car(params, filepath, scene):
         obj.name = name
         return obj
 
-    body_path = get_path(params['body']['modelnum'], 'body')
-    body_obj = import_or_placeholder(body_path, "body", to_blender_coord(params["body"]["offset"]))
-    body_obj.name = "body"
-    
-    wheel_names = ['wheelfl', 'wheelfr', 'wheelbl', 'wheelbr']
-    spring_names = ['spring0', 'spring1', 'spring2', 'spring3']
-    axle_names = ['axle0', 'axle1', 'axle2', 'axle3']
-    pin_names = ['pin0', 'pin1', 'pin2', 'pin3']
-
     wheel_locations = [wheel0loc, wheel1loc, wheel2loc, wheel3loc]
-    spring_locations = [spring0loc, spring1loc, spring2loc, spring3loc]
     spring_lengths = [spring0length, spring1length, spring2length, spring3length]
     axle_lengths = [axle0length, axle1length, axle2length, axle3length]
-    pin_locations = [pin0loc, pin1loc, pin2loc, pin3loc]
-    pin_lengths = [spring_lengths[i] + to_blender_scale(params["pin"][i]["length"]) for i in range(4)]
+    if 'pin' in params:
+        # Set pin locations and lengths only if pin data exists
+        pin_locations = [pin0loc, pin1loc, pin2loc, pin3loc]
+        pin_lengths = [spring_lengths[i] + to_blender_scale(params["pin"][i]["length"]) for i in range(4)]
+    else:
+        # Default values if pin data is missing
+        pin_locations = [(0, 0, 0)] * 4
+        pin_lengths = [0] * 4
+        print("Warning: 'pin' data missing in parameters.txt. Skipping pin imports.")
     cambers = [camber_0, camber_1, camber_2, camber_3]
     
+    # Body
+    try:
+        body_path = get_path(params['body']['modelnum'], 'body')
+        if body_path:
+            body_obj = import_or_placeholder(body_path, "body", to_blender_coord(params["body"]["offset"]))
+            body_obj.name = "body"
+            imported_objects.append(body_obj)
+            print(f"Imported body at {params['body']['offset']}")
+        else:
+            print("Warning: Missing data or path for the car body. Skipping body import.")
+    except KeyError:
+        print("Warning: 'body' data missing in parameters.txt. Skipping body import.")
+
+    # Wheels
+    wheel_names = ['wheelfl', 'wheelfr', 'wheelbl', 'wheelbr']
     for i in range(4):
-        wheel_path = get_path(params['wheel'][i]['modelnum'], 'wheel')
-        wheel = import_or_placeholder(wheel_path, wheel_names[i], to_blender_coord(params['wheel'][i]['offset1']))
-        wheel.parent = body_obj
+        try:
+            wheel_path = get_path(params['wheel'][i]['modelnum'], 'wheel')
+            if wheel_path:
+                wheel = import_or_placeholder(wheel_path, wheel_names[i], to_blender_coord(params['wheel'][i]['offset1']))
+                wheel.parent = body_obj
+                is_right_wheel = i in [1, 3]
+                apply_camber_to_wheel(wheel, cambers[i], is_right_wheel)
+                imported_objects.append(wheel)
+                print(f"Imported wheel {wheel_names[i]}")
+            else:
+                print(f"Warning: Missing data or path for wheel {i}. Skipping wheel import.")
+        except KeyError:
+            print(f"Warning: Wheel data missing for wheel {i}. Skipping wheel import.")
 
-        # Apply camber, specifying if the wheel is a right-side wheel (1 or 3)
-        is_right_wheel = i in [1, 3]
-        apply_camber_to_wheel(wheel, cambers[i], is_right_wheel)
+    # Springs
+    if 'spring' in params:
+        spring_names = ['spring0', 'spring1', 'spring2', 'spring3']
+        springs = []
+        for i in range(4):
+            try:
+                spring_path = get_path(params['spring'][i]['modelnum'], 'spring')
+                if spring_path:
+                    spring = import_or_placeholder(spring_path, spring_names[i], to_blender_coord(params['spring'][i]['offset']))
+                    spring.parent = body_obj
+                    springs.append(spring)
+                    align_to_axis(spring, 'Z')
+                    adjust_object_length(spring, spring_lengths[i], 'Z')
+                    if is_aligned(spring):
+                        set_spring_orientation(spring, wheel_locations[i])
+                    print(f"Imported and aligned {spring.name}")
+                else:
+                    print(f"Warning: Missing data or path for spring {i}. Skipping spring import.")
+            except KeyError:
+                print(f"Warning: Spring data missing for spring {i}. Skipping spring import.")
+    else:
+        print("Warning: 'spring' data missing in parameters.txt. Skipping all springs.")
 
-        imported_objects.append(wheel)
-        print(f"Imported wheel {wheel_names[i]}")
-        
-    springs = []
-    for i in range(4):
-        spring_path = get_path(params['spring'][i]['modelnum'], 'spring')
-        if spring_path:
-            spring = import_or_placeholder(spring_path, spring_names[i], to_blender_coord(params['spring'][i]['offset']))
-            spring.parent = body_obj
-            springs.append(spring)
-            align_to_axis(spring, 'Z')
-            adjust_object_length(spring, spring_lengths[i], 'Z')
-            if is_aligned(spring):
-                set_spring_orientation(spring, wheel_locations[i])
-            print(f"Imported and aligned {spring.name}")
+    # Axles
+    if 'axle' in params:
+        axle_names = ['axle0', 'axle1', 'axle2', 'axle3']
+        axles = []
+        for i in range(4):
+            try:
+                axle_path = get_path(params['axle'][i]['modelnum'], 'axle')
+                if axle_path:
+                    axle = import_or_placeholder(axle_path, axle_names[i], to_blender_coord(params['axle'][i]['offset']))
+                    axle.parent = body_obj
+                    axles.append(axle)
+                    align_to_axis(axle, 'Y')
+                    adjust_object_length(axle, axle_lengths[i], 'Y')
+                    set_orientation(axle, wheel_locations[i])
+                    print(f"Adjusted length and set orientation for {axle.name}")
+                else:
+                    print(f"Warning: Missing data or path for axle {i}. Skipping axle import.")
+            except KeyError:
+                print(f"Warning: Axle data missing for axle {i}. Skipping axle import.")
+    else:
+        print("Warning: 'axle' data missing in parameters.txt. Skipping all axles.")
 
-    axles = []
-    for i in range(4):
-        axle_path = get_path(params['axle'][i]['modelnum'], 'axle')
-        if axle_path:
-            axle = import_or_placeholder(axle_path, axle_names[i], to_blender_coord(params['axle'][i]['offset']))
-            axle.parent = body_obj
-            axles.append(axle)
-            align_to_axis(axle, 'Y')
-            adjust_object_length(axle, axle_lengths[i], 'Y')
-            set_orientation(axle, wheel_locations[i])
-            print(f"Adjusted length and set orientation for {axle.name}")
+    # Pins
+    if 'pin' in params:
+        pin_names = ['pin0', 'pin1', 'pin2', 'pin3']
+        pins = []
+        for i in range(4):
+            try:
+                if params['pin'][i]['modelnum'] == -1:
+                    continue  # Skip this pin if ModelNum is -1
+                pin_path = get_path(params['pin'][i]['modelnum'], 'pin')
+                if pin_path:
+                    pin = import_or_placeholder(pin_path, pin_names[i], pin_locations[i])
+                    pin.parent = body_obj
+                    pins.append(pin)
+                    align_to_axis(pin, 'Z')
+                    adjust_object_length(pin, pin_lengths[i], 'Z')
+                    direction_to_wheel = Vector(wheel_locations[i]) - Vector(pin_locations[i])
+                    direction_to_wheel.normalize()
+                    opposite_direction = -direction_to_wheel
+                    rot_quat = opposite_direction.to_track_quat('Z', 'Y')
+                    pin.rotation_euler = rot_quat.to_euler()
+                    move_distance = pin_lengths[i]
+                    move_vector = direction_to_wheel * move_distance
+                    pin.location += move_vector
+                    print(f"Imported and oriented pin {pin_names[i]} away from wheel {wheel_names[i]}")
+                else:
+                    print(f"Warning: Missing data or path for pin {i}. Skipping pin import.")
+            except KeyError:
+                print(f"Warning: Pin data missing for pin {i}. Skipping pin import.")
+    else:
+        print("Warning: 'pin' data missing in parameters.txt. Skipping all pins.")
 
-    pins = []
-    for i in range(4):
-        # Check if the pin should exist
-        if params['pin'][i]['modelnum'] == -1:
-            continue  # Skip this pin if ModelNum is -1
-
-        pin_path = get_path(params['pin'][i]['modelnum'], 'pin')
-        if pin_path:
-            pin = import_or_placeholder(pin_path, pin_names[i], pin_locations[i])
-            pin.parent = body_obj
-            pins.append(pin)
-            align_to_axis(pin, 'Z')
-            adjust_object_length(pin, pin_lengths[i], 'Z')
-            print(f"Imported and aligned {pin.name}")
-
-            # Calculate the direction vector from the pin to the corresponding wheel
-            direction_to_wheel = Vector(wheel_locations[i]) - Vector(pin_locations[i])
-            direction_to_wheel.normalize()
-
-            # Orient the pin to point in the opposite direction of the wheel
-            opposite_direction = -direction_to_wheel
-            rot_quat = opposite_direction.to_track_quat('Z', 'Y')  # Align Z-axis with the opposite direction
-            pin.rotation_euler = rot_quat.to_euler()
-
-            print(f"Oriented {pin.name} to face away from {wheel_names[i]}")
-
-            # Move the pin along the direction of the wheel by the pin's length
-            move_distance = pin_lengths[i]
-            move_vector = direction_to_wheel * move_distance
-            pin.location += move_vector
-
-            print(f"Moved {pin.name} towards {wheel_names[i]} by {move_distance} units")
-
+    # Spinner
     if "spinner" in params:
-        spinner_params = params["spinner"]
-        spinner_path = get_path(spinner_params["modelnum"], '')
-        if spinner_path:
-            spinner_loc = to_blender_coord(spinner_params["offset"])
-            spinner_obj = import_or_placeholder(spinner_path, "spinner", spinner_loc)
-            spinner_obj.parent = body_obj
-            print(f"Imported spinner at {spinner_loc}")
-    
-    # Aerial (skip if not present)
+        try:
+            spinner_params = params["spinner"]
+            spinner_path = get_path(spinner_params["modelnum"], 'spinner')
+            if spinner_path:
+                spinner_loc = to_blender_coord(spinner_params["offset"])
+                spinner_obj = import_or_placeholder(spinner_path, "spinner", spinner_loc)
+                spinner_obj.parent = body_obj
+                imported_objects.append(spinner_obj)
+                print(f"Imported spinner at {spinner_loc}")
+            else:
+                print("Warning: Missing data or path for spinner. Skipping spinner import.")
+        except KeyError:
+            print("Warning: Spinner data missing in parameters.txt. Skipping spinner import.")
+    else:
+        print("Warning: 'spinner' data missing in parameters.txt. Skipping spinner import.")
+
+    # Aerial
     aerial_params = params.get("aerial")
     if aerial_params:
-        aerial_loc = to_blender_coord(aerial_params.get("offset", (0.0, 0.0, 0.0)))
-        aerial = bpy.data.objects.new("aerial", None)
-        scene.collection.objects.link(aerial)
-        aerial.location = aerial_loc
-        aerial.empty_display_type = 'PLAIN_AXES'
-        aerial.empty_display_size = 0.1
-        aerial.parent = body_obj
-        imported_objects.append(aerial)
-        print(f"Imported aerial at {aerial_loc}")
+        try:
+            aerial_loc = to_blender_coord(aerial_params.get("offset", (0.0, 0.0, 0.0)))
+            aerial = bpy.data.objects.new("aerial", None)
+            scene.collection.objects.link(aerial)
+            aerial.location = aerial_loc
+            aerial.empty_display_type = 'PLAIN_AXES'
+            aerial.empty_display_size = 0.1
+            aerial.parent = body_obj
+            imported_objects.append(aerial)
+            print(f"Imported aerial at {aerial_loc}")
+        except KeyError:
+            print("Warning: Aerial data missing in parameters.txt. Skipping aerial import.")
+    else:
+        print("Warning: No aerial parameters found. Skipping aerial import.")
     
     # Apply UV maps to textures for all imported objects
     for obj in imported_objects:

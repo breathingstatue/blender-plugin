@@ -2,7 +2,7 @@
 I created a modified version of Marv's Blender Plugin for Re-Volt, that works in the current Blender (4.1)
 
 INSTALLATION
-place io_revolt in Blender/"version"/scripts/addons/
+place 'io_revolt' in Blender/"version"/scripts/addons/
 
 -Theman with the help of Chat GPT
 
@@ -14,6 +14,7 @@ Objects (.fob)
 FULL CHANGELOG:
 
 20.24.10
+Streamlined Car import / parameters Export
 .m files Material Assignment
 bug fixes to Material Assignment
 bug fixes and improvements to Import & Export modules

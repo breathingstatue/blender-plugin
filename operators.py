@@ -62,7 +62,7 @@ def update_file_extension(operator_instance):
     ext = ext_mapping.get(operator_instance.format_type, "")
     operator_instance.filename_ext = ext
     operator_instance.filter_glob = f"*{ext}"
-
+    
 """
 BUTTONS ------------------------------------------------------------------------
 """
@@ -614,11 +614,53 @@ class CarParametersExport(bpy.types.Operator):
         car_name = self.car_name.strip() if self.car_name.strip() else "car"
         from . import parameters_out
         parameters_out.export_file(car_name)
+        self.report({'INFO'}, "Car parameters copied to clipboard.")
         return {"FINISHED"}
 
     def invoke(self, context, event):
-        wm = context.window_manager
-        return wm.invoke_props_dialog(self)
+        # Check for unparented objects
+        self.show_parenting_warning = self.check_missing_parenting(context)
+        
+        # Invoke the car name prompt
+        return context.window_manager.invoke_props_dialog(self)
+
+    def draw(self, context):
+        layout = self.layout
+        # Show different messages based on parenting status
+        if self.show_parenting_warning:
+            layout.label(text="Only child objects of 'body' will be copied.", icon="ERROR")
+        else:
+            layout.label(text="Enter the car name:")
+        layout.prop(self, "car_name")  # Field for entering the car name
+
+    def check_missing_parenting(self, context):
+        """ Check for unparented or missing objects and report warnings. """
+        body = bpy.data.objects.get("body")
+        required_objects = ["wheelfl", "wheelfl.prm", "wheell.prm",
+                            "wheelfr", "wheelfr.prm", "wheelr.prm",
+                            "wheelbl", "wheelbl.prm", "wheelfl.prm.001", "wheell.prm.001",
+                            "wheelbr", "wheelbr.prm", "wheelfr.prm.001", "wheelr.prm.001", 
+                            "spring0", "spring.prm", "springsl.prm", "springs.prm",
+                            "spring1", "spring.prm.001", "springsr.prm", "springs.prm.001",
+                            "spring2", "spring.prm.002", "springsr.prm.001", "springs.prm.002",
+                            "spring3", "spring.prm.003", "springsl.prm.001", "springs.prm.003",
+                            "pin0", "pin.prm", "pinfl.prm",
+                            "pin1", "pin.prm.001", "pinfr.prm",
+                            "pin2", "pin.prm.002", "pinfr.prm.001",
+                            "pin3", "pin.prm.003", "pinfl.prm.001",
+                            "axle0", "axle.prm", "axlefl.prm",
+                            "axle1", "axle.prm.001", "axlefr.prm",
+                            "axle2", "axle.prm.002", "axlefr.prm.001",
+                            "axle3", "axle.prm.003", "axlefl.prm.001",
+                            "spinner", "aerial"]
+
+        for obj_name in required_objects:
+            obj = bpy.data.objects.get(obj_name)
+            if obj and obj.parent != body:
+                print(f"Warning: {obj_name} not found in the scene or not parented to body.")
+                return True  # Missing or unparented object found
+
+        return False  # All objects properly parented
     
 """
 INSTANCES -----------------------------------------------------------------------

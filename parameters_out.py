@@ -139,9 +139,9 @@ def append_front_left_wheel(params, body, processed):
     wheels = get_objects_by_exact_names(wheel_names, parent_object=body)
 
     child = wheels.get("wheelfl") or wheels.get("wheelfl.prm") or wheels.get("wheell.prm")
-    if child and child.name not in processed:
+    if child and child.name not in processed and child.parent == body:
         params += f";====================\n"
-        params += F"; Car Wheel details\n"
+        params += f"; Car Wheel details\n"
         params += f";====================\n\n"
         location = to_revolt_coord(child.location)
         params += f"\nWHEEL 0 {{\t; Start Wheel\n"
@@ -158,14 +158,14 @@ def append_front_left_wheel(params, body, processed):
         params += f"ToeIn\t\t0.000000\n"
         camber_value = get_camber_for_wheel(child, 0)
         if camber_value is not None:
-            params += f";)Camber\t{camber_value:.6f}\n"
+            params += f"Camber\t{camber_value:.6f}\n"
         params += f"AxleFriction\t0.020000\n"
         params += f"Grip\t\t0.014000\n"
         params += f"StaticFriction\t1.500000\nKineticFriction\t1.500000\n"
         params += "}\t\t; End Wheel\n"
         processed.add(child.name)
     else:
-        print(f"Warning: wheelfl  not found in the scene.")
+        print(f"Warning: wheelfl not found in the scene or not parented to body.")
     
     return params
 
@@ -175,9 +175,8 @@ def append_front_right_wheel(params, body, processed):
     ]
     wheels = get_objects_by_exact_names(wheel_names, parent_object=body)
 
-    # Check for any of the matching keys
     child = wheels.get("wheelfr") or wheels.get("wheelfr.prm") or wheels.get("wheelr.prm")
-    if child and child.name not in processed:
+    if child and child.name not in processed and child.parent == body:
         location = to_revolt_coord(child.location)
         params += f"\nWHEEL 1 {{\t; Start Wheel\n"
         params += f"ModelNum\t2\n"
@@ -193,14 +192,14 @@ def append_front_right_wheel(params, body, processed):
         params += f"ToeIn\t\t0.000000\n"
         camber_value = get_camber_for_wheel(child, 1)
         if camber_value is not None:
-            params += f";)Camber\t{camber_value:.6f}\n"
+            params += f"Camber\t{camber_value:.6f}\n"
         params += f"AxleFriction\t0.020000\n"
         params += f"Grip\t\t0.014000\n"
         params += f"StaticFriction\t1.500000\nKineticFriction\t1.500000\n"
         params += "}\t\t; End Wheel\n"
         processed.add(child.name)
     else:
-        print(f"Warning: wheelfr not found in the scene.")
+        print(f"Warning: wheelfr not found in the scene or not parented to body.")
     
     return params
 
@@ -210,9 +209,8 @@ def append_back_left_wheel(params, body, processed):
     ]
     wheels = get_objects_by_exact_names(wheel_names, parent_object=body)
 
-    # Check for any of the matching keys
     child = wheels.get("wheelbl") or wheels.get("wheelbl.prm") or wheels.get("wheelfl.prm.001") or wheels.get("wheell.prm.001")
-    if child and child.name not in processed:
+    if child and child.name not in processed and child.parent == body:
         location = to_revolt_coord(child.location)
         params += f"\nWHEEL 2 {{\t; Start Wheel\n"
         params += f"ModelNum\t3\n"
@@ -228,14 +226,14 @@ def append_back_left_wheel(params, body, processed):
         params += f"ToeIn\t\t0.000000\n"
         camber_value = get_camber_for_wheel(child, 2)
         if camber_value is not None:
-            params += f";)Camber\t{camber_value:.6f}\n"
+            params += f"Camber\t{camber_value:.6f}\n"
         params += f"AxleFriction\t0.050000\n"
         params += f"Grip\t\t0.014000\n"
         params += f"StaticFriction\t1.500000\nKineticFriction\t1.500000\n"
         params += "}\t\t; End Wheel\n"
         processed.add(child.name)
     else:
-        print(f"Warning: wheelbl not found in the scene.")
+        print(f"Warning: wheelbl not found in the scene or not parented to body.")
     
     return params
 
@@ -245,9 +243,8 @@ def append_back_right_wheel(params, body, processed):
     ]
     wheels = get_objects_by_exact_names(wheel_names, parent_object=body)
 
-    # Check for any of the matching keys
     child = wheels.get("wheelbr") or wheels.get("wheelbr.prm") or wheels.get("wheelfr.prm.001") or wheels.get("wheelr.prm.001")
-    if child and child.name not in processed:
+    if child and child.name not in processed and child.parent == body:
         location = to_revolt_coord(child.location)
         params += f"\nWHEEL 3 {{\t; Start Wheel\n"
         params += f"ModelNum\t4\n"
@@ -263,14 +260,14 @@ def append_back_right_wheel(params, body, processed):
         params += f"ToeIn\t\t0.000000\n"
         camber_value = get_camber_for_wheel(child, 3)
         if camber_value is not None:
-            params += f";)Camber\t{camber_value:.6f}\n"
+            params += f"Camber\t{camber_value:.6f}\n"
         params += f"AxleFriction\t0.050000\n"
         params += f"Grip\t\t0.014000\n"
         params += f"StaticFriction\t1.500000\nKineticFriction\t1.500000\n"
         params += "}\t\t; End Wheel\n"
         processed.add(child.name)
     else:
-        print(f"Warning: wheelbr not found in the scene.")
+        print(f"Warning: wheelbr not found in the scene or not parented to body.")
     
     return params
 
@@ -279,7 +276,7 @@ def append_spring_info(params, body, processed):
         ("spring0", "spring.prm", "springsl.prm", "springs.prm"),
         ("spring1", "spring.prm.001", "springsr.prm", "springs.prm.001"),
         ("spring2", "spring.prm.002", "springsr.prm.001", "springs.prm.002"),
-        ("spring3", "spring.prm.003", "springsl.prm.001", "springs.prm.003"),
+        ("spring3", "spring.prm.003", "springsl.prm.001", "springs.prm.003")
     ]
     springs = get_objects_by_exact_names(spring_names, parent_object=body)
 
@@ -287,8 +284,9 @@ def append_spring_info(params, body, processed):
         spring_key = spring_name[0]
         spring_obj = springs.get(spring_key)
 
-        if not spring_obj:
-            print(f"Warning: Spring not found for index {i} ({spring_key}).")
+        # New parenting check
+        if not spring_obj or spring_obj.parent != body:
+            print(f"Warning: Spring {spring_key} not found or not parented to body.")
             continue
 
         # Store original rotation
@@ -327,13 +325,18 @@ def append_spring_info(params, body, processed):
     return params
 
 def append_pin_info(params, body, processed):
-    pin_names = ["pin0", "pin1", "pin2", "pin3"]
-
+    pin_names = [
+        ("pin0", "pin.prm", "pinfl.prm"),
+        ("pin1", "pin.prm.001", "pinfr.prm"),
+        ("pin2", "pin.prm.002", "pinfr.prm.001"),
+        ("pin3", "pin.prm.003", "pinfl.prm.001")
+    ]
     for i, pin_name in enumerate(pin_names):
-        pin_obj = bpy.data.objects.get(pin_name)
+        pin_obj = bpy.data.objects.get(pin_name[0])
 
+        # New parenting check
         if not pin_obj or pin_obj.parent != body:
-            print(f"Warning: Pin {pin_name} not found or not parented to the body.")
+            print(f"Warning: Pin {pin_name[0]} not found or not parented to body.")
             continue
 
         # Calculate the length of the pin that extends beyond the spring
@@ -374,8 +377,9 @@ def append_axle_info(params, body, processed):
         axle_key = axle_name[0]
         axle_obj = axles.get(axle_key)
 
-        if not axle_obj:
-            print(f"Warning: Axle not found for index {i} ({axle_key}).")
+        # New parenting check
+        if not axle_obj or axle_obj.parent != body:
+            print(f"Warning: Axle {axle_key} not found or not parented to body.")
             continue
         
         original_rotation = axle_obj.rotation_euler.copy()
@@ -408,6 +412,7 @@ def append_axle_info(params, body, processed):
 def append_spinner_info(params, body, processed):
     spinner = bpy.data.objects.get("spinner")
 
+    # New parenting check
     if spinner and spinner.parent == body and spinner.name not in processed:
         spinner_position = to_revolt_coord(spinner.location)
         x, y, z = spinner_position
@@ -420,7 +425,7 @@ def append_spinner_info(params, body, processed):
         params += f"}}\t\t; End Spinner\n"
         processed.add(spinner.name)
     else:
-        print("Spinner not found or already processed.")
+        print("Spinner not found or not parented to body, or already processed.")
 
     return params
 
@@ -428,6 +433,7 @@ def append_aerial_info(params, body, processed):
     # Directly fetch the aerial object by name and check its parent
     aerial = bpy.data.objects.get("aerial")
     
+    # New parenting check
     if aerial and aerial.parent == body and aerial.name not in processed:
         params += f";====================\n"
         params += f"; Car Aerial details\n"
@@ -447,7 +453,7 @@ def append_aerial_info(params, body, processed):
         if aerial is None:
             print("Aerial object not found.")
         elif aerial.parent != body:
-            print("Aerial is not parented correctly.")
+            print("Aerial is not parented to body.")
         elif aerial.name in processed:
             print("Aerial has already been processed.")
 
@@ -576,6 +582,21 @@ def get_camber_for_wheel(wheel_obj, wheel_index):
         return camber_in_revolt
     else:
         return None  # If camber is not exported, return None
+    
+def check_and_get_child(name, body, required=True):
+    """
+    Check if an object exists and is parented to 'body'. 
+    If required is True and the check fails, print a warning.
+    """
+    obj = bpy.data.objects.get(name)
+    if not obj:
+        if required:
+            print(f"Warning: {name} is not found in the scene.")
+        return None
+    elif obj.parent != body:
+        print(f"Warning: {name} is not parented to 'body'. Parent the object to proceed.")
+        return None
+    return obj
     
 def export_file(car_name="car", filepath=None, scene=None):
     params = f"{{\n\n;============================================================\n"
