@@ -13,6 +13,10 @@ Objects (.fob)
 
 FULL CHANGELOG:
 
+20.24.11
+fixed bugs for Vertex Colouring
+fixed bugs for NCP materials
+
 20.24.10
 Streamlined Car import / parameters Export
 .m files Material Assignment

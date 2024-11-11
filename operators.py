@@ -2688,16 +2688,28 @@ class VertexAndAlphaLayer(bpy.types.Operator):
                         # Set default color to gray (0.5, 0.5, 0.5) with full opacity (1.0) for both layers
                         default_color = (0.5, 0.5, 0.5, 1.0) if layer_name == 'Alpha' else (1.0, 1.0, 1.0, 1.0)
                         for face in bm.faces:
-                            for loop in face.loops:
-                                loop[created_layer] = default_color
+                            if face.select:  # Apply to selected faces only
+                                for loop in face.loops:
+                                    loop[created_layer] = default_color
                         self.report({'INFO'}, f"{layer_name} vertex color layer created for {obj.name}.")
                     else:
+                        for face in bm.faces:
+                            if face.select:  # Ensure selected faces have the correct layer data
+                                for loop in face.loops:
+                                    loop[created_layer] = (1.0, 1.0, 1.0, 1.0)  # Reapply default white color with full opacity
                         self.report({'INFO'}, f"{layer_name} vertex color layer already exists for {obj.name}.")
 
                 bmesh.update_edit_mesh(mesh, destructive=True)
 
-                # Ensure materials are set up for the layers
+                # Ensure materials are set up for the layers and assigned to selected faces
                 self.setup_materials(obj, layers)
+                self.reassign_materials_to_selected_faces(bm, obj, layers)
+
+                # Recreate the vertex color and alpha layers if they were removed
+                self.reapply_vertex_colors_to_selected_faces(bm, layers, mesh)
+
+                # Trigger the MaterialAssignment operator to assign materials automatically
+                bpy.ops.object.assign_materials()
 
         return {'FINISHED'}
 
@@ -2729,16 +2741,36 @@ class VertexAndAlphaLayer(bpy.types.Operator):
                     bsdf.inputs['Base Color'].default_value = (0.5, 0.5, 0.5, 1.0) if attr_name == 'Alpha' else (1.0, 1.0, 1.0, 1.0)
                     material.node_tree.links.new(vcol.outputs['Color'], bsdf.inputs['Base Color'])
                     material.node_tree.links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
-                    self.report({'INFO'}, f"{mat_name_generic} material created.")
+                    self.report({'INFO'}, f"Col/Alpha material created.")
             
             # Ensure the material is assigned to the object
             if material.name not in obj.data.materials:
                 obj.data.materials.append(material)
 
+    def reassign_materials_to_selected_faces(self, bm, obj, attributes):
+        for face in bm.faces:
+            if face.select:
+                for attr_name in attributes:
+                    material_index = obj.data.materials.find(f"_{attr_name}")
+                    if material_index != -1:
+                        face.material_index = material_index
+
+        bmesh.update_edit_mesh(obj.data, destructive=True)
+
+    def reapply_vertex_colors_to_selected_faces(self, bm, layers, mesh):
+        for layer_name in layers:
+            created_layer = bm.loops.layers.color.get(layer_name)
+            if created_layer:
+                for face in bm.faces:
+                    if face.select:
+                        for loop in face.loops:
+                            loop[created_layer] = (1.0, 1.0, 1.0, 1.0)  # Reapply white color with full opacity
+        bmesh.update_edit_mesh(mesh, destructive=True)
+
 class VertexColorRemove(bpy.types.Operator):
     bl_idname = "vertexcolor.remove_layer"
     bl_label = "Remove Vertex Color and Alpha Layers"
-    bl_description = "Removes the active vertex color and alpha layers from the selected meshes"
+    bl_description = "Clears the active vertex color and alpha data from selected faces in the selected meshes"
 
     @classmethod
     def poll(cls, context):
@@ -2751,25 +2783,33 @@ class VertexColorRemove(bpy.types.Operator):
                 mesh = obj.data
                 bm = bmesh.from_edit_mesh(mesh)
 
-                # Remove the vertex color layer
+                # Access vertex color and alpha layers
                 vc_layer = bm.loops.layers.color.get("Col")
-                if vc_layer is not None:
-                    bm.loops.layers.color.remove(vc_layer)
-
-                # Remove the alpha layer
                 va_layer = bm.loops.layers.color.get("Alpha")
-                if va_layer is not None:
-                    bm.loops.layers.color.remove(va_layer)
+
+                # Clear vertex color and alpha data for selected faces
+                for face in bm.faces:
+                    if face.select:  # Check if the face is selected
+                        for loop in face.loops:
+                            if vc_layer is not None:
+                                loop[vc_layer] = (0.0, 0.0, 0.0, 1.0)  # Set color to transparent black
+                            if va_layer is not None:
+                                loop[va_layer] = (0.0, 0.0, 0.0, 1.0)  # Set alpha to transparent black
 
                 bmesh.update_edit_mesh(mesh, destructive=True)
 
-                # Remove materials with _Col or _Alpha suffix
-                materials_to_remove = [mat for mat in obj.data.materials if mat.name.endswith('_Col') or mat.name.endswith('_Alpha')]
+                # Clear material assignment from selected faces only
+                materials_to_clear = [mat for mat in obj.data.materials if mat.name.endswith('_Col') or mat.name.endswith('_Alpha')]
 
-                for mat in materials_to_remove:
-                    obj.data.materials.remove(mat)
+                for face in bm.faces:
+                    if face.select:  # Check if the face is selected
+                        for mat in materials_to_clear:
+                            if face.material_index == obj.data.materials.find(mat.name):
+                                face.material_index = 0  # Set to 0 to ensure valid range
 
-        self.report({'INFO'}, "Vertex color and alpha layers and associated materials removed.")
+                bmesh.update_edit_mesh(mesh, destructive=True)
+
+        self.report({'INFO'}, "Vertex color and alpha data cleared from selected faces, and materials cleared.")
         return {'FINISHED'}
 
 class SetVertexColor(bpy.types.Operator):

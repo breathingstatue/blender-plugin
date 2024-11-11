@@ -557,25 +557,17 @@ def set_face_material(self, value):
     bm = bmesh.from_edit_mesh(edit_object.data)
     material_layer = bm.faces.layers.int.get("Material") or bm.faces.layers.int.new("Material")
 
-    # Initialize the dictionary to store materials
-    materials_dict = {}
-
-    for poly in bm.faces:
-        # Fetch color and create material if not already existing
-        color_key = COLORS[value]
-        if color_key not in materials_dict:
-            mat = bpy.data.materials.new(name=f"Material_{color_key}")
-            mat.use_nodes = True
-            bsdf = mat.node_tree.nodes.get('Principled BSDF')
-            bsdf.inputs['Base Color'].default_value = (*color_key, 1.0)  # RGB + alpha
-            materials_dict[color_key] = mat
-            edit_object.data.materials.append(mat)
+    # Ensure the material name matches the in-game material name
+    material_info = next((item for item in MATERIALS if item[0] == str(value)), None)
+    if material_info:
+        material_name = material_info[1]
+    else:
+        material_name = f"Material_{value}"
 
     for face in bm.faces:
         if face.select:
             face[material_layer] = value
-            color_key = COLORS[value]
-            mat_name = f"Material_{color_key}"
+            mat_name = material_name
             mat_index = edit_object.data.materials.find(mat_name)
             if mat_index == -1:
                 mat = bpy.data.materials.get(mat_name)
@@ -583,7 +575,7 @@ def set_face_material(self, value):
                     mat = bpy.data.materials.new(name=mat_name)
                     mat.use_nodes = True
                     bsdf = mat.node_tree.nodes.get('Principled BSDF')
-                    bsdf.inputs['Base Color'].default_value = (*color_key, 1.0)
+                    bsdf.inputs['Base Color'].default_value = (*COLORS[value], 1.0)
                     edit_object.data.materials.append(mat)
                 mat_index = edit_object.data.materials.find(mat_name)
             face.material_index = mat_index
@@ -592,10 +584,24 @@ def set_face_material(self, value):
 
 def select_ncp_material(self, context):
     edit_object = bpy.context.edit_object
+    
+    # Ensure the edit_object is valid and in Edit Mode
+    if edit_object is None or edit_object.type != 'MESH' or not edit_object.mode == 'EDIT':
+        print("Error: No active mesh in Edit Mode.")
+        return
+    
+    # Get the bmesh of the edit mesh
     bm = get_edit_bmesh(edit_object)
+    if bm is None or not hasattr(bm, 'faces'):
+        print("Error: Failed to initialize bmesh or bmesh has no faces.")
+        return
+    
+    # Get or create the 'Material' layer
+    material_layer = bm.faces.layers.int.get("Material")
+    if material_layer is None:
+        material_layer = bm.faces.layers.int.new("Material")
+    
     mat = int(self.select_material)
-
-    material_layer = bm.faces.layers.int.get("Material") or bm.faces.layers.int.new("Material")
     count = 0
     count_sel = 0
 
@@ -606,9 +612,16 @@ def select_ncp_material(self, context):
                 face.select = True
             else:
                 count_sel += 1
-
+    
     if count == 0:
-        msg_box("No {} materials found.".format(MATERIALS[mat+1][1]))
+        material_name = MATERIALS[mat + 1][1] if mat + 1 < len(MATERIALS) else "Unknown"
+        msg_box(f"No {material_name} materials found.")
+    else:
+        print(f"Selected {count} faces with the material '{material_name}'.")
+    
+    # Update the mesh in the editor
+    bmesh.update_edit_mesh(edit_object.data, destructive=False)
+
         
 def get_base_name_for_layers(obj):
     name_parts = obj.name.split('.')

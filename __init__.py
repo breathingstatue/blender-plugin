@@ -171,7 +171,7 @@ from .ui.migpanel import RVIO_PT_RevoltMIGPanel
 bl_info = {
 "name": "Re-Volt",
 "author": "Marvin Thiel & Theman",
-"version": (20, 24, 10),
+"version": (20, 24, 11),
 "blender": (4, 2, 2),
 "location": "File > Import-Export",
 "description": "Import and export Re-Volt file formats.",
@@ -357,7 +357,7 @@ def register():
     bpy.types.Scene.apply_rotation = bpy.props.BoolProperty(
         name="Apply Rotation on Export",
         default=True,
-        description="Apply object rotation during export"
+        description="Apply object rotation during export. (disable for axle/pin/spring)"
     )
     
     bpy.types.Scene.apply_translation = bpy.props.BoolProperty(
