@@ -171,8 +171,8 @@ from .ui.migpanel import RVIO_PT_RevoltMIGPanel
 bl_info = {
 "name": "Re-Volt",
 "author": "Marvin Thiel & Theman",
-"version": (20, 24, 11),
-"blender": (4, 2, 2),
+"version": (20, 24, 12),
+"blender": (4, 3, 2),
 "location": "File > Import-Export",
 "description": "Import and export Re-Volt file formats.",
 "wiki_url": "https://re-volt.github.io/re-volt-addon/",
