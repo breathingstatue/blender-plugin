@@ -9,9 +9,15 @@ place 'io_revolt' in Blender/"version"/scripts/addons/
 TO DO LIST:
 
 20.24.?
+Car AutoShader Tool
 Objects (.fob)
 
 FULL CHANGELOG:
+
+20.24.12
+hotfix for .prm export
+fixed bugs for Material Assigner
+fixed bugs for .prm / .fin files
 
 20.24.11
 fixed bugs for Vertex Colouring

@@ -223,12 +223,7 @@ def get_base_name_for_layers(obj):
     if len(name_parts) > 1 and name_parts[-1].isdigit():
         suffix = f".{name_parts[-1]}"
 
-    extension = ""
-
-    if ".w" in obj.name:
-        extension = ".w"
-    elif ".prm" in obj.name:
-        extension = ".prm"
+    extension = ".prm"
 
     return f"{base_name}{extension}", suffix
 
@@ -254,18 +249,9 @@ def clean_instance_name(name):
     return f"{base_name}.prm" if name.endswith(".prm") else base_name
 
 def assign_material_to_all(scene):
-    """Assign material to all imported objects for both COL and UV_TEX."""
-    # Get all mesh objects in the scene
     mesh_objects = [obj for obj in scene.objects if obj.type == 'MESH']
-    
-    # Run texture assignment for both material choices
-    set_material_to_col(mesh_objects)
-    set_material_to_texture(mesh_objects)
-
-def set_material_to_col(mesh_objects):
-    """Sets the material to Vertex Colour (_Col) for all mesh objects."""
     if not mesh_objects:
-        print("No mesh objects selected for material assignment.")
+        print("No mesh objects found for material assignment.")
         return
 
     for obj in mesh_objects:
@@ -273,19 +259,22 @@ def set_material_to_col(mesh_objects):
         bpy.context.view_layer.objects.active = obj
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.mesh.select_all(action='SELECT')
-        bpy.ops.object.assign_materials_auto()
+
+        # Ensure materials are only assigned once for each type
+        if "material_assigned_col" not in obj:
+            bpy.ops.object.assign_materials_auto()
+            obj["material_assigned_col"] = True  # Mark object to avoid re-processing COL
+        
         bpy.ops.object.mode_set(mode='OBJECT')
-
-def set_material_to_texture(mesh_objects):
-    """Sets the material to Texture (UV_TEX) for all mesh objects."""
-    if not mesh_objects:
-        print("No mesh objects selected for material assignment.")
-        return
-
-    for obj in mesh_objects:
+        
+        # Now assign UV_TEX layer as well
         obj.data.material_choice = 'UV_TEX'
         bpy.context.view_layer.objects.active = obj
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.mesh.select_all(action='SELECT')
-        bpy.ops.object.assign_materials_auto()
+        
+        if "material_assigned_uv" not in obj:
+            bpy.ops.object.assign_materials_auto()
+            obj["material_assigned_uv"] = True  # Mark object to avoid re-processing UV_TEX
+        
         bpy.ops.object.mode_set(mode='OBJECT')

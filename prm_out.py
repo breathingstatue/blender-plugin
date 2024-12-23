@@ -313,7 +313,7 @@ def set_material_to_col(mesh_objects):
         bpy.context.view_layer.objects.active = obj
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.mesh.select_all(action='SELECT')
-        bpy.ops.object.assign_materials_auto()
+        bpy.ops.object.assign_materials_prm()
         bpy.ops.object.mode_set(mode='OBJECT')
 
 def set_material_to_texture(mesh_objects):
@@ -327,5 +327,5 @@ def set_material_to_texture(mesh_objects):
         bpy.context.view_layer.objects.active = obj
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.mesh.select_all(action='SELECT')
-        bpy.ops.object.assign_materials_auto()
+        bpy.ops.object.assign_materials_prm()
         bpy.ops.object.mode_set(mode='OBJECT')

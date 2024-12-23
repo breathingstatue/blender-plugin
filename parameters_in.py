@@ -23,17 +23,23 @@ def import_file(filepath, scene):
     Imports a parameters.txt file and loads car body and wheels.
     """
     PARAMETERS[filepath] = carinfo.read_parameters(filepath)
-    # Extract the car name directly from the parameters.txt file
-    import_car(PARAMETERS[filepath], filepath, scene)
+    car_name = extract_car_name(filepath)
+    
+    # Import the car and its parts
+    import_car(PARAMETERS[filepath], filepath, scene, car_name)
+    
+    # After import, ensure material is named car.bmp
+    ensure_car_bmp_material(filepath, car_name)
+
     PARAMETERS.pop(filepath)
 
-def import_car(params, filepath, scene):
+def import_car(params, filepath, scene, car_name):
     folder = os.sep.join(filepath.split(os.sep)[:-1])
-    imported_objects = []  # List to keep track of all imported objects
+    imported_objects = []
 
-    # Import all textures with car name appended
-    import_all_textures(folder)
-    
+    # Pass car_name and params to import_all_textures
+    import_all_textures(folder, car_name, params)
+
     if 'body' in params and "model" in params:
         body = params["model"][params["body"]["modelnum"]]
         body_loc = to_blender_coord(params["body"]["offset"])
@@ -329,10 +335,14 @@ def extract_car_name(filepath):
                 return line.split('\"')[1].strip()  # Get the text between the quotes
     return "Unknown Car"  # Default if not found
     
-def import_all_textures(folder):
+def import_all_textures(folder, car_name, params):
     """
-    Import all .bmp files in the given folder as textures without appending car name.
+    Import all .bmp files in the given folder as textures.
+    If car.bmp is missing, try to load the car-specific texture (e.g., carname.bmp).
+    If that fails, check for a TPAGE entry in parameters.txt.
     """
+    car_texture_found = False
+
     for image_file in os.listdir(folder):
         if image_file.lower().endswith('.bmp'):
             img_path = os.path.join(folder, image_file)
@@ -341,8 +351,38 @@ def import_all_textures(folder):
             # Import texture without appending car name
             if img_name not in bpy.data.images:
                 img = bpy.data.images.load(img_path)
-                img.name = img_name  # Use the original name
+                img.name = img_name  # Use the original name (without .bmp suffix)
                 print(f"Imported texture: {img_name}")
+
+            if img_name.lower() == "car" or img_name.lower() == car_name.lower():
+                car_texture_found = True
+
+    # Fallback to load car-specific texture if car.bmp is not found
+    if not car_texture_found:
+        fallback_texture = f"{car_name.lower()}.bmp"
+        fallback_path = os.path.join(folder, fallback_texture)
+        if os.path.exists(fallback_path):
+            fallback_name = os.path.splitext(fallback_texture)[0]  # Remove .bmp for naming
+            if fallback_name not in bpy.data.images:
+                img = bpy.data.images.load(fallback_path)
+                img.name = fallback_name
+                print(f"Fallback imported texture: {fallback_name}")
+                car_texture_found = True
+        else:
+            print(f"Warning: Neither car.bmp nor {fallback_texture} found in {folder}")
+
+    # Fallback to TPAGE if other methods fail
+    if not car_texture_found and 'TPAGE' in params:
+        tpage_texture = params['TPAGE'].split('\\')[-1]
+        tpage_name = os.path.splitext(tpage_texture)[0]  # Remove .bmp suffix
+        tpage_path = os.path.join(folder, tpage_texture)
+        if os.path.exists(tpage_path):
+            if tpage_name not in bpy.data.images:
+                img = bpy.data.images.load(tpage_path)
+                img.name = tpage_name
+                print(f"Imported TPAGE texture: {tpage_name}")
+        else:
+            print(f"Warning: TPAGE texture {tpage_texture} not found in {folder}")
                 
 def apply_uv_maps_to_textures(obj):
     """
@@ -517,3 +557,30 @@ def apply_camber_to_wheel(wheel, camber_angle, is_right_wheel=False):
         print(f"Applied camber of {math.degrees(camber_angle)} degrees to {wheel.name}")
     else:
         pass
+    
+def ensure_car_bmp_material(filepath, car_name):
+    """
+    Ensures the material for the car body is named 'car.bmp'.
+    If 'car.bmp' is not found but 'carname.bmp' exists, rename the material to 'car.bmp'.
+    """
+    folder = os.path.dirname(filepath)
+    car_texture_path = os.path.join(folder, "car.bmp")
+    fallback_texture_path = os.path.join(folder, f"{car_name.lower()}.bmp")
+    
+    # Check if car.bmp exists
+    if not os.path.exists(car_texture_path):
+        if os.path.exists(fallback_texture_path):
+            # Check if the material with the fallback name exists (including .bmp suffix)
+            fallback_name = os.path.basename(fallback_texture_path)
+            fallback_material = bpy.data.materials.get(fallback_name)
+            
+            if fallback_material:
+                # Rename the material to car.bmp (with .bmp suffix)
+                fallback_material.name = "car.bmp"
+                print(f"Renamed material '{fallback_name}' to 'car.bmp'")
+            else:
+                print(f"Fallback material '{fallback_name}' not found in Blender materials.")
+        else:
+            print("Neither car.bmp nor fallback texture found after import.")
+    else:
+        print("car.bmp already exists, no renaming necessary.")

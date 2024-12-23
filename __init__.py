@@ -143,7 +143,7 @@ from .layers import update_fin_env, update_rgb, update_no_envmapping, update_env
 from .operators import ImportRV, ExportRV, RVIO_OT_ReadCarParameters, RVIO_OT_SelectRevoltDirectory, ButtonReExport
 from .operators import VertexAndAlphaLayer, VertexColorRemove, SetVertexColor, BakeShadow, BakeVertex, BatchBakeVertexToEnv, BakeVertexToRGBModelColor
 from .operators import SetVertexAlpha, SetFaceTextureNumber
-from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, MaterialAssignment, MaterialAssignmentAuto, TextureAssigner
+from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, MaterialAssignment, MaterialAssignmentAuto, MaterialAssignmentPRM, TextureAssigner
 from .operators import SetInstanceProperty, RemoveInstanceProperty, LaunchRV, TexturesSave
 from .operators import TexturesRename, CarParametersExport, ButtonZoneHide, AddTrackZone, ReverseTrackZone, ButtonTriggerHide, CreateTrigger
 from .operators import DuplicateTrigger, CopyTrigger, PasteTrigger, SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere
@@ -972,6 +972,7 @@ def register():
     bpy.utils.register_class(TexturesRename)
     bpy.utils.register_class(MaterialAssignment)
     bpy.utils.register_class(MaterialAssignmentAuto)
+    bpy.utils.register_class(MaterialAssignmentPRM)
     bpy.utils.register_class(TextureAssigner)
     bpy.utils.register_class(CarParametersExport)
     bpy.utils.register_class(ButtonHullGenerate)  
@@ -1058,6 +1059,7 @@ def unregister():
     bpy.utils.unregister_class(ButtonHullGenerate) 
     bpy.utils.unregister_class(CarParametersExport)
     bpy.utils.unregister_class(TextureAssigner)
+    bpy.utils.unregister_class(MaterialAssignmentPRM)
     bpy.utils.unregister_class(MaterialAssignmentAuto)
     bpy.utils.unregister_class(MaterialAssignment)
     bpy.utils.unregister_class(TexturesRename)
