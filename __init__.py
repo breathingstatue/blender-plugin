@@ -46,6 +46,7 @@ from . import (
     parameters_out,
     prm_in,
     prm_out,
+    prm_out_for_fin,
     rim_in,
     rim_out,
     rvstruct,
@@ -116,6 +117,8 @@ if "prm_in" in locals():
     importlib.reload(prm_in)
 if "prm_out" in locals():
     importlib.reload(prm_out)
+if "prm_out_for_fin" in locals():
+    importlib.reload(prm_out_for_fin)
 if "rim_in" in locals():
     importlib.reload(rim_in)
 if "rim_out" in locals():
@@ -143,7 +146,7 @@ from .layers import update_fin_env, update_rgb, update_no_envmapping, update_env
 from .operators import ImportRV, ExportRV, RVIO_OT_ReadCarParameters, RVIO_OT_SelectRevoltDirectory, ButtonReExport
 from .operators import VertexAndAlphaLayer, VertexColorRemove, SetVertexColor, BakeShadow, BakeVertex, BatchBakeVertexToEnv, BakeVertexToRGBModelColor
 from .operators import SetVertexAlpha, SetFaceTextureNumber
-from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, MaterialAssignment, MaterialAssignmentAuto, MaterialAssignmentPRM, TextureAssigner
+from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, MaterialAssignment, MaterialAssignmentAuto, TextureAssigner
 from .operators import SetInstanceProperty, RemoveInstanceProperty, LaunchRV, TexturesSave
 from .operators import TexturesRename, CarParametersExport, ButtonZoneHide, AddTrackZone, ReverseTrackZone, ButtonTriggerHide, CreateTrigger
 from .operators import DuplicateTrigger, CopyTrigger, PasteTrigger, SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere
@@ -156,7 +159,7 @@ from .rvstruct import Triggers, Trigger
 from .texanim import update_ta_max_frames, update_ta_current_slot, update_ta_current_frame, update_ta_current_frame_uv
 from .texanim import update_ta_current_frame_delay, update_ta_current_frame_tex, update_ta_max_slots
 from .tools import get_trigger_type_items, get_trigger_type, set_trigger_type, get_low_flag_items, get_low_flag, set_low_flag, get_high_flag_items
-from .tools import get_high_flag, set_high_flag, set_material_to_col_for_object, set_material_to_texture_for_object
+from .tools import get_high_flag, set_high_flag
 from .ui.faceprops import RVIO_PT_RevoltFacePropertiesPanel
 from .ui.headers import RVIO_PT_RevoltIOToolPanel
 from .ui.helpers import RVIO_PT_RevoltHelpersPanelMesh
@@ -972,7 +975,6 @@ def register():
     bpy.utils.register_class(TexturesRename)
     bpy.utils.register_class(MaterialAssignment)
     bpy.utils.register_class(MaterialAssignmentAuto)
-    bpy.utils.register_class(MaterialAssignmentPRM)
     bpy.utils.register_class(TextureAssigner)
     bpy.utils.register_class(CarParametersExport)
     bpy.utils.register_class(ButtonHullGenerate)  
@@ -1059,7 +1061,6 @@ def unregister():
     bpy.utils.unregister_class(ButtonHullGenerate) 
     bpy.utils.unregister_class(CarParametersExport)
     bpy.utils.unregister_class(TextureAssigner)
-    bpy.utils.unregister_class(MaterialAssignmentPRM)
     bpy.utils.unregister_class(MaterialAssignmentAuto)
     bpy.utils.unregister_class(MaterialAssignment)
     bpy.utils.unregister_class(TexturesRename)

@@ -1,40 +1,40 @@
 """
-Name:    fin_in
-Purpose: Imports Re-Volt instance files (.fin)
+Name:    fin_out
+Purpose: Exports Re-Volt instance files (.fin)
 
 Description:
-Imports Instance files.
+Exports Instance files.
 
 """
 
 import re
 import os
 import bpy
-import bmesh
-import mathutils
-
 from . import common
 from . import rvstruct
-from . import prm_out
+from . import prm_out_for_fin
 
-from .rvstruct import Instances, Instance, Vector, Color, Matrix
-from .common import to_revolt_coord, FIN_SET_MODEL_RGB, to_or_matrix, FIN_ENV, FIN_HIDE, FIN_NO_MIRROR, FIN_NO_LIGHTS
+from .rvstruct import Instances, Instance, Vector, Matrix, Color
+from .common import to_revolt_coord, to_or_matrix, FIN_SET_MODEL_RGB, FIN_ENV, FIN_HIDE, FIN_NO_MIRROR, FIN_NO_LIGHTS
 from .common import FIN_NO_CAMERA_COLLISION, FIN_NO_OBJECT_COLLISION
-from .tools import set_material_to_col_for_object, set_material_to_texture_for_object
+
 
 if "bpy" in locals():
     import imp
     imp.reload(common)
     imp.reload(rvstruct)
+    imp.reload(prm_out_for_fin)
+
 
 def export_file(filepath, scene):
+    print("Starting export...")  
     scene = bpy.context.scene
     fin = rvstruct.Instances()
 
-    # Ensure we're in object mode before any operations
     bpy.ops.object.mode_set(mode='OBJECT')
+    print("Switched to Object Mode")  
 
-    # Select all mesh objects in the scene
+    # Collect all mesh objects for export
     bpy.ops.object.select_all(action='SELECT')
     mesh_objects = [obj for obj in bpy.context.selected_objects if obj.type == 'MESH']
     
@@ -42,40 +42,57 @@ def export_file(filepath, scene):
         print("No mesh objects available for export.")
         return
 
-    # Apply material settings using the imported utility functions
-    for obj in mesh_objects:
-        set_material_to_col_for_object(obj)
-        set_material_to_texture_for_object(obj)
+    print(f"Found {len(mesh_objects)} mesh objects")  
 
-    # Perform the export process
-    objs = [obj for obj in mesh_objects if obj.get("is_instance", False)]
+    # Batch process materials: First COL, then UV_TEX
+    assign_material_to_meshes(mesh_objects, 'COL')
+    assign_material_to_meshes(mesh_objects, 'UV_TEX')
 
-    # Dictionary to keep track of objects by their base name
+    # Group objects by PRM base name
     objects_by_base_name = {}
-    for obj in objs:
-        base_name, _ = get_base_name_for_layers(obj)
-        if base_name not in objects_by_base_name:
-            objects_by_base_name[base_name] = []
-        objects_by_base_name[base_name].append(obj)
+    for obj in mesh_objects:
+        if obj.get("is_instance", False):
+            base_name, _ = get_base_name_for_layers(obj)
+            if base_name not in objects_by_base_name:
+                objects_by_base_name[base_name] = []
+            objects_by_base_name[base_name].append(obj)
 
-    # Set to keep track of already exported PRM files
     exported_prms = set()
 
+    # Batch PRM export
     for base_name, objects in objects_by_base_name.items():
+        if base_name in exported_prms:
+            continue  # Skip already exported PRMs
+
+        print(f"Batch exporting PRM for {base_name}.prm with {len(objects)} objects")  
+
+        # Select all objects sharing the same base name
+        bpy.ops.object.select_all(action='DESELECT')
+        for obj in objects:
+            obj.select_set(True)
+
+        bpy.context.view_layer.objects.active = objects[0]  # Set one active for export
+
+        folder = os.path.dirname(filepath)
+        prm_fname = f"{base_name}.prm"
+
+        # Perform batch PRM export using prm_out_for_fin
+        prm_out_for_fin.export_file(os.path.join(folder, prm_fname), scene)
+
+        exported_prms.add(base_name)  # Mark as exported
+
+        # Add instances to FIN
         for obj in objects:
             instance = Instance()
-
-            # Use the cleaned base name for the instance name
             instance.name = base_name[:8].upper()
 
-            # Access custom properties with a fallback default
             fin_col = obj.get("fin_col", [0.5, 0.5, 0.5])
             instance.color = (
                 int(fin_col[0] * 255) - 128,
                 int(fin_col[1] * 255) - 128,
                 int(fin_col[2] * 255) - 128,
             )
-            print(f"Exporting instance with color: {instance.color}")
+            print(f"Instance {instance.name} with color {instance.color}")  
 
             fin_envcol = obj.get("fin_envcol", [0.5, 0.5, 0.5, 1.0])
             instance.env_color = rvstruct.Color(
@@ -84,110 +101,58 @@ def export_file(filepath, scene):
                     int(fin_envcol[1] * 255),
                     int(fin_envcol[2] * 255),
                 ),
-                alpha=True
+                alpha=int((1 - fin_envcol[3]) * 255)
             )
-            instance.env_color.alpha = int((1 - fin_envcol[3]) * 255)
 
-            # Access other custom properties similarly
-            instance.priority = obj.get("fin_priority", 1)
-            instance.lod_bias = obj.get("fin_lod_bias", 1024)
-
-            # Position and orientation
             instance.position = Vector(data=to_revolt_coord(obj.location))
             instance.or_matrix = rvstruct.Matrix()
             instance.or_matrix.data = to_or_matrix(obj.matrix_world)
 
-            # Flags
+            # Assign instance flags
             instance.flag = 0
-
             if obj.get("fin_env", False):
                 instance.flag |= FIN_ENV
-
             if obj.get("fin_model_rgb", False):
                 instance.flag |= FIN_SET_MODEL_RGB
-
             if obj.get("fin_hide", False):
                 instance.flag |= FIN_HIDE
-
             if obj.get("fin_no_mirror", False):
                 instance.flag |= FIN_NO_MIRROR
-
             if obj.get("fin_no_lights", False):
                 instance.flag |= FIN_NO_LIGHTS
-
             if obj.get("fin_no_cam_coll", False):
                 instance.flag |= FIN_NO_CAMERA_COLLISION
-
             if obj.get("fin_no_obj_coll", False):
                 instance.flag |= FIN_NO_OBJECT_COLLISION
-
-            folder = os.sep.join(filepath.split(os.sep)[:-1])
-
-            # Ensure the base name ends with .prm but avoid adding .prm twice
-            if not base_name.endswith(".prm"):
-                prm_fname = f"{base_name}.prm"
-            else:
-                prm_fname = base_name
-
-            # Ensure the objects with the same base name are exported as a single .prm file
-            if prm_fname not in exported_prms:
-                bpy.context.view_layer.objects.active = obj
-                prev_apply_scale = scene.apply_scale
-                prev_apply_rotation = scene.apply_rotation
-
-                scene.apply_rotation = False
-                scene.apply_scale = False
-                prm_out.export_file(os.path.join(folder, prm_fname), scene)
-
-                scene.apply_rotation = prev_apply_rotation
-                scene.apply_scale = prev_apply_scale
-
-                exported_prms.add(prm_fname)
 
             instance.name += "\x00"
             fin.instances.append(instance)
 
     fin.instance_count = len(fin.instances)
 
+    print("Writing to FIN file...")  
     with open(filepath, "wb") as fd:
         fin.write(fd)
+    print(f"Export complete: {len(fin.instances)} instances exported to {filepath}")  
 
-    print(f"Exported {len(fin.instances)} instances to {filepath}")
 
-def set_material_to_col():
-    """Sets the material to Vertex Colour (_Col) for all selected mesh objects."""
-    mesh_objects = [obj for obj in bpy.context.selected_objects if obj.type == 'MESH']
-    
+def assign_material_to_meshes(mesh_objects, material_choice):
+    """Assign materials to mesh objects in bulk by switching to edit mode."""
     if not mesh_objects:
-        print("No mesh objects selected for material assignment.")
+        print("No mesh objects for material assignment.")
         return
 
+    bpy.ops.object.select_all(action='DESELECT')
     for obj in mesh_objects:
-        bpy.context.view_layer.objects.active = obj
-        obj.data.material_choice = 'COL'
+        obj.select_set(True)
+        obj.data.material_choice = material_choice
 
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.select_all(action='SELECT')
-        bpy.ops.object.assign_materials_auto()
-        bpy.ops.object.mode_set(mode='OBJECT')
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.object.assign_materials_auto()
+    bpy.ops.object.mode_set(mode='OBJECT')
 
-def set_material_to_texture():
-    """Sets the material to Texture (UV_TEX) for all selected mesh objects."""
-    mesh_objects = [obj for obj in bpy.context.selected_objects if obj.type == 'MESH']
-    
-    if not mesh_objects:
-        print("No mesh objects selected for material assignment.")
-        return
 
-    for obj in mesh_objects:
-        bpy.context.view_layer.objects.active = obj
-        obj.data.material_choice = 'UV_TEX'
-
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.select_all(action='SELECT')
-        bpy.ops.object.assign_materials_auto()
-        bpy.ops.object.mode_set(mode='OBJECT')
-        
 def get_base_name_for_layers(obj):
     """Generates a clean base name for the object by removing unnecessary suffixes and handling extensions."""
     name = obj.name.lower()
@@ -204,6 +169,7 @@ def get_base_name_for_layers(obj):
 
     # Reattach the .prm extension only if it's not already there
     return base_name, ''
+
 
 def clean_instance_name(name):
     """

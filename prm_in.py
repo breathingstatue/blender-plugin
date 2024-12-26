@@ -66,13 +66,7 @@ def import_file(filepath, scene):
             bpy.context.view_layer.objects.active = obj
             assign_uv_tex_material(obj)
     
-            # Check for part prefix
-            if any(filename.lower().startswith(prefix) for prefix in part_prefixes):
-                # Car part import path
-                bpy.ops.object.assign_materials_prm()
-            else:
-                # .fin-related import path
-                bpy.ops.object.assign_materials_auto()
+            bpy.ops.object.assign_materials_auto()
     
     return obj
 
@@ -324,7 +318,7 @@ def set_material_to_prm_col(mesh_objects):
         bpy.context.view_layer.objects.active = obj
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.mesh.select_all(action='SELECT')
-        bpy.ops.object.assign_materials_prm()
+        bpy.ops.object.assign_materials_auto()
         bpy.ops.object.mode_set(mode='OBJECT')
 
 def set_material_to_prm_texture(mesh_objects):
@@ -338,7 +332,7 @@ def set_material_to_prm_texture(mesh_objects):
         bpy.context.view_layer.objects.active = obj
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.mesh.select_all(action='SELECT')
-        bpy.ops.object.assign_materials_prm()
+        bpy.ops.object.assign_materials_auto()
         bpy.ops.object.mode_set(mode='OBJECT')
         
 def set_material_to_fin_col(mesh_objects):

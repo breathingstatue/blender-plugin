@@ -3,7 +3,7 @@ Name:    prm_out
 Purpose: Exports Probe mesh files (.prm)
 
 Description:
-Meshes used for cars, game objects and track instances.
+Meshes used for cars and world meshes.
 
 """
 
@@ -27,8 +27,6 @@ from . import layers
 from .common import dprint, get_all_lod, triangulate_ngons, queue_error, FACE_QUAD, FACE_PROP_MASK, texture_to_int, FACE_ENV
 from .common import to_revolt_coord, to_revolt_axis, rvbbox_from_bm, center_from_rvbbox, radius_from_bmesh
 from .layers import *
-from .tools import set_material_to_texture_for_object
-
 
 def export_file(filepath, scene):
     obj = bpy.context.view_layer.objects.active
@@ -68,47 +66,41 @@ def export_file(filepath, scene):
 def get_texture_from_material(face, obj):
     # Check if the object has materials
     if obj.material_slots:
-        # Ensure the material index is within the valid range
         if face.material_index < len(obj.material_slots):
-            # Get the material from the corresponding slot
             mat = obj.material_slots[face.material_index].material
-
             if mat and mat.node_tree:
-                # Iterate over all nodes in the material
                 for node in mat.node_tree.nodes:
-                    # Check if the node is an image texture node
                     if node.type == 'TEX_IMAGE':
                         image = node.image
-                        # Return the image if found
                         if image:
-                            return image
+                            return image  # Return the existing image if found
                         else:
                             print(f"No image found for material: {mat.name} on {obj.name}")
 
-            # Ensure material is added to object data if not already present
-            if mat.name not in obj.data.materials:
-                obj.data.materials.append(mat)
+    # Check for car parts by name
+    car_part_prefixes = ["body", "wheel", "axle", "spring", "pin", "spinner"]
+    is_car_part = any(obj.name.startswith(prefix) for prefix in car_part_prefixes)
 
-            # Assign the material index to the face
-            face.material_index = obj.data.materials.find(mat.name)
-
-            # Explicitly assign the material to the object mesh data
-            for f in obj.data.polygons:
-                if f.select:
-                    f.material_index = face.material_index
-
-    # Fallback to car.bmp material logic for car parts
-    car_part_prefixes = ["body", "wheel", "axle", "spring", "pin"]
-    if any(obj.name.startswith(prefix) for prefix in car_part_prefixes):
-        # Ensure car.bmp is used as a fallback for car parts
-        print(f"Assigning fallback car texture for {obj.name}")
+    if is_car_part:
+        # Fallback to car.bmp for car parts
+        print(f"Checking for car.bmp fallback for {obj.name}...")
         car_texture = bpy.data.images.get('car')
+        
         if car_texture:
             print(f"Assigned car texture image to {obj.name}")
             return car_texture
         else:
-            print(f"Error: car texture image not found for {obj.name}")
+            # Fallback to mesh material
+            print(f"car.bmp not found for {obj.name}, using mesh material instead.")
+            if obj.material_slots:
+                for mat in obj.material_slots:
+                    if mat.material and mat.material.node_tree:
+                        for node in mat.material.node_tree.nodes:
+                            if node.type == 'TEX_IMAGE':
+                                return node.image
 
+    # Final fallback if no image is found
+    print(f"Error: No material found for {obj.name}")
     return None
 
 def export_mesh(me, obj, scene, filepath, world=None):
@@ -313,7 +305,7 @@ def set_material_to_col(mesh_objects):
         bpy.context.view_layer.objects.active = obj
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.mesh.select_all(action='SELECT')
-        bpy.ops.object.assign_materials_prm()
+        bpy.ops.object.assign_materials_auto()
         bpy.ops.object.mode_set(mode='OBJECT')
 
 def set_material_to_texture(mesh_objects):
@@ -327,5 +319,5 @@ def set_material_to_texture(mesh_objects):
         bpy.context.view_layer.objects.active = obj
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.mesh.select_all(action='SELECT')
-        bpy.ops.object.assign_materials_prm()
+        bpy.ops.object.assign_materials_auto()
         bpy.ops.object.mode_set(mode='OBJECT')

@@ -26,86 +26,71 @@ if "bpy" in locals():
     importlib.reload(rvstruct)
 
 def import_file(filepath, scene):
+    print(f"Opening file: {filepath}")  # Debug point 1
     with open(filepath, 'rb') as file:
         filename = os.path.basename(filepath)
         fin = Instances(file)
-        print("Imported FIN file.")
+        print(f"Imported FIN file with {len(fin.instances)} instances.")  # Debug point 2
 
-    # Import each instance
-    for instance in fin.instances:
+    for idx, instance in enumerate(fin.instances):
+        print(f"Importing instance {idx+1}/{len(fin.instances)}: {instance.name}")  # Debug point 3
         import_instance(filepath, scene, instance)
 
-    # After importing all instances, run the texture assignment
+    print("Running material assignment...")  # Debug point 4
     assign_material_to_all(scene)
+    print("Import complete.")  # Debug point 5
 
 def import_instance(filepath, scene, instance):
-    scene = bpy.context.scene
-
+    print(f"Importing instance: {instance.name}")  # Debug point 1
     folder = os.sep.join(filepath.split(os.sep)[:-1])
-
-    # Clean up the instance name
     instance_name = clean_instance_name(instance.name)
 
-    # Determine the expected PRM filename
     expected_prm_fname = instance_name if instance_name.endswith(".prm") else f"{instance_name}.prm"
+    print(f"Expected PRM file: {expected_prm_fname}")  # Debug point 2
 
-    # Try to find the exact file name
     prm_fname = None
     for f in os.listdir(folder):
         if f == expected_prm_fname:
             prm_fname = f
             break
 
-    # If no exact match was found, try to find a file that starts with the cleaned instance name
     if not prm_fname:
         for f in os.listdir(folder):
             if f.startswith(instance_name) and f.endswith(".prm"):
                 prm_fname = f
                 break
 
-    # Check if the object with this name already exists in the scene
+    print(f"Matching PRM found: {prm_fname}")  # Debug point 3
+
     if prm_fname in [ob.name for ob in scene.objects]:
+        print(f"PRM {prm_fname} already in scene. Duplicating...")  # Debug point 4
         data = scene.objects[prm_fname].data
-
-        # Create a duplicate object and link it to the scene
         instance_obj = bpy.data.objects.new(name=prm_fname, object_data=data)
-        if instance_obj is not None:
-            scene.collection.objects.link(instance_obj)
-
+        scene.collection.objects.link(instance_obj)
     elif prm_fname:
         prm_path = os.path.join(folder, prm_fname)
-        # Create the object and link it to the scene
+        print(f"Importing PRM from path: {prm_path}")  # Debug point 5
         instance_obj = prm_in.import_file(prm_path, scene)
-
     else:
-        # Create an empty object if no PRM file was found
+        print(f"No PRM found for {instance_name}. Creating empty object.")  # Debug point 6
         instance_obj = bpy.data.objects.new(instance_name, None)
-        if instance_obj is not None:
-            scene.collection.objects.link(instance_obj)
+        scene.collection.objects.link(instance_obj)
         instance_obj.empty_display_type = "SPHERE"
 
+    print(f"Applying transformations to {instance_name}")  # Debug point 7
     instance_obj.matrix_world = to_trans_matrix(instance.or_matrix)
     instance_obj.location = to_blender_coord(instance.position)
 
-    # Set custom properties on the Blender object
     instance_obj["is_instance"] = True
     instance_obj["fin_col"] = [(128 + c) / 255 for c in instance.color]
     envcol = (*instance.env_color.color, 255 - instance.env_color.alpha)
     instance_obj["fin_envcol"] = [c / 255 for c in envcol]
     instance_obj["fin_priority"] = instance.priority
 
-    flag = instance.flag
-    instance_obj["fin_model_rgb"] = bool(flag & FIN_SET_MODEL_RGB)
-    instance_obj["fin_env"] = bool(flag & FIN_ENV)
-    instance_obj["fin_hide"] = bool(flag & FIN_HIDE)
-    instance_obj["fin_no_mirror"] = bool(flag & FIN_NO_MIRROR)
-    instance_obj["fin_no_lights"] = bool(flag & FIN_NO_LIGHTS)
-    instance_obj["fin_no_cam_coll"] = bool(flag & FIN_NO_OBJECT_COLLISION)
-    instance_obj["fin_no_obj_coll"] = bool(flag & FIN_NO_CAMERA_COLLISION)
-    
     apply_environment_settings(instance_obj)
     model_color_material(instance_obj)
-    
+
+    print(f"Finished importing {instance_name}")  # Debug point 8
     return instance_obj
 
 def apply_environment_settings(obj):
@@ -249,32 +234,40 @@ def clean_instance_name(name):
     return f"{base_name}.prm" if name.endswith(".prm") else base_name
 
 def assign_material_to_all(scene):
-    mesh_objects = [obj for obj in scene.objects if obj.type == 'MESH']
+    mesh_objects = [obj for obj in scene.objects if obj.type == 'MESH' and obj.data]
     if not mesh_objects:
-        print("No mesh objects found for material assignment.")
+        print("No valid mesh objects for material assignment.")
         return
 
-    for obj in mesh_objects:
-        obj.data.material_choice = 'COL'
-        bpy.context.view_layer.objects.active = obj
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.select_all(action='SELECT')
+    # Deselect all objects first
+    bpy.ops.object.select_all(action='DESELECT')
 
-        # Ensure materials are only assigned once for each type
-        if "material_assigned_col" not in obj:
-            bpy.ops.object.assign_materials_auto()
-            obj["material_assigned_col"] = True  # Mark object to avoid re-processing COL
-        
-        bpy.ops.object.mode_set(mode='OBJECT')
-        
-        # Now assign UV_TEX layer as well
+    # Select all mesh objects at once for faster batch processing
+    for obj in mesh_objects:
+        if "material_assigned" not in obj:
+            obj.select_set(True)
+            obj.data.material_choice = 'COL'  # Set vertex color first
+
+    # Batch switch to edit mode
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.object.assign_materials_auto()
+
+    # Switch back to object mode
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    # Assign UV_TEX to all selected objects in one go
+    for obj in mesh_objects:
+        obj.select_set(True)
         obj.data.material_choice = 'UV_TEX'
-        bpy.context.view_layer.objects.active = obj
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.select_all(action='SELECT')
-        
-        if "material_assigned_uv" not in obj:
-            bpy.ops.object.assign_materials_auto()
-            obj["material_assigned_uv"] = True  # Mark object to avoid re-processing UV_TEX
-        
-        bpy.ops.object.mode_set(mode='OBJECT')
+
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.object.assign_materials_auto()
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    # Mark objects as assigned to prevent reprocessing
+    for obj in mesh_objects:
+        obj["material_assigned"] = True
+
+    print("Batch material assignment complete.")

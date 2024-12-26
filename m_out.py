@@ -28,8 +28,6 @@ from .common import dprint, get_all_lod, triangulate_ngons, queue_error, FACE_PR
 from. common import to_revolt_axis, rvbbox_from_bm, center_from_rvbbox, radius_from_bmesh
 from .layers import *
 from .rvstruct import Model
-from .tools import set_material_to_texture_for_object
-
 
 def export_file(filepath, scene):
     obj = bpy.context.view_layer.objects.active
