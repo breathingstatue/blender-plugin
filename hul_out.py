@@ -25,46 +25,47 @@ from .rvstruct import Hull, ConvexHull, BoundingBox, Edge, Sphere, Plane, Interi
 from mathutils import Color, Vector
 
 
-def get_plane(x, y, z):
-    vector1 = [x[1] - x[0], y[1] - y[0], z[1] - z[0]]
-    vector2 = [x[2] - x[0], y[2] - y[0], z[2] - z[0]]
-
-    normal = vector1.cross(vector2)
-
-    distance = - (normal[0] * x[0] + normal[1] * y[0] + normal[2] * z[0])
-
-
 def export_hull(filepath, scene):
-    hull = rvstruct.Hull()
+    hull = Hull()
 
-    # Export Convex Hulls
-    chull_objs = [obj for obj in scene.objects if "is_hull_convex" in obj and obj["is_hull_convex"]]
+    chull_objs = [obj for obj in scene.objects if obj.get("is_hull_convex", False)]
     hull.chull_count = len(chull_objs)
 
     for obj in chull_objs:
         chull = rvstruct.ConvexHull()
         bm = bmesh.new()
         bm.from_mesh(obj.data)
-
-        apply_trs(obj, bm, transform=False)
+        apply_trs(obj, bm)
 
         for face in bm.faces:
             plane = create_plane_from_face(face)
             chull.faces.append(plane)
             chull.face_count += 1
 
-        process_edges_and_vertices(chull, bm)
-        define_bounding_box(chull, bm)
-
-        bm.free()        
         hull.chulls.append(chull)
 
-    # Export Sphere Hulls
     hull.interior = process_sphere_hulls(scene)
-
-    # Write to file
+    
     with open(filepath, "wb") as f:
         hull.write(f)
+
+
+def process_sphere_hulls(scene):
+    interior = rvstruct.Interior()
+    sphere_objs = [obj for obj in scene.objects if obj.get("is_hull_sphere", False)]
+    interior.sphere_count = len(sphere_objs)
+
+    for obj in sphere_objs:
+        sphere = rvstruct.Sphere()
+        sphere.center = rvstruct.Vector(data=to_revolt_coord(obj.location))
+        sphere.radius = to_revolt_scale(sum(obj.scale) / 3)
+        interior.spheres.append(sphere)
+
+    return interior
+
+
+def export_file(filepath, scene):
+    return export_hull(filepath, scene)
         
 def create_plane_from_face(face):
     plane = rvstruct.Plane()

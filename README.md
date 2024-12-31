@@ -15,6 +15,7 @@ Objects (.fob)
 FULL CHANGELOG:
 
 20.24.12
+hotfix for Car Shadow Tool
 hotfix for .fin import / export
 hotfix for .prm export
 fixed bugs for Material Assigner

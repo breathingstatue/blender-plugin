@@ -966,23 +966,25 @@ class ButtonHullSphere(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
-        center = bpy.context.scene.cursor.location
+        scene = context.scene
+        center = scene.cursor.location
         radius = to_revolt_scale(0.1)
         filename = "Hull_Sphere"
 
-        ob = create_sphere(context.scene, center, radius, filename)
+        ob = create_sphere(scene, center, radius, filename)
 
         if ob.name not in context.collection.objects:
             context.collection.objects.link(ob)
         else:
-            self.report({'WARNING'}, f"Object '{ob.name}' is already in the collection")
+            self.report({'WARNING'}, f"Object '{ob.name}' already exists")
             return {'CANCELLED'}
 
         ob["is_hull_sphere"] = True
+        ob.is_hull_sphere = True
+        scene.is_hull_sphere = True  # Mark scene property
 
         ob.select_set(True)
         context.view_layer.objects.active = ob
-
         return {'FINISHED'}
     
 """
@@ -1569,8 +1571,7 @@ class BakeShadow(bpy.types.Operator):
                 texture.pixels[i + j] = min(texture.pixels[i + j] * factor, 1.0)
         texture.update()
 
-    def get_brightness_factor(scene):
-        # Map the slider value (1-8) to brightness factors from 2.0 to 1.3
+    def get_brightness_factor(self, scene):
         factor_mapping = {
             1: 2.0,
             2: 1.9,

@@ -375,18 +375,6 @@ def register():
         default=False
     )
     
-    bpy.types.Object.is_hull_sphere = bpy.props.BoolProperty(
-        name = "Is Interior Sphere",
-        default = False,
-        description = ""
-    )
-    
-    bpy.types.Object.is_hull_convex = bpy.props.BoolProperty(
-        name = "Is Convex Hull",
-        default = False,
-        description = ""
-    )
-
     bpy.types.Object.bcube_mesh_indices = bpy.props.StringProperty(
         name="Mesh Indices",
         default="",
@@ -861,7 +849,31 @@ def register():
 
     bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
     bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
-
+    
+    bpy.types.Scene.is_hull_sphere = bpy.props.BoolProperty(
+        name="Is Interior Sphere",
+        description="Enable Hull Sphere creation",
+        default=False
+    )
+    
+    bpy.types.Scene.is_hull_convex = bpy.props.BoolProperty(
+        name="Is Hull Convex",
+        description="Enable Convex Hull creation",
+        default=False
+    )
+    
+    bpy.types.Object.is_hull_sphere = bpy.props.BoolProperty(
+        name="Is Hull Sphere",
+        description="Marks object as hull sphere",
+        default=False
+    )
+    
+    bpy.types.Object.is_hull_convex = bpy.props.BoolProperty(
+        name="Is Hull Convex",
+        description="Marks object as hull convex",
+        default=False
+    )
+    
     bpy.types.Scene.export_worldcut = bpy.props.BoolProperty(
         name="Export WorldCut",
         description="Export world as split meshes (.w)",
@@ -1097,6 +1109,11 @@ def unregister():
     del bpy.types.Scene.split_size_faces
     del bpy.types.Scene.actual_split_size
     del bpy.types.Scene.export_worldcut
+    
+    del bpy.types.Object.is_hull_convex    
+    del bpy.types.Object.is_hull_sphere
+    del bpy.types.Scene.is_hull_convex
+    del bpy.types.Scene.is_hull_sphere
 
     bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
     bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
@@ -1158,8 +1175,6 @@ def unregister():
     del bpy.types.Scene.rvgl_dir
     del bpy.types.Object.is_mirror_plane
     del bpy.types.Object.bcube_mesh_indices
-    del bpy.types.Object.is_hull_convex
-    del bpy.types.Object.is_hull_sphere
     del bpy.types.Scene.export_camber
     del bpy.types.Scene.apply_rotation
     del bpy.types.Scene.apply_scale

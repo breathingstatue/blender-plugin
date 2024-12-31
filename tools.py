@@ -132,27 +132,22 @@ def bake_shadow(self, context):
     scene.render.engine = original_engine
 
 def generate_chull(context):
-    hull_name = f"is_hull_convex"  # Prefix for naming the hull object
-
     scene = context.scene
     obj = context.object
+    hull_name = "Convex_Hull"
 
     bm = bmesh.new()
     bm.from_mesh(obj.data)
 
-    # Adds a convex hull to the bmesh
     chull_out = bmesh.ops.convex_hull(bm, input=bm.verts)
-    
+
     try:
-        # Gets rid of interior geometry
         for face in bm.faces:
             if face not in chull_out["geom"]:
                 bm.faces.remove(face)
-
         for edge in bm.edges:
             if edge not in chull_out["geom"]:
                 bm.edges.remove(edge)
-
         for vert in bm.verts:
             if vert not in chull_out["geom"]:
                 bm.verts.remove(vert)
@@ -161,35 +156,28 @@ def generate_chull(context):
         bm.to_mesh(me)
         bm.free()
 
-        # Create new hull object
         hull_ob = bpy.data.objects.new(hull_name, me)
-
-        # Set custom property
         hull_ob.is_hull_convex = True
+        hull_ob["is_hull_convex"] = True
+        scene.is_hull_convex = True  # Mark scene property
 
-        # Setup materials and other properties
         hull_ob.show_transparent = True
         hull_ob.show_wire = True
         hull_ob.matrix_world = obj.matrix_world.copy()
         me.materials.append(create_material("RVHull", COL_HULL, 0.3))
 
-        # Link new hull object to the same collections as the original object
         for collection in bpy.data.collections:
             if obj.name in collection.objects:
                 collection.objects.link(hull_ob)
 
-        # Remove the original object
         bpy.data.objects.remove(obj, do_unlink=True)
 
-        # Select and activate hull object
         context.view_layer.objects.active = hull_ob
         hull_ob.select_set(True)
-
         context.view_layer.update()
-
         return hull_ob
     except Exception as e:
-        print(f"An error occurred while generating the hull: {e}")
+        self.report({'ERROR'}, f"Failed to generate convex hull: {e}")
         return None
     
 def get_trigger_type_items(self, context):
