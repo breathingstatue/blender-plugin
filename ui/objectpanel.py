@@ -15,6 +15,7 @@ class RVIO_PT_RevoltObjectPanel(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         obj = context.active_object
+        scene = context.scene
         
         #Track Zone properties
         tz_box = layout.box()
@@ -62,11 +63,13 @@ class RVIO_PT_RevoltObjectPanel(bpy.types.Panel):
         mirror_col = mirror_box.column(align=True)
         mirror_col.prop(obj, "is_mirror_plane", text="Is Mirror Plane")
 
-        # Hull properties
+        # Hull Spheres
         hull_box = layout.box()
         hull_box.label(text="Hull Properties:")
         hull_col = hull_box.column(align=True)
-        hull_col.operator("hull.generate")
+        hull_col.operator("hull.generate", text="Generate Convex Hull")
+        hull_box.prop(obj, "is_hull_sphere", text="is Hull Sphere")
+        hull_box.prop(obj, "is_hull_convex", text="is Hull Convex")
         
         # Debug properties
         box = layout.box()
