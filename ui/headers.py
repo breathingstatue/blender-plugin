@@ -18,4 +18,8 @@ class RVIO_PT_RevoltIOToolPanel(bpy.types.Panel):
         
         box = self.layout.box()
         box.label(text="Car tools:")
-        box.operator("headers.car_parameters_export")
+        box.operator("headers.copy_wheel_params", text="Copy Wheel Params")
+        box.operator("headers.axle_message_box", text="Copy Axle Params")
+        box.operator("headers.spring_message_box", text="Copy Spring Params")
+        box.operator("headers.pin_message_box", text="Copy Pin Params")
+        box.operator("headers.copy_aerial_params", text="Copy Aerial Params")
