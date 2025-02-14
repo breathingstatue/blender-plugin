@@ -27,23 +27,8 @@ from .common import COL_SPHERE, COL_HULL, to_blender_coord, to_blender_scale, cr
 from .rvstruct import Hull
 from mathutils import Color, Vector
 
-
-import os
-import subprocess
-import re
-import bpy
-import bmesh
-import importlib
-from . import common, rvstruct
-
-if "bpy" in locals():
-    importlib.reload(common)
-    importlib.reload(rvstruct)
-
-from .common import COL_SPHERE, COL_HULL, to_blender_coord, to_blender_scale, create_material
-from .rvstruct import Hull
-from mathutils import Vector
-
+def import_file(filepath, scene):
+    return import_hull(filepath, scene)
 
 def import_hull(filepath, scene):
     with open(filepath, "rb") as fd:
@@ -54,8 +39,6 @@ def import_hull(filepath, scene):
     qhull_out = os.path.join(script_dir, "hull", "qhull_out.txt")
     qhull_exe = os.path.join(script_dir, "hull", "qhull.exe") if os.name == "nt" else "qhull"
 
-    filename = os.path.basename(filepath)
-
     for chull in hull.chulls:
         offset = rvstruct.Vector(data=(
             (chull.bbox.xlo + chull.bbox.xhi) / 2,
@@ -63,17 +46,9 @@ def import_hull(filepath, scene):
             (chull.bbox.zlo + chull.bbox.zhi) / 2
         ))
         chull.bbox_offset += offset
-    
-        # Apply offset to shift the bounding box
-        chull.bbox.xlo -= offset[0]
-        chull.bbox.xhi -= offset[0]
-        chull.bbox.ylo -= offset[1]
-        chull.bbox.yhi -= offset[1]
-        chull.bbox.zlo -= offset[2]
-        chull.bbox.zhi -= offset[2]
 
         bm = bmesh.new()
-        me = bpy.data.meshes.new(filename)
+        me = bpy.data.meshes.new("Hull_Convex")  # Changed name to "Hull_Convex"
 
         with open(qhull_in, "w") as file:
             file.write("3 1\n")
@@ -101,7 +76,8 @@ def import_hull(filepath, scene):
         me.materials.append(create_material("RVHull", COL_HULL, 0.3))
         bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
         bm.to_mesh(me)
-        ob = bpy.data.objects.new(filename, me)
+
+        ob = bpy.data.objects.new("Hull_Convex", me)  # Changed name here
         ob.show_transparent = True
         ob.show_wire = True
         ob.is_hull_convex = True
@@ -109,108 +85,36 @@ def import_hull(filepath, scene):
         bpy.context.collection.objects.link(ob)
 
     for sphere in hull.interior.spheres:
-        create_sphere(scene, sphere.center, sphere.radius, filename)
+        create_sphere(scene, sphere.center, sphere.radius, "Hull_Sphere")
 
 
 def create_sphere(scene, center, radius, filename):
+    # Convert center and radius to Blender scale
     center = to_blender_coord(center)
     radius = to_blender_scale(radius)
+
     mname = "RVSphere"
-    
     me = bpy.data.meshes.new(mname) if mname not in bpy.data.meshes else bpy.data.meshes[mname]
     bm = bmesh.new()
+
+    # Create the sphere using Blender's radius
     bmesh.ops.create_uvsphere(bm, radius=radius, u_segments=16, v_segments=8, calc_uvs=True)
     bm.to_mesh(me)
     bm.free()
+
     me.materials.append(create_material(mname, COL_SPHERE, 0))
+    for poly in me.polygons:
+        poly.use_smooth = True
 
     ob = bpy.data.objects.new("Hull_Sphere", me)
     ob.location = center
-    ob.scale = (radius, radius, radius)
+    ob.scale = (1, 1, 1)  # Avoid double-scaling by setting uniform scale
     ob.display_type = "SOLID"
     ob.is_hull_sphere = True
     ob["is_hull_sphere"] = True
     bpy.context.collection.objects.link(ob)
     return ob
 
-
-def import_file(filepath, scene):
-    return import_hull(filepath, scene)
-
-def import_chull(chull, scene, filename):
-    #unused
-    print("Importing convex hull...")
-
-    me = bpy.data.meshes.new(filename)
-    bm = bmesh.new()
-
-    print("verts:", len(chull.vertices))
-    print("edges:", len(chull.edges))
-    print("faces:", len(chull.faces))
-
-    for vert in chull.vertices:
-        position = to_blender_coord(vert)
-        print("vertex position:", position)
-
-        # Creates vertices
-        bm.verts.new(Vector((position[0], position[1], position[2])))
-
-        bm.verts.ensure_lookup_table()
-
-    for edge in chull.edges:
-        e = bm.edges.new([bm.verts[edge[0]], bm.verts[edge[1]]])
-        if e is None:
-            print("could not create edge")
-    for face in chull.faces:
-        print("FACE-----------------")
-        verts = []
-        for vert in chull.vertices:
-            if face.contains_vertex(vert):
-                position = to_blender_coord(vert)
-                # Creates vertices
-                v = bm.verts.new(Vector((position[0], position[1], position[2])))
-                verts.append(v)
-        if len(verts) > 2:
-            # bm.faces.append(bmesh.ops.contextual_create(bm, verts, 0, False)["faces"])
-            bmesh.ops.contextual_create(bm, geom=verts, use_smooth=True)
-            # bm.faces.new(verts)
-
-    bpy.context.collection.objects.link(ob)
-    context.view_layer.objects.active = ob
-
-    # Converts the bmesh back to a mesh and frees resources
-    bm.normal_update()
-    bm.to_mesh(me)
-    bm.free()
-
-def create_sphere(scene, center, radius, filename):
-    col = COL_SPHERE
-    center = to_blender_coord(center)
-    radius = to_blender_scale(radius)
-    mname = "RVSphere"
-    if mname not in bpy.data.meshes:
-        me = bpy.data.meshes.new(mname)
-        bm = bmesh.new()
-        # Creates a UV sphere
-        bmesh.ops.create_uvsphere(bm, radius=radius, u_segments=16, v_segments=8, calc_uvs=True)
-        bm.to_mesh(me)
-        bm.free()
-        # Creates a transparent material for the object
-        me.materials.append(create_material(mname, col, 0))
-        # Makes polygons smooth
-        for poly in me.polygons:
-            poly.use_smooth = True
-    else:
-        me = bpy.data.meshes[mname]
-
-    # Links the object and sets position and scale
-    ob = bpy.data.objects.new(f"hull_sphere", me)
-    bpy.context.collection.objects.link(ob)
-    ob.location = center
-    ob.scale = (radius, radius, radius)
-    ob.display_type = "SOLID"
-    ob.is_hull_sphere = True
-    return ob
 
 def import_file(filepath, scene):
     return import_hull(filepath, scene)

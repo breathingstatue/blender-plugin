@@ -608,7 +608,6 @@ def objects_to_bmesh(objs, transform=True):
 
 	return bm_all
 
-
 class DialogOperator(bpy.types.Operator):
 	bl_idname = "revolt.dialog"
 	bl_label = "Re-Volt Add-On Notification"

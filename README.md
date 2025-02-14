@@ -1,25 +1,27 @@
 # blender-plugin
-I created a modified version of Marv's Blender Plugin for Re-Volt, that works in the current Blender (4.3)
+I created a modified version of Marv's Blender Plugin for Re-Volt, that works in the current Blender (4.1)
 
 INSTALLATION
-place 'io_revolt' in Blender/"version"/scripts/addons_core/
+place 'io_revolt' in Blender/"version"/scripts/addons/
 
--Theman with the help of Chat GPT
+-Theman with the help of Chat GPT and a bunch of friends in the RV I/O community.
 
 TO DO LIST:
 
-20.24.?
-Car AutoShader Tool
+20.25.?
 Objects (.fob)
+Car AutoShader
+broader .m (model) support
 
 FULL CHANGELOG:
 
-20.24.12
-hotfix for Car Shadow Tool
-hotfix for .fin import / export
-hotfix for .prm export
-fixed bugs for Material Assigner
-fixed bugs for .prm / .fin files
+20.25.2
+improved car import / parameters export
+especially the handling of length parameter
+
+20.25.1
+fixed .hul import / export
+fixed Convex Hull Tool
 
 20.24.11
 fixed bugs for Vertex Colouring

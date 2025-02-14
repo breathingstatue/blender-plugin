@@ -14,6 +14,7 @@ import bmesh
 import mathutils
 import re
 from math import pi
+from mathutils import Matrix
 import time
 from . import common
 from .common import create_material, COL_HULL, int_to_texture, texture_to_int, get_texture_path, TRIGGER_TYPES, LOW_FLAG_OPTIONS, HIGH_FLAG_OPTIONS
@@ -30,7 +31,7 @@ if "common" in locals():
     importlib.reload(common)
 
 
-def bake_shadow(self, context):
+def bake_shadow(self, context, shade_obj):
     original_active = context.view_layer.objects.active
     original_location = original_active.location
     scene = context.scene
@@ -60,6 +61,10 @@ def bake_shadow(self, context):
 
     # Create a texture for the shadow
     shadow_tex = bpy.data.images.new("Shadow", width=resolution, height=resolution)
+
+    # Ensure `shade_obj` is valid
+    if not shade_obj:
+        raise ValueError("shade_obj is not defined or invalid")
 
     all_objs = [ob_child for ob_child in context.scene.objects if ob_child.parent == shade_obj] + [shade_obj]
 
@@ -136,22 +141,43 @@ def generate_chull(context):
     obj = context.object
     hull_name = "Convex_Hull"
 
-    bm = bmesh.new()
-    bm.from_mesh(obj.data)
+    # Duplicate the object
+    duplicate_obj = obj.copy()
+    duplicate_obj.data = obj.data.copy()
 
-    chull_out = bmesh.ops.convex_hull(bm, input=bm.verts)
+    # Temporarily link the duplicate for processing
+    temp_collection = bpy.data.collections.new("Temp_Collection")
+    bpy.context.scene.collection.children.link(temp_collection)
+    temp_collection.objects.link(duplicate_obj)
+
+    bpy.context.view_layer.objects.active = duplicate_obj
+    duplicate_obj.select_set(True)
+
+    # Convert the duplicate to a convex hull
+    bm = bmesh.new()
+    bm.from_mesh(duplicate_obj.data)
 
     try:
-        for face in bm.faces:
+        chull_out = bmesh.ops.convex_hull(bm, input=bm.verts)
+
+        # Validate convex hull geometry
+        if not chull_out["geom"]:
+            print("No valid convex hull geometry created.")
+            bm.free()
+            return None
+
+        # Remove non-hull geometry
+        for face in bm.faces[:]:
             if face not in chull_out["geom"]:
                 bm.faces.remove(face)
-        for edge in bm.edges:
+        for edge in bm.edges[:]:
             if edge not in chull_out["geom"]:
                 bm.edges.remove(edge)
-        for vert in bm.verts:
+        for vert in bm.verts[:]:
             if vert not in chull_out["geom"]:
                 bm.verts.remove(vert)
 
+        # Create a new mesh and object for the convex hull
         me = bpy.data.meshes.new(hull_name)
         bm.to_mesh(me)
         bm.free()
@@ -159,25 +185,30 @@ def generate_chull(context):
         hull_ob = bpy.data.objects.new(hull_name, me)
         hull_ob.is_hull_convex = True
         hull_ob["is_hull_convex"] = True
-        scene.is_hull_convex = True  # Mark scene property
-
+        hull_ob.matrix_world = obj.matrix_world.copy()
         hull_ob.show_transparent = True
         hull_ob.show_wire = True
-        hull_ob.matrix_world = obj.matrix_world.copy()
         me.materials.append(create_material("RVHull", COL_HULL, 0.3))
 
-        for collection in bpy.data.collections:
-            if obj.name in collection.objects:
-                collection.objects.link(hull_ob)
+        # Link to the same collections as the original object
+        for collection in obj.users_collection:
+            collection.objects.link(hull_ob)
 
-        bpy.data.objects.remove(obj, do_unlink=True)
+        # Remove the temporary duplicate
+        bpy.data.objects.remove(duplicate_obj, do_unlink=True)
+        bpy.data.collections.remove(temp_collection)
 
+        # Set the convex hull as the active object
         context.view_layer.objects.active = hull_ob
         hull_ob.select_set(True)
         context.view_layer.update()
+
         return hull_ob
     except Exception as e:
-        self.report({'ERROR'}, f"Failed to generate convex hull: {e}")
+        print(f"Failed to generate convex hull: {e}")
+        bm.free()
+        bpy.data.objects.remove(duplicate_obj, do_unlink=True)
+        bpy.data.collections.remove(temp_collection)
         return None
     
 def get_trigger_type_items(self, context):

@@ -1,4 +1,4 @@
-import os
+﻿import os
 from re import S
 import bpy
 import bmesh
@@ -40,13 +40,6 @@ def import_car(params, filepath, scene, car_name):
     # Pass car_name and params to import_all_textures
     import_all_textures(folder, car_name, params)
 
-    if 'body' in params and "model" in params:
-        body = params["model"][params["body"]["modelnum"]]
-        body_loc = to_blender_coord(params["body"]["offset"])
-    else:
-        body = None
-        body_loc = (0, 0, 0)
-        print("Warning: 'body' data missing in parameters.txt. Skipping body import.")
     if 'wheel' in params:
         wheel0loc = to_blender_coord(params["wheel"][0]["offset1"])
         wheel1loc = to_blender_coord(params["wheel"][1]["offset1"])
@@ -55,70 +48,69 @@ def import_car(params, filepath, scene, car_name):
     else:
         wheel0loc = wheel1loc = wheel2loc = wheel3loc = (0, 0, 0)
         print("Warning: 'wheel' data missing in parameters.txt. Skipping wheel imports.")
+
+    spring_lengths = []
     if 'spring' in params:
         spring0loc = to_blender_coord(params["spring"][0]["offset"])
         spring1loc = to_blender_coord(params["spring"][1]["offset"])
         spring2loc = to_blender_coord(params["spring"][2]["offset"])
         spring3loc = to_blender_coord(params["spring"][3]["offset"])
-        spring0length = to_blender_scale(params["spring"][0]["length"])
-        spring1length = to_blender_scale(params["spring"][1]["length"])
-        spring2length = to_blender_scale(params["spring"][2]["length"])
-        spring3length = to_blender_scale(params["spring"][3]["length"])
+        spring_lengths = [
+            to_blender_scale(params["spring"][0]["length"]),
+            to_blender_scale(params["spring"][1]["length"]),
+            to_blender_scale(params["spring"][2]["length"]),
+            to_blender_scale(params["spring"][3]["length"])
+        ]
     else:
         spring0loc = spring1loc = spring2loc = spring3loc = (0, 0, 0)
-        spring0length = spring1length = spring2length = spring3length = 0
+        spring_lengths = [0, 0, 0, 0]
         print("Warning: 'spring' data missing in parameters.txt. Skipping all springs.")
+
+    axle_lengths = []
     if 'axle' in params:
         axle0loc = to_blender_coord(params["axle"][0]["offset"])
         axle1loc = to_blender_coord(params["axle"][1]["offset"])
         axle2loc = to_blender_coord(params["axle"][2]["offset"])
         axle3loc = to_blender_coord(params["axle"][3]["offset"])
-        axle0length = to_blender_scale(params["axle"][0]["length"])
-        axle1length = to_blender_scale(params["axle"][1]["length"])
-        axle2length = to_blender_scale(params["axle"][2]["length"])
-        axle3length = to_blender_scale(params["axle"][3]["length"])
+        axle_lengths = [
+            to_blender_scale(params["axle"][0]["length"]),
+            to_blender_scale(params["axle"][1]["length"]),
+            to_blender_scale(params["axle"][2]["length"]),
+            to_blender_scale(params["axle"][3]["length"])
+        ]
     else:
         axle0loc = axle1loc = axle2loc = axle3loc = (0, 0, 0)
-        axle0length = axle1length = axle2length = axle3length = 0
+        axle_lengths = [0, 0, 0, 0]
         print("Warning: 'axle' data missing in parameters.txt. Skipping axle imports.")
+
+    pin_lengths = []
     if 'pin' in params:
         pin0loc = to_blender_coord(params["pin"][0]["offset"]) if params["pin"][0]["offset"] != (0.0, 0.0, 0.0) else spring0loc
         pin1loc = to_blender_coord(params["pin"][1]["offset"]) if params["pin"][1]["offset"] != (0.0, 0.0, 0.0) else spring1loc
         pin2loc = to_blender_coord(params["pin"][2]["offset"]) if params["pin"][2]["offset"] != (0.0, 0.0, 0.0) else spring2loc
         pin3loc = to_blender_coord(params["pin"][3]["offset"]) if params["pin"][3]["offset"] != (0.0, 0.0, 0.0) else spring3loc
-        pin0length = to_blender_scale(params["pin"][0]["length"])
-        pin1length = to_blender_scale(params["pin"][1]["length"])
-        pin2length = to_blender_scale(params["pin"][2]["length"])
-        pin3length = to_blender_scale(params["pin"][3]["length"])
+        pin_lengths = [
+            (params["pin"][0]["length"]),
+            (params["pin"][1]["length"]),
+            (params["pin"][2]["length"]),
+            (params["pin"][3]["length"])
+        ]
     else:
         pin0loc = pin1loc = pin2loc = pin3loc = (0, 0, 0)
-        pin0length = pin1length = pin2length = pin3length = 0
+        pin_lengths = [0, 0, 0, 0]
         print("Warning: 'pin' data missing in parameters.txt. Skipping pin imports.")
-    if 'aerial' in params:
-        aerial_loc = to_blender_coord(params["aerial"]["offset"])
-    else:
-        aerial_loc = (0, 0, 0)
-        print("Warning: 'aerial' data missing in parameters.txt. Skipping aerial import.")
-    if "camber" in params['wheel'][0]:
-        camber_0 = to_blender_angle(params['wheel'][0]["camber"])
-    else:
-        camber_0 = 0.0  # Explicitly set camber to 0.0 if not present
 
-    if "camber" in params['wheel'][1]:
-        camber_1 = to_blender_angle(params['wheel'][1]["camber"])
-    else:
-        camber_1 = 0.0  # Explicitly set camber to 0.0 if not present
-
-    if "camber" in params['wheel'][2]:
-        camber_2 = to_blender_angle(params['wheel'][2]["camber"])
-    else:
-        camber_2 = 0.0  # Explicitly set camber to 0.0 if not present
-
-    if "camber" in params['wheel'][3]:
-        camber_3 = to_blender_angle(params['wheel'][3]["camber"])
-    else:
-        camber_3 = 0.0  # Explicitly set camber to 0.0 if not present
-
+    cambers = [
+        to_blender_angle(params['wheel'][0].get("camber", 0.0)),
+        to_blender_angle(params['wheel'][1].get("camber", 0.0)),
+        to_blender_angle(params['wheel'][2].get("camber", 0.0)),
+        to_blender_angle(params['wheel'][3].get("camber", 0.0))
+    ]
+    
+    wheel_locations = [wheel0loc, wheel1loc, wheel2loc, wheel3loc]
+    spring_locations = [spring0loc, spring1loc, spring2loc, spring3loc]
+    pin_locations = [pin0loc, pin1loc, pin2loc, pin3loc]
+    
     def get_single_file_with_keyword(keyword):
         files = [f for f in os.listdir(folder) if keyword in f.lower() and f.lower().endswith('.prm')]
         return files[0] if len(files) == 1 else None
@@ -162,20 +154,6 @@ def import_car(params, filepath, scene, car_name):
         obj.name = name
         return obj
 
-    wheel_locations = [wheel0loc, wheel1loc, wheel2loc, wheel3loc]
-    spring_lengths = [spring0length, spring1length, spring2length, spring3length]
-    axle_lengths = [axle0length, axle1length, axle2length, axle3length]
-    if 'pin' in params:
-        # Set pin locations and lengths only if pin data exists
-        pin_locations = [pin0loc, pin1loc, pin2loc, pin3loc]
-        pin_lengths = [spring_lengths[i] + to_blender_scale(params["pin"][i]["length"]) for i in range(4)]
-    else:
-        # Default values if pin data is missing
-        pin_locations = [(0, 0, 0)] * 4
-        pin_lengths = [0] * 4
-        print("Warning: 'pin' data missing in parameters.txt. Skipping pin imports.")
-    cambers = [camber_0, camber_1, camber_2, camber_3]
-    
     # Body
     try:
         body_path = get_path(params['body']['modelnum'], 'body')
@@ -233,11 +211,12 @@ def import_car(params, filepath, scene, car_name):
     if 'axle' in params:
         axle_names = ['axle0', 'axle1', 'axle2', 'axle3']
         axles = []
+        axle_locations = [axle0loc, axle1loc, axle2loc, axle3loc]
         for i in range(4):
             try:
                 axle_path = get_path(params['axle'][i]['modelnum'], 'axle')
                 if axle_path:
-                    axle = import_or_placeholder(axle_path, axle_names[i], to_blender_coord(params['axle'][i]['offset']))
+                    axle = import_or_placeholder(axle_path, axle_names[i], axle_locations[i])
                     axle.parent = body_obj
                     axles.append(axle)
                     align_to_axis(axle, 'Y')
@@ -258,23 +237,98 @@ def import_car(params, filepath, scene, car_name):
         for i in range(4):
             try:
                 if params['pin'][i]['modelnum'] == -1:
+                    print(f"Skipping pin {i} due to ModelNum being -1.")
                     continue  # Skip this pin if ModelNum is -1
                 pin_path = get_path(params['pin'][i]['modelnum'], 'pin')
                 if pin_path:
                     pin = import_or_placeholder(pin_path, pin_names[i], pin_locations[i])
                     pin.parent = body_obj
                     pins.append(pin)
-                    align_to_axis(pin, 'Z')
-                    adjust_object_length(pin, pin_lengths[i], 'Z')
-                    direction_to_wheel = Vector(wheel_locations[i]) - Vector(pin_locations[i])
-                    direction_to_wheel.normalize()
-                    opposite_direction = -direction_to_wheel
-                    rot_quat = opposite_direction.to_track_quat('Z', 'Y')
-                    pin.rotation_euler = rot_quat.to_euler()
-                    move_distance = pin_lengths[i]
-                    move_vector = direction_to_wheel * move_distance
-                    pin.location += move_vector
-                    print(f"Imported and oriented pin {pin_names[i]} away from wheel {wheel_names[i]}")
+
+                    # Use the predefined wheel location
+                    wheel_location = Vector(wheel_locations[i])
+                    print(f"Wheel location for pin {pin_names[i]}: {wheel_location}")
+
+                    # Align the pin's Z-axis to point towards the wheel location
+                    align_to_direction(pin, wheel_location)
+
+                    # Move the pin to the wheel location
+                    pin.location = wheel_location
+
+                    # Update the object's transformation matrix to apply the changes
+                    pin.matrix_world = pin.matrix_basis
+
+                    # Get the length parameter and interpret the scale factor
+                    length_param = params['pin'][i]['length']
+                    print(f"Length parameter for pin {pin_names[i]}: {length_param}")
+
+                    if length_param == 0.0:
+                        scale_factor = 1.0  # No scaling or movement
+                    elif 0 < length_param < 1:
+                        scale_factor = 1.0 + length_param  # Increase scale
+                    elif length_param < -1.0:
+                        scale_factor = abs(length_param)
+                    elif length_param > 1.0:
+                        scale_factor = length_param
+
+                        # Calculate the original bounding box after positioning and aligning
+                        original_min_x, original_max_x, original_max_z = calculate_bounding_box(pin)
+                        print(f"Original bounding box for pin {pin_names[i]}: X({original_min_x}, {original_max_x}), Z({original_max_z})")
+
+                        # Scale the pin in the Z direction
+                        pin.scale.z = scale_factor  # Directly set the scale factor
+                        print(f"Scaled pin {pin_names[i]} by factor {scale_factor}")
+
+                        # Update the object's transformation matrix to apply the scaling
+                        pin.matrix_world = pin.matrix_basis
+
+                        # Calculate the scaled bounding box
+                        scaled_min_x, scaled_max_x, scaled_max_z = calculate_bounding_box(pin)
+                        print(f"Scaled bounding box for pin {pin_names[i]}: X({scaled_min_x}, {scaled_max_x}), Z({scaled_max_z})")
+
+                        # Calculate the adjustments needed to even out the edges
+                        if i % 2 == 0:
+                            # For pins 0 and 2, move towards -x based on max_x difference
+                            adjustment_x = original_max_x - scaled_max_x
+                        else:
+                            # For pins 1 and 3, move towards +x based on min_x difference
+                            adjustment_x = original_min_x - scaled_min_x
+
+                        # Adjust the pin's X position
+                        pin.location.x += adjustment_x
+
+                        # Adjust the pin's Z position to maintain the top edge
+                        adjustment_z = original_max_z - scaled_max_z
+                        pin.location.z += adjustment_z
+
+                        # Store the original Y coordinate
+                        original_y = pin.location.y
+
+                        # Duplicate the pin
+                        duplicate = duplicate_object(pin)
+
+                        # Set the duplicate's origin to its geometry
+                        set_geometry_to_origin(duplicate)
+
+                        # Align the original pin with the duplicate in the Y direction
+                        pin.location.y = duplicate.location.y
+
+                        # Remove the duplicate from the scene
+                        bpy.data.objects.remove(duplicate, do_unlink=True)
+
+                        # Restore the original Y coordinate
+                        pin.location.y = original_y
+
+                        print(f"Adjusted location for pin {pin_names[i]}: {pin.location}")
+                    else:
+                        scale_factor = 1.0 - length_param  # Reduce scale
+
+                    # Ensure the final scale factor is applied correctly
+                    pin.scale.z = scale_factor
+                    print(f"Final scale factor for pin {pin_names[i]}: {scale_factor}")
+                    print(f"Final location for pin {pin_names[i]}: {pin.location}")
+
+                    print(f"Imported, oriented, and scaled pin {pin_names[i]} towards wheel {wheel_location}")
                 else:
                     print(f"Warning: Missing data or path for pin {i}. Skipping pin import.")
             except KeyError:
@@ -317,7 +371,7 @@ def import_car(params, filepath, scene, car_name):
             print("Warning: Aerial data missing in parameters.txt. Skipping aerial import.")
     else:
         print("Warning: No aerial parameters found. Skipping aerial import.")
-    
+
     # Apply UV maps to textures for all imported objects
     for obj in imported_objects:
         apply_uv_maps_to_textures(obj)
@@ -479,34 +533,43 @@ def align_to_axis(obj, target_axis='Z'):
         bpy.context.view_layer.update()
         print(f"Rotated {obj.name} around {rotation_axis.upper()} by {angle} degrees to align {principal_axis.upper()} with {target_axis.upper()}")
 
-def adjust_object_length(obj, target_length, length_axis='Z'):
+def adjust_object_length(obj, target_length_blender, length_axis='Z'):
     bpy.context.view_layer.update()
     bbox = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
+
     if length_axis == 'Y':
-        current_length = max(v.y for v in bbox) - min(v.y for v in bbox)
+        original_length_blender = max(v.y for v in bbox) - min(v.y for v in bbox)
     elif length_axis == 'Z':
-        current_length = max(v.z for v in bbox) - min(v.z for v in bbox)
+        original_length_blender = max(v.z for v in bbox) - min(v.z for v in bbox)
     elif length_axis == 'X':
-        current_length = max(v.x for v in bbox) - min(v.x for v in bbox)
+        original_length_blender = max(v.x for v in bbox) - min(v.x for v in bbox)
 
-    print(f"Before scaling, {obj.name} length along {length_axis}: {current_length}")
+    print(f"Original length of {obj.name} along {length_axis}: {original_length_blender} Blender units")
 
-    if current_length > 0:
-        scale_factor = target_length / current_length
-        if length_axis == 'Y':
-            obj.scale.y *= scale_factor
-        elif length_axis == 'Z':
-            obj.scale.z *= scale_factor
-        elif length_axis == 'X':
-            obj.scale.x *= scale_factor
+    # For other objects, use the percentage logic
+    base_value = 20.0
+    percentage = (base_value / target_length_blender)
+    new_length = original_length_blender * percentage
+    new_length /= 100  # Reduce the dimension by 100 times
 
-        bpy.context.view_layer.update()
-        print(f"Scaled {obj.name} along {length_axis} to target length {target_length}. Scale factor applied: {scale_factor}")
+    # Calculate the new scale factor
+    new_scale_factor = new_length / original_length_blender
 
-        bpy.context.view_layer.update()
-        bbox = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
-        new_length = max(getattr(v, length_axis.lower()) for v in bbox) - min(getattr(v, length_axis.lower()) for v in bbox)
-        print(f"After scaling, {obj.name} length along {length_axis}: {new_length}")
+    # Apply the new scale factor to the object's scale along the specified axis
+    if length_axis == 'Y':
+        obj.scale.y *= new_scale_factor
+    elif length_axis == 'Z':
+        obj.scale.z *= new_scale_factor
+    elif length_axis == 'X':
+        obj.scale.x *= new_scale_factor
+
+    bpy.context.view_layer.update()
+    print(f"Adjusted {obj.name} along {length_axis} to target length {new_length} Blender units.")
+
+    bpy.context.view_layer.update()
+    bbox = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
+    new_length_blender = max(getattr(v, length_axis.lower()) for v in bbox) - min(getattr(v, length_axis.lower()) for v in bbox)
+    print(f"After adjustment, {obj.name} length along {length_axis}: {new_length_blender} Blender units")
 
 def check_alignment_and_orient(obj, wheel_loc):
     if is_aligned(obj):
@@ -524,7 +587,56 @@ def set_spring_orientation(spring, wheel_loc, outward=True):
     rot_quat = direction.to_track_quat('Z', 'Y')
     spring.rotation_euler = rot_quat.to_euler()
     print(f"Applied rotation to {spring.name}")
+    
+def align_to_direction(pin, target_location):
+    # Calculate the direction vector from the pin to the target location
+    direction = target_location - pin.location
+    direction.normalize()
 
+    # Create a quaternion rotation to align the pin's Z-axis with the direction vector
+    up = Vector((0, 1, 0))  # Assuming the pin's local Y-axis is the up direction
+    rot_quat = direction.to_track_quat('Z', 'Y')
+
+    # Apply an additional 180-degree rotation around the X-axis to flip the pin
+    flip_quat = Quaternion((1, 0, 0), math.radians(180))
+
+    # Combine the rotations
+    final_quat = rot_quat @ flip_quat
+
+    # Apply the rotation to the pin
+    pin.rotation_mode = 'QUATERNION'
+    pin.rotation_quaternion = final_quat
+
+def calculate_bounding_box(obj):
+    # Get the object's vertices in world space
+    vertices = [obj.matrix_world @ Vector(v.co) for v in obj.data.vertices]
+
+    # Calculate the bounding box
+    min_x = min(v.x for v in vertices)
+    max_x = max(v.x for v in vertices)
+    max_z = max(v.z for v in vertices)
+
+    return min_x, max_x, max_z
+
+def duplicate_object(obj):
+    # Create a duplicate of the object
+    duplicate = obj.copy()
+    duplicate.data = obj.data.copy()
+    duplicate.animation_data_clear()
+    bpy.context.collection.objects.link(duplicate)
+    return duplicate
+
+def set_geometry_to_origin(obj):
+    # Store the current active object
+    original_active = bpy.context.view_layer.objects.active
+
+    # Set the duplicate as the active object
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
+
+    # Restore the original active object
+    bpy.context.view_layer.objects.active = original_active
+    
 def set_orientation(obj, target_pos, flip=False):
     if obj is None:
         print("Attempted to set orientation on a None object.")

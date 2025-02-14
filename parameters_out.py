@@ -7,6 +7,7 @@ Prints most valuable car parameters into clipboard.
 
 """
 
+from logging import INFO
 import bpy
 import bmesh
 import importlib
@@ -22,6 +23,10 @@ if "bpy" in locals():
     importlib.reload(common)
 
 from .common import to_revolt_coord  # Assuming to_revolt_coord exists in common and converts Blender to Re-Volt coordinates
+
+"""
+MODEL INFO -----------------------------------------------------------------------
+"""
 
 def append_model_info(params, car_name):
     params += f";====================\n"
@@ -80,57 +85,9 @@ def append_model_info(params, car_name):
 
     return params
             
-def append_additional_params(params):
-    params += f";====================\n"
-    params += f"; Stuff mainly for frontend display and car selectability\n"
-    params += f";====================\n\n"
-    params += f"BestTime\tTRUE\n"
-    params += f"Selectable\tTRUE\n"
-    params += f"Class\t\t0\t\t; Engine type (0 = Elec, 1 = Glow, 2 = Other)\n"
-    params += f"Obtain\t\t0\t\t; Obtain method\n"
-    params += f"Rating\t\t0\t\t; Skill level (rookie, amateur, ...)\n"
-    params += f"TopEnd\t\t3000.000000\t\t; Actual top speed (mph) for frontend bars\n"
-    params += f"Acc\t\t5.000000\t\t; Acceleration rating (empirical)\n"
-    params += f"Weight\t\t1.000000\t\t; Scaled weight (for frontend bars)\n"
-    params += f"Handling\t50.000000\t\t; Handling ability (empirical and totally subjective)\n"
-    params += f"Trans\t\t0\t\t; Transmission type (calculate in-game anyway...)\n"
-    params += f"MaxRevs\t\t0.500000\t\t; Max Revs (for rev counter)\n\n"
-    params += f";====================\n"
-    params += f"; Handling related stuff\n"
-    params += f";====================\n\n"
-    params += f"SteerRate\t3.000000\t\t; Rate at which steer angle approaches value from input\n"
-    params += f"SteerMod\t0.400000\t\t; Additional steering modulation\n"
-    params += f"EngineRate\t4.500000\t\t; Rate at which Engine voltage approaches set value\n"
-    params += f"TopSpeed\t32.000000\t\t; Theoretical top speed of car (not including friction...)\n"
-    params += f"DownForceMod\t2.000000\t\t; Downforce modifier when car on floor\n"
-    params += f"CoM\t\t0.000000 2.000000 -4.000000\t\t; Centre of mass relative to model centre\n"
-    params += f"Weapon\t\t0.000000 -32.000000 64.000000\t\t; Weapon generation offset\n\n"
-
-    return params
-    
-def append_body_info(params):
-    # Append static placeholders for BODY details
-    params += f";====================\n"
-    params += f"; Car Body details\n"
-    params += f";====================\n\n"
-    params += f"BODY {{\t\t; Start Body\n"
-    params += f"ModelNum\t0\n"
-    params += f"Offset\t\t0, 0, 0\n"
-    params += f"Mass\t\t1.000000\n"
-    params += f"Inertia\t\t800.000000 0.000000 0.000000\n"
-    params += f"\t\t0.000000 1000.000000 0.000000\n"
-    params += f"\t\t0.000000 0.000000 500.000000\n"
-    params += f"Gravity\t\t2200\n"
-    params += f"Hardness\t0.000000\n"
-    params += f"Resistance\t0.001000\t\t; Linear air resistance\n"
-    params += f"AngRes\t\t0.001000\t\t; Angular air resistance\n"
-    params += f"ResMod\t\t25.000000\t\t; Ang air resistance scale when in air\n"
-    params += f"Grip\t\t0.010000\t\t; Converts downforce to friction value\n"
-    params += f"StaticFriction\t0.800000\n"
-    params += f"KineticFriction\t0.400000\n"
-    params += "}\t\t; End Body\n"
-    
-    return params
+"""
+WHEELS -----------------------------------------------------------------------
+"""
 
 def append_front_left_wheel(params, body, processed):
     wheel_names = [
@@ -271,6 +228,65 @@ def append_back_right_wheel(params, body, processed):
     
     return params
 
+"""
+SPRINGS -----------------------------------------------------------------------
+"""
+
+def compare_and_adjust_spring_lengths(imported_object):
+    body = bpy.data.objects.get("body")
+    if not body:
+        print("Body object not found in the scene.")
+        return
+
+    spring_names = [
+        ("spring0", "spring.prm", "springsl.prm", "springs.prm"),
+        ("spring1", "spring.prm.001", "springsr.prm", "springs.prm.001"),
+        ("spring2", "spring.prm.002", "springsr.prm.001", "springs.prm.002"),
+        ("spring3", "spring.prm.003", "springsl.prm.001", "springs.prm.003")
+    ]
+    springs = get_objects_by_exact_names(spring_names, parent_object=body)
+
+    for spring_name in spring_names:
+        spring_key = spring_name[0]
+        spring_obj = springs.get(spring_key)
+
+        if not spring_obj or spring_obj.parent != body:
+            print(f"Warning: Spring {spring_key} not found or not parented to body.")
+            continue
+
+        # Store the original rotation
+        original_rotation = spring_obj.rotation_euler.copy()
+
+        # Align the existing spring to face upwards
+        align_spring_to_upwards(spring_obj)
+        bpy.context.view_layer.update()
+
+        # Use the single imported object for comparison
+        if imported_object:
+            print(f"Using imported object: {imported_object.name}")
+
+            # Calculate the length of the imported spring
+            imported_spring_length = calculate_spring_length(imported_object)
+
+            # Calculate the length of the existing spring
+            existing_spring_length = calculate_spring_length(spring_obj)
+
+            # Compare lengths and adjust the measured length
+            if existing_spring_length == 0:
+                measured_length = 20.000000  # Default value if existing length is zero
+            else:
+                length_ratio = imported_spring_length / existing_spring_length
+                measured_length = 20.000000 * length_ratio
+
+            # Store the measured length for parameters export
+            spring_obj["measured_length"] = measured_length
+            print(f"Spring {spring_key}: Measured length = {measured_length:.6f}")
+        else:
+            print("Warning: No imported object found for comparison.")
+
+        # Restore the original rotation
+        spring_obj.rotation_euler = original_rotation
+
 def append_spring_info(params, body, processed):
     spring_names = [
         ("spring0", "spring.prm", "springsl.prm", "springs.prm"),
@@ -284,31 +300,19 @@ def append_spring_info(params, body, processed):
         spring_key = spring_name[0]
         spring_obj = springs.get(spring_key)
 
-        # New parenting check
         if not spring_obj or spring_obj.parent != body:
             print(f"Warning: Spring {spring_key} not found or not parented to body.")
             continue
 
-        # Store original rotation
-        original_rotation = spring_obj.rotation_euler.copy()
-
-        # Align spring to face upwards for parameter calculation
-        align_spring_to_upwards(spring_obj)
-
-        # Recalculate bounding box after alignment
-        bpy.context.view_layer.update()
-        
-        # Calculate the lenght directly from the bounding box
-        bbox = [spring_obj.matrix_world @ Vector(corner) for corner in spring_obj.bound_box]
-        z_min = min(corner.z for corner in bbox)
-        z_max = max(corner.z for corner in bbox)
-        spring_length = z_max - z_min  # Spring length along the Z-axis
-        spring_length_revolt = to_revolt_scale(spring_length)
+        # Use the stored measured length if available
+        spring_length_revolt = spring_obj.get("measured_length", 20.000000)
+        print(f"Using measured length for {spring_key}: {spring_length_revolt:.6f}")
 
         # Converting the location to Re-Volt coordinates
         spring_position_revolt = to_revolt_coord(spring_obj.location)
         x, y, z = spring_position_revolt
 
+        # Build output string
         params += f"\nSPRING {i} {{\t; Start Spring\n"
         params += f"ModelNum\t5\n"
         params += f"Offset\t\t{x:.6f} {y:.6f} {z:.6f}\n"
@@ -319,145 +323,13 @@ def append_spring_info(params, body, processed):
         params += f"}}\t\t; End Spring\n"
         processed.add(spring_obj.name)
 
-        # Restore original rotation
-        spring_obj.rotation_euler = original_rotation
-
     return params
 
-def append_pin_info(params, body, processed):
-    pin_names = [
-        ("pin0", "pin.prm", "pinfl.prm"),
-        ("pin1", "pin.prm.001", "pinfr.prm"),
-        ("pin2", "pin.prm.002", "pinfr.prm.001"),
-        ("pin3", "pin.prm.003", "pinfl.prm.001")
-    ]
-    for i, pin_name in enumerate(pin_names):
-        pin_obj = bpy.data.objects.get(pin_name[0])
-
-        # New parenting check
-        if not pin_obj or pin_obj.parent != body:
-            print(f"Warning: Pin {pin_name[0]} not found or not parented to body.")
-            continue
-
-        # Calculate the length of the pin that extends beyond the spring
-        pin_length = to_revolt_scale(pin_obj.dimensions.z)
-
-        # Adjust the length by subtracting the part that overlaps with the spring
-        spring_obj = bpy.data.objects.get(f"spring{i}")
-        if spring_obj:
-            spring_bbox = [spring_obj.matrix_world @ Vector(corner) for corner in spring_obj.bound_box]
-            spring_z_max = max(corner.z for corner in spring_bbox)
-
-            pin_bbox = [pin_obj.matrix_world @ Vector(corner) for corner in pin_obj.bound_box]
-            pin_z_max = max(corner.z for corner in pin_bbox)
-
-            # Calculate the part of the pin that extends beyond the spring
-            pin_extension_length = max(0, pin_z_max - spring_z_max)
-            pin_length = to_revolt_scale(pin_extension_length)
-
-        params += f"\nPIN {i} {{\t\t; Start Pin\n"
-        params += f"ModelNum\t13\n"
-        params += f"Offset\t\t0.000000 0.000000 0.000000\n"
-        params += f"Length\t\t{pin_length:.6f}\n"
-        params += f"}}\t\t; End Pin\n\n"
-        processed.add(pin_obj.name)
-
-    return params
-
-def append_axle_info(params, body, processed):
-    axle_names = [
-        ("axle0", "axle.prm", "axlefl.prm"),
-        ("axle1", "axle.prm.001", "axlefr.prm"),
-        ("axle2", "axle.prm.002", "axlefr.prm.001"),
-        ("axle3", "axle.prm.003", "axlefl.prm.001")
-    ]
-    axles = get_objects_by_exact_names(axle_names, parent_object=body)
-
-    for i, axle_name in enumerate(axle_names):
-        axle_key = axle_name[0]
-        axle_obj = axles.get(axle_key)
-
-        # New parenting check
-        if not axle_obj or axle_obj.parent != body:
-            print(f"Warning: Axle {axle_key} not found or not parented to body.")
-            continue
-        
-        original_rotation = axle_obj.rotation_euler.copy()
-
-        # Align the axle to consistent orientation (modify the axis as needed for your model)
-        align_axle_to_consistent_orientation(axle_obj, target_forward='Y', target_up='Z')
-        bpy.context.view_layer.update()  # Ensure the alignment is applied
-
-        # Calculate the axle's length along the Y-axis (primary length axis)
-        bbox = [axle_obj.matrix_world @ Vector(corner) for corner in axle_obj.bound_box]
-        y_min = min(corner.y for corner in bbox)
-        y_max = max(corner.y for corner in bbox)
-        axle_length = y_max - y_min
-        axle_length_revolt = to_revolt_scale(axle_length)
-
-        # Build output string
-        axle_position = to_revolt_coord(axle_obj.location)
-        params += f"\nAXLE {i} {{\t; Start Axle\n"
-        params += f"ModelNum\t9\n"
-        params += f"Offset\t\t{axle_position[0]:.6f} {axle_position[1]:.6f} {axle_position[2]:.6f}\n"
-        params += f"Length\t\t{axle_length_revolt:.6f}\n"
-        params += "}\t\t; End Axle\n"
-        processed.add(axle_obj.name)
-        
-        # Restore original rotation if needed
-        axle_obj.rotation_euler = original_rotation
-    
-    return params
-
-def append_spinner_info(params, body, processed):
-    spinner = bpy.data.objects.get("spinner")
-
-    # New parenting check
-    if spinner and spinner.parent == body and spinner.name not in processed:
-        spinner_position = to_revolt_coord(spinner.location)
-        x, y, z = spinner_position
-
-        params += f"\nSPINNER {{\t; Start Spinner\n"
-        params += f"ModelNum\t13\n"
-        params += f"Offset\t\t{x:.6f} {y:.6f} {z:.6f}\n"
-        params += f"Axis\t\t0.000000 1.000000 0.000000\n"
-        params += f"AngVel\t\t1.000000\n"
-        params += f"}}\t\t; End Spinner\n"
-        processed.add(spinner.name)
-    else:
-        print("Spinner not found or not parented to body, or already processed.")
-
-    return params
-
-def append_aerial_info(params, body, processed):
-    # Directly fetch the aerial object by name and check its parent
-    aerial = bpy.data.objects.get("aerial")
-    
-    # New parenting check
-    if aerial and aerial.parent == body and aerial.name not in processed:
-        params += f";====================\n"
-        params += f"; Car Aerial details\n"
-        params += f";====================\n"
-        location = to_revolt_coord(aerial.location)
-        params += f"\nAERIAL {{\t; Start Aerial\n"
-        params += f"SecModelNum\t17\n"
-        params += f"TopModelNum\t18\n"
-        params += f"Offset\t\t{location[0]:.6f} {location[1]:.6f} {location[2]:.6f}\n"
-        params += f"Direction\t0.000000 -1.000000 0.000000\n"
-        params += f"Length\t\t35.000000\n"
-        params += f"Stiffness\t2000.000000\n"
-        params += f"Damping\t\t5.500000\n"
-        params += "}\t\t; End Aerial\n"
-        processed.add(aerial.name)
-    else:
-        if aerial is None:
-            print("Aerial object not found.")
-        elif aerial.parent != body:
-            print("Aerial is not parented to body.")
-        elif aerial.name in processed:
-            print("Aerial has already been processed.")
-
-    return params
+def calculate_spring_length(spring_obj):
+    bbox = [spring_obj.matrix_world @ Vector(corner) for corner in spring_obj.bound_box]
+    z_min = min(corner.z for corner in bbox)
+    z_max = max(corner.z for corner in bbox)
+    return z_max - z_min
 
 def align_spring_to_upwards(spring_obj):
     """
@@ -477,7 +349,309 @@ def align_spring_to_upwards(spring_obj):
 
     # Update the scene to apply changes
     bpy.context.view_layer.update()
-    
+
+def get_objects_by_exact_names(names, parent_object=None):
+    """
+    Retrieves objects by their exact names, optionally filtering by parent object.
+    """
+    objects = {}
+    for name_tuple in names:
+        for name in name_tuple:
+            obj = bpy.data.objects.get(name)
+            if obj and (parent_object is None or obj.parent == parent_object):
+                objects[name_tuple[0]] = obj
+                break
+    return objects
+
+def remove_imported_springs(objects):
+    """
+    Removes the imported spring objects from the scene.
+    """
+    for obj in objects:
+        bpy.data.objects.remove(obj, do_unlink=True)
+
+"""
+PINS -----------------------------------------------------------------------
+"""
+
+def compare_and_adjust_pin_lengths(imported_object):
+    body = bpy.data.objects.get("body")
+    if not body:
+        print("Body object not found in the scene.")
+        return
+
+    pin_names = [
+        ("pin0", "pin.prm", "pinfl.prm"),
+        ("pin1", "pin.prm.001", "pinfr.prm"),
+        ("pin2", "pin.prm.002", "pinfr.prm.001"),
+        ("pin3", "pin.prm.003", "pinfl.prm.001")
+    ]
+    pins = get_objects_by_exact_names(pin_names, parent_object=body)
+
+    wheel_names = [
+        ("wheelfl", "wheelfl.prm", "wheell.prm"),
+        ("wheelfr", "wheelfr.prm", "wheelr.prm"),
+        ("wheelbl", "wheelbl.prm", "wheelfl.prm.001", "wheell.prm.001"),
+        ("wheelbr", "wheelbr.prm", "wheelfr.prm.001", "wheelr.prm.001")
+    ]
+    wheels = get_objects_by_exact_names(wheel_names, parent_object=body)
+
+    wheel_locations = [
+        wheels.get("wheelfl") or wheels.get("wheelfl.prm") or wheels.get("wheell.prm"),
+        wheels.get("wheelfr") or wheels.get("wheelfr.prm") or wheels.get("wheelr.prm"),
+        wheels.get("wheelbl") or wheels.get("wheelbl.prm") or wheels.get("wheelfl.prm.001") or wheels.get("wheell.prm.001"),
+        wheels.get("wheelbr") or wheels.get("wheelbr.prm") or wheels.get("wheelfr.prm.001") or wheels.get("wheelr.prm.001")
+    ]
+
+    for i, pin_name in enumerate(pin_names):
+        pin_key = pin_name[0]
+        pin_obj = pins.get(pin_key)
+
+        if not pin_obj or pin_obj.parent != body:
+            print(f"Warning: Pin {pin_key} not found or not parented to body.")
+            continue
+
+        # Store the original rotation mode
+        original_rotation_mode = pin_obj.rotation_mode
+
+        # Store the original rotation based on the mode
+        if original_rotation_mode == 'QUATERNION':
+            original_rotation = pin_obj.rotation_quaternion.copy()
+        elif original_rotation_mode == 'AXIS_ANGLE':
+            original_rotation = (pin_obj.rotation_axis_angle[0], pin_obj.rotation_axis_angle[1])
+        else:
+            original_rotation = pin_obj.rotation_euler.copy()
+
+        # Store the original location
+        original_location = pin_obj.location.copy()
+
+        # Align the existing pin to face upwards
+        align_pin_to_upwards(pin_obj)
+        bpy.context.view_layer.update()
+
+        # Use the single imported object for comparison
+        if imported_object:
+            print(f"Using imported object: {imported_object.name}")
+
+            # Calculate the length of the imported pin
+            imported_pin_length = calculate_pin_length(imported_object)
+
+            # Calculate the length of the existing pin
+            existing_pin_length = calculate_pin_length(pin_obj)
+
+            # Calculate the bounding box of the pin
+            bbox = [pin_obj.matrix_world @ Vector(corner) for corner in pin_obj.bound_box]
+            z_min = min(corner.z for corner in bbox)
+
+            # Determine if the pin exceeds the wheel's coordinates
+            wheel_location = wheel_locations[i].location if wheel_locations[i] else None
+            if wheel_location:
+                if z_min < wheel_location.z:
+                    exceeding_part = wheel_location.z - z_min
+                    if exceeding_part > 0.10 * existing_pin_length:
+                        measured_length = existing_pin_length / imported_pin_length
+                    else:
+                        length_ratio = existing_pin_length / imported_pin_length
+                        measured_length = -length_ratio  # Pin is longer from the top
+                else:
+                    length_ratio = existing_pin_length / imported_pin_length
+                    measured_length = -length_ratio  # Pin is longer from the top
+            else:
+                measured_length = 1.000000  # Default value if no wheel location
+
+            # Store the measured length for parameters export
+            pin_obj["measured_length"] = measured_length
+            print(f"Pin {pin_key}: Measured length = {measured_length:.6f}")
+        else:
+            print("Warning: No imported object found for comparison.")
+
+        # Restore the original rotation mode and rotation
+        pin_obj.rotation_mode = original_rotation_mode
+        if original_rotation_mode == 'QUATERNION':
+            pin_obj.rotation_quaternion = original_rotation
+        elif original_rotation_mode == 'AXIS_ANGLE':
+            pin_obj.rotation_axis_angle = original_rotation
+        else:
+            pin_obj.rotation_euler = original_rotation
+
+        # Restore the original location
+        pin_obj.location = original_location
+
+def append_pin_info(params, body, processed):
+    pin_names = [
+        ("pin0", "pin.prm", "pinfl.prm"),
+        ("pin1", "pin.prm.001", "pinfr.prm"),
+        ("pin2", "pin.prm.002", "pinfr.prm.001"),
+        ("pin3", "pin.prm.003", "pinfl.prm.001")
+    ]
+    pins = get_objects_by_exact_names(pin_names, parent_object=body)
+
+    for i, pin_name in enumerate(pin_names):
+        pin_key = pin_name[0]
+        pin_obj = pins.get(pin_key)
+
+        if not pin_obj or pin_obj.parent != body:
+            print(f"Warning: Pin {pin_key} not found or not parented to body.")
+            continue
+
+        # Use the stored measured length if available
+        pin_length_revolt = pin_obj.get("measured_length", -1.000000)
+        print(f"Using measured length for {pin_key}: {pin_length_revolt:.6f}")
+
+        # Build output string
+        params += f"\nPIN {i} {{\t\t; Start Pin\n"
+        params += f"ModelNum\t13\n"
+        params += f"Offset\t\t0.000000 0.000000 0.000000\n"
+        params += f"Length\t\t{pin_length_revolt:.6f}\n"
+        params += f"}}\t\t; End Pin\n\n"
+        processed.add(pin_obj.name)
+
+    return params
+
+def calculate_pin_length(pin_obj):
+    bbox = [pin_obj.matrix_world @ Vector(corner) for corner in pin_obj.bound_box]
+    z_min = min(corner.z for corner in bbox)
+    z_max = max(corner.z for corner in bbox)
+    return z_max - z_min
+
+def align_pin_to_upwards(pin_obj):
+    """
+    Aligns the pin object so that its primary axis points directly upwards.
+    Assumes the primary axis of the pin is its local Z-axis.
+    """
+    # Determine the direction vector for the pin's primary axis in world space
+    local_z = Vector((0, 0, 1))
+    world_z = pin_obj.matrix_world.to_3x3() @ local_z
+
+    # Calculate the rotation required to align this vector with the global Z-axis
+    align_rotation = world_z.rotation_difference(Vector((0, 0, 1)))
+
+    # Apply this rotation to the object's existing rotation
+    current_mode = pin_obj.rotation_mode
+    pin_obj.rotation_mode = 'XYZ'  # Temporarily set to Euler XYZ for alignment
+    pin_obj.rotation_euler.rotate(align_rotation)
+    pin_obj.rotation_mode = current_mode  # Restore the original rotation mode
+
+    # Update the scene to apply changes
+    bpy.context.view_layer.update()
+
+def get_objects_by_exact_names(names, parent_object=None):
+    """
+    Retrieves objects by their exact names, optionally filtering by parent object.
+    """
+    objects = {}
+    for name_tuple in names:
+        for name in name_tuple:
+            obj = bpy.data.objects.get(name)
+            if obj and (parent_object is None or obj.parent == parent_object):
+                objects[name_tuple[0]] = obj
+                break
+    return objects
+
+def remove_imported_pins(objects):
+    """
+    Removes the imported pin objects from the scene.
+    """
+    for obj in objects:
+        bpy.data.objects.remove(obj, do_unlink=True)
+
+"""
+AXLES -----------------------------------------------------------------------
+"""
+
+def compare_and_adjust_axle_lengths(imported_object):
+    body = bpy.data.objects.get("body")
+    if not body:
+        print("Body object not found in the scene.")
+        return
+
+    axle_names = [
+        ("axle0", "axle.prm", "axlefl.prm"),
+        ("axle1", "axle.prm.001", "axlefr.prm"),
+        ("axle2", "axle.prm.002", "axlefr.prm.001"),
+        ("axle3", "axle.prm.003", "axlefl.prm.001")
+    ]
+    axles = get_objects_by_exact_names(axle_names, parent_object=body)
+
+    for axle_name in axle_names:
+        axle_key = axle_name[0]
+        axle_obj = axles.get(axle_key)
+
+        if not axle_obj or axle_obj.parent != body:
+            print(f"Warning: Axle {axle_key} not found or not parented to body.")
+            continue
+
+        # Store the original rotation
+        original_rotation = axle_obj.rotation_euler.copy()
+
+        # Align the existing axle to a consistent orientation
+        align_axle_to_consistent_orientation(axle_obj, target_forward='Y', target_up='Z')
+        bpy.context.view_layer.update()
+
+        # Use the single imported object for comparison
+        if imported_object:
+            print(f"Using imported object: {imported_object.name}")
+
+            # Calculate the length of the imported axle
+            imported_axle_length = calculate_axle_length(imported_object)
+
+            # Calculate the length of the existing axle
+            existing_axle_length = calculate_axle_length(axle_obj)
+
+            # Compare lengths and adjust the measured length
+            if existing_axle_length == 0:
+                measured_length = 20.000000  # Default value if existing length is zero
+            else:
+                length_ratio = imported_axle_length / existing_axle_length
+                measured_length = 20.000000 * length_ratio
+
+            # Store the measured length for parameters export
+            axle_obj["measured_length"] = measured_length
+            print(f"Axle {axle_key}: Measured length = {measured_length:.6f}")
+        else:
+            print("Warning: No imported object found for comparison.")
+
+        # Restore the original rotation
+        axle_obj.rotation_euler = original_rotation
+
+def append_axle_info(params, body, processed):
+    axle_names = [
+        ("axle0", "axle.prm", "axlefl.prm"),
+        ("axle1", "axle.prm.001", "axlefr.prm"),
+        ("axle2", "axle.prm.002", "axlefr.prm.001"),
+        ("axle3", "axle.prm.003", "axlefl.prm.001")
+    ]
+    axles = get_objects_by_exact_names(axle_names, parent_object=body)
+
+    for i, axle_name in enumerate(axle_names):
+        axle_key = axle_name[0]
+        axle_obj = axles.get(axle_key)
+
+        if not axle_obj or axle_obj.parent != body:
+            print(f"Warning: Axle {axle_key} not found or not parented to body.")
+            continue
+
+        # Use the stored measured length if available
+        axle_length_revolt = axle_obj.get("measured_length", 20.000000)
+        print(f"Using measured length for {axle_key}: {axle_length_revolt:.6f}")
+
+        # Build output string
+        axle_position = to_revolt_coord(axle_obj.location)
+        params += f"\nAXLE {i} {{\t; Start Axle\n"
+        params += f"ModelNum\t9\n"
+        params += f"Offset\t\t{axle_position[0]:.6f} {axle_position[1]:.6f} {axle_position[2]:.6f}\n"
+        params += f"Length\t\t{axle_length_revolt:.6f}\n"
+        params += "}\t\t; End Axle\n"
+        processed.add(axle_obj.name)
+
+    return params
+
+def calculate_axle_length(axle_obj):
+    bbox = [axle_obj.matrix_world @ Vector(corner) for corner in axle_obj.bound_box]
+    y_min = min(corner.y for corner in bbox)
+    y_max = max(corner.y for corner in bbox)
+    return y_max - y_min
+
 def align_axle_to_consistent_orientation(axle_obj, target_forward='Y', target_up='Z'):
     """Align the axle's primary forward axis and a secondary up axis to specified global axes."""
     bpy.context.view_layer.update()  # Refresh to get current state.
@@ -508,7 +682,82 @@ def align_axle_to_consistent_orientation(axle_obj, target_forward='Y', target_up
     # Final update to apply all transformations
     bpy.context.view_layer.update()
     print(f"{axle_obj.name} aligned to forward {target_forward} and up {target_up}.")
+
+def remove_imported_axles(imported_objects):
+    for obj in imported_objects:
+        if isinstance(obj, str):
+            # If obj is a string, assume it's an object name
+            obj = bpy.data.objects.get(obj)
+
+        if obj and obj.name in bpy.data.objects:
+            bpy.data.objects.remove(obj, do_unlink=True)
+        else:
+            print(f"Warning: Object {obj.name if obj else obj} not found in the scene.")
+
+    print("Imported axles removed from the scene.")
     
+"""
+SPINNER -----------------------------------------------------------------------
+"""
+
+def append_spinner_info(params, body, processed):
+    spinner = bpy.data.objects.get("spinner")
+
+    # New parenting check
+    if spinner and spinner.parent == body and spinner.name not in processed:
+        spinner_position = to_revolt_coord(spinner.location)
+        x, y, z = spinner_position
+
+        params += f"\nSPINNER {{\t; Start Spinner\n"
+        params += f"ModelNum\t13\n"
+        params += f"Offset\t\t{x:.6f} {y:.6f} {z:.6f}\n"
+        params += f"Axis\t\t0.000000 1.000000 0.000000\n"
+        params += f"AngVel\t\t1.000000\n"
+        params += f"}}\t\t; End Spinner\n"
+        processed.add(spinner.name)
+    else:
+        print("Spinner not found or not parented to body, or already processed.")
+
+    return params
+
+"""
+AERIAL -----------------------------------------------------------------------
+"""
+
+def append_aerial_info(params, body, processed):
+    # Directly fetch the aerial object by name and check its parent
+    aerial = bpy.data.objects.get("aerial")
+    
+    # New parenting check
+    if aerial and aerial.parent == body and aerial.name not in processed:
+        params += f";====================\n"
+        params += f"; Car Aerial details\n"
+        params += f";====================\n"
+        location = to_revolt_coord(aerial.location)
+        params += f"\nAERIAL {{\t; Start Aerial\n"
+        params += f"SecModelNum\t17\n"
+        params += f"TopModelNum\t18\n"
+        params += f"Offset\t\t{location[0]:.6f} {location[1]:.6f} {location[2]:.6f}\n"
+        params += f"Direction\t0.000000 -1.000000 0.000000\n"
+        params += f"Length\t\t20.000000\n"
+        params += f"Stiffness\t2000.000000\n"
+        params += f"Damping\t\t5.500000\n"
+        params += "}\t\t; End Aerial\n"
+        processed.add(aerial.name)
+    else:
+        if aerial is None:
+            print("Aerial object not found.")
+        elif aerial.parent != body:
+            print("Aerial is not parented to body.")
+        elif aerial.name in processed:
+            print("Aerial has already been processed.")
+
+    return params
+
+"""
+TOOLS -----------------------------------------------------------------------
+"""
+
 def get_objects_by_exact_names(name_tuples, parent_object=None):
     """
     Retrieves objects matching any of the given exact names provided in tuples.
@@ -597,6 +846,10 @@ def check_and_get_child(name, body, required=True):
         print(f"Warning: {name} is not parented to 'body'. Parent the object to proceed.")
         return None
     return obj
+
+"""
+EXPORT FUNCTION -----------------------------------------------------------------------
+"""
     
 def export_file(car_name="car", filepath=None, scene=None):
     params = f"{{\n\n;============================================================\n"
@@ -609,8 +862,6 @@ def export_file(car_name="car", filepath=None, scene=None):
     processed = set()
 
     params = append_model_info(params, car_name)
-    params = append_additional_params(params)
-    params = append_body_info(params)
     params += f"\n"
     params = append_front_left_wheel(params, body, processed)
     params = append_front_right_wheel(params, body, processed)
@@ -638,26 +889,5 @@ def export_file(car_name="car", filepath=None, scene=None):
     params = append_spinner_info(params, body, processed)
     params += f"\n"
     params = append_aerial_info(params, body, processed)
-    params += f"\n"
-    params += f";====================\n"
-    params += f"; Car AI details\n"
-    params += f";====================\n\n"
-    params += f"AI {{\t\t; Start AI\n"
-    params += f"UnderThresh\t8.049010\n"
-    params += f"UnderRange\t550.400561\n"
-    params += f"UnderFront\t300.000000\n"
-    params += f"UnderRear\t132.6500000\n"
-    params += f"UnderMax\t0.999711\n"
-    params += f"OverThresh\t200.600000\n"
-    params += f"OverRange\t666.000000\n"
-    params += f"OverMax\t\t0.400000\n"
-    params += f"OverAccThresh\t31000.000000\n"
-    params += f"OverAccRange\t601.000000\n"
-    params += f"PickupBias\t16383\n"
-    params += f"BlockBias\t16383\n"
-    params += f"OvertakeBias\t19660\n"
-    params += f"Suspension\t19660\n"
-    params += f"Aggression\t16383\n"
-    params += f"}}\t\t; End AI\n\n}}"
-
+    
     bpy.context.window_manager.clipboard = params

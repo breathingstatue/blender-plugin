@@ -143,12 +143,14 @@ from .layers import select_ncp_material, get_face_material, set_face_material, s
 from .layers import set_face_ncp_property, get_face_ncp_property, get_face_env, set_face_env, update_face_env, get_fin_envcol, set_fin_envcol
 from .layers import get_face_property, set_face_property, update_fin_envcol, set_rgb, get_rgb, update_fin_col, get_alpha_items
 from .layers import update_fin_env, update_rgb, update_no_envmapping, update_envmapping, remove_env_material
-from .operators import ImportRV, ExportRV, RVIO_OT_ReadCarParameters, RVIO_OT_SelectRevoltDirectory, ButtonReExport
+from .operators import CopyAndRemoveAxles, ImportRV, ExportRV, RVIO_OT_ReadCarParameters, RVIO_OT_SelectRevoltDirectory, ButtonReExport
 from .operators import VertexAndAlphaLayer, VertexColorRemove, SetVertexColor, BakeShadow, BakeVertex, BatchBakeVertexToEnv, BakeVertexToRGBModelColor
 from .operators import SetVertexAlpha, SetFaceTextureNumber
 from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, MaterialAssignment, MaterialAssignmentAuto, TextureAssigner
-from .operators import SetInstanceProperty, RemoveInstanceProperty, LaunchRV, TexturesSave
-from .operators import TexturesRename, CarParametersExport, ButtonZoneHide, AddTrackZone, ReverseTrackZone, ButtonTriggerHide, CreateTrigger
+from .operators import SetInstanceProperty, RemoveInstanceProperty, LaunchRV, TexturesSave, TexturesRename
+from .operators import CopyAerialParams, AxleMessageBox, ConfirmLoadOriginalAxle, CopyAndRemoveAxles, SpringMessageBox, ConfirmLoadOriginalSpring
+from .operators import CopyAndRemoveSprings, PinMessageBox, ConfirmLoadOriginalPin, CopyAndRemovePins, CopyWheelParams 
+from .operators import ButtonZoneHide, AddTrackZone, ReverseTrackZone, ButtonTriggerHide, CreateTrigger
 from .operators import DuplicateTrigger, CopyTrigger, PasteTrigger, SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere
 from .operators import ButtonCopyUvToFrame, ButtonCopyFrameToUv, PreviewNextFrame, PreviewPrevFrame, TexAnimTransform, TexAnimGrid
 from .operators import menu_func_import, menu_func_export
@@ -174,7 +176,7 @@ from .ui.migpanel import RVIO_PT_RevoltMIGPanel
 bl_info = {
 "name": "Re-Volt",
 "author": "Marvin Thiel & Theman",
-"version": (20, 24, 12),
+"version": (20, 25, 2),
 "blender": (4, 3, 2),
 "location": "File > Import-Export",
 "description": "Import and export Re-Volt file formats.",
@@ -988,7 +990,17 @@ def register():
     bpy.utils.register_class(MaterialAssignment)
     bpy.utils.register_class(MaterialAssignmentAuto)
     bpy.utils.register_class(TextureAssigner)
-    bpy.utils.register_class(CarParametersExport)
+    bpy.utils.register_class(CopyWheelParams)
+    bpy.utils.register_class(AxleMessageBox)
+    bpy.utils.register_class(ConfirmLoadOriginalAxle)
+    bpy.utils.register_class(CopyAndRemoveAxles)
+    bpy.utils.register_class(SpringMessageBox)
+    bpy.utils.register_class(ConfirmLoadOriginalSpring)
+    bpy.utils.register_class(CopyAndRemoveSprings)
+    bpy.utils.register_class(PinMessageBox)
+    bpy.utils.register_class(ConfirmLoadOriginalPin)
+    bpy.utils.register_class(CopyAndRemovePins)
+    bpy.utils.register_class(CopyAerialParams)
     bpy.utils.register_class(ButtonHullGenerate)  
     bpy.utils.register_class(BakeShadow)
     bpy.utils.register_class(BakeVertex)
@@ -1070,8 +1082,18 @@ def unregister():
     bpy.utils.unregister_class(BatchBakeVertexToEnv)
     bpy.utils.unregister_class(BakeVertex)
     bpy.utils.unregister_class(BakeShadow)
-    bpy.utils.unregister_class(ButtonHullGenerate) 
-    bpy.utils.unregister_class(CarParametersExport)
+    bpy.utils.unregister_class(ButtonHullGenerate)
+    bpy.utils.unregister_class(CopyAerialParams)
+    bpy.utils.unregister_class(CopyAndRemovePins)
+    bpy.utils.unregister_class(ConfirmLoadOriginalPin)
+    bpy.utils.unregister_class(PinMessageBox)
+    bpy.utils.unregister_class(CopyAndRemoveSprings)
+    bpy.utils.unregister_class(ConfirmLoadOriginalSpring)
+    bpy.utils.unregister_class(SpringMessageBox)
+    bpy.utils.unregister_class(CopyAndRemoveAxles)
+    bpy.utils.unregister_class(ConfirmLoadOriginalAxle)
+    bpy.utils.unregister_class(AxleMessageBox)
+    bpy.utils.unregister_class(CopyWheelParams)
     bpy.utils.unregister_class(TextureAssigner)
     bpy.utils.unregister_class(MaterialAssignmentAuto)
     bpy.utils.unregister_class(MaterialAssignment)

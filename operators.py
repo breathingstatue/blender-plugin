@@ -29,8 +29,12 @@ from .rvstruct import *
 from . import carinfo
 from .common import get_format, FORMAT_PRM, FORMAT_FIN, FORMAT_NCP, FORMAT_HUL, FORMAT_W, FORMAT_M, FORMAT_RIM, FORMAT_TA_CSV
 from .common import FORMAT_TAZ, FORMAT_TRI, FORMAT_UNK
-from .common import get_errors, msg_box, FORMATS, to_revolt_scale, FORMAT_CAR, TEX_PAGES_MAX, int_to_texture
+from .common import get_errors, msg_box, FORMATS, to_revolt_scale, FORMAT_CAR, TEX_PAGES_MAX, int_to_texture, to_revolt_coord
 from .layers import set_face_env, create_or_assign_env_material
+from .parameters_out import append_aerial_info, append_axle_info, append_back_left_wheel, append_back_right_wheel
+from .parameters_out import append_front_left_wheel, append_front_right_wheel, append_pin_info, append_spring_info
+from .parameters_out import compare_and_adjust_axle_lengths, remove_imported_axles, compare_and_adjust_spring_lengths
+from .parameters_out import remove_imported_springs, compare_and_adjust_pin_lengths, remove_imported_pins
 from .taz_in import create_zone
 from .texanim import copy_frame_to_uv, copy_uv_to_frame
 from .tri_in import create_trigger
@@ -424,8 +428,7 @@ class ButtonRenameAllObjects(bpy.types.Operator):
             obj.name = base_name + suffix
 
         return {'FINISHED'}
-
-
+    
 class SelectByName(bpy.types.Operator):
     bl_idname = "helpers.select_by_name"
     bl_label = "Select by name"
@@ -455,7 +458,6 @@ class SelectByName(bpy.types.Operator):
         self.report({'INFO'}, "Selected {} objects".format(selected_count))
         return {'FINISHED'}
 
-
 class SelectByData(bpy.types.Operator):
     bl_idname = "helpers.select_by_data"
     bl_label = "Select by data"
@@ -484,7 +486,6 @@ class SelectByData(bpy.types.Operator):
 
         self.report({'INFO'}, "Selected {} objects".format(selected_count))
         return {'FINISHED'}
-
 
 class LaunchRV(bpy.types.Operator):
     bl_idname = "helpers.launch_rv"
@@ -599,68 +600,298 @@ class TexturesRename(bpy.types.Operator):
         self.report({'INFO'}, f"Renamed {len(textures)} textures starting with base name '{self.base_name}'")
         return {'FINISHED'}
     
-class CarParametersExport(bpy.types.Operator):
-    bl_idname = "headers.car_parameters_export"
-    bl_label = "Car parameters to clipboard"
-    bl_description = "Copies most important parameters into clipboard"
-
-    car_name: bpy.props.StringProperty(
-        name="Car Name",
-        description="Name of the car",
-        default="car"
-    )
+class CopyWheelParams(bpy.types.Operator):
+    bl_idname = "headers.copy_wheel_params"
+    bl_label = "Copy Wheel Parameters"
+    bl_description = "Copies wheel parameters into clipboard"
 
     def execute(self, context):
-        car_name = self.car_name.strip() if self.car_name.strip() else "car"
-        from . import parameters_out
-        parameters_out.export_file(car_name)
-        self.report({'INFO'}, "Car parameters copied to clipboard.")
+        body = bpy.data.objects.get("body")
+        processed = set()
+
+        params = ""
+        params = append_front_left_wheel(params, body, processed)
+        params = append_front_right_wheel(params, body, processed)
+        params = append_back_left_wheel(params, body, processed)
+        params = append_back_right_wheel(params, body, processed)
+
+        bpy.context.window_manager.clipboard = params
+        self.report({'INFO'}, "Wheel parameters copied to clipboard.")
         return {"FINISHED"}
 
+class AxleMessageBox(bpy.types.Operator):
+    bl_idname = "headers.axle_message_box"
+    bl_label = "Load the original axle for comparison"
+    bl_options = {'REGISTER', 'INTERNAL'}
+
+    def execute(self, context):
+        bpy.ops.headers.confirm_load_original_axle('INVOKE_DEFAULT')
+        return {'FINISHED'}
+
     def invoke(self, context, event):
-        # Check for unparented objects
-        self.show_parenting_warning = self.check_missing_parenting(context)
-        
-        # Invoke the car name prompt
-        return context.window_manager.invoke_props_dialog(self)
+        return context.window_manager.invoke_confirm(self, event)
 
-    def draw(self, context):
-        layout = self.layout
-        # Show different messages based on parenting status
-        if self.show_parenting_warning:
-            layout.label(text="Only child objects of 'body' will be copied.", icon="ERROR")
-        else:
-            layout.label(text="Enter the car name:")
-        layout.prop(self, "car_name")  # Field for entering the car name
+class ConfirmLoadOriginalAxle(bpy.types.Operator):
+    bl_idname = "headers.confirm_load_original_axle"
+    bl_label = "Load the original axle for comparison"
+    bl_options = {'REGISTER', 'INTERNAL'}
 
-    def check_missing_parenting(self, context):
-        """ Check for unparented or missing objects and report warnings. """
+    def execute(self, context):
+        context.scene['existing_objects'] = list(bpy.data.objects.keys())
+        bpy.ops.import_scene.revolt('INVOKE_DEFAULT')
+        context.window_manager.modal_handler_add(self)
+        return {'RUNNING_MODAL'}
+
+    def modal(self, context, event):
+        if event.type == 'TIMER':
+            imported_objects = set(bpy.data.objects.keys()) - set(context.scene['existing_objects'])
+            if imported_objects:
+                imported_object = None
+                for obj_name in imported_objects:
+                    obj = bpy.data.objects.get(obj_name)
+                    if obj:
+                        imported_object = obj
+                        break  # Assuming only one imported object
+
+                # Store the single imported object in the scene
+                context.scene['imported_object'] = imported_object
+
+                compare_and_adjust_axle_lengths(imported_object)
+                bpy.ops.headers.copy_and_remove_axles('INVOKE_DEFAULT')
+
+                # Report a message to the user
+                self.report({'INFO'}, "Axle parameters copied to clipboard.")
+
+                return {'FINISHED'}
+
+        return {'PASS_THROUGH'}
+
+    def invoke(self, context, event):
+        context.window_manager.event_timer_add(0.1, window=context.window)
+        return self.execute(context)
+
+class CopyAndRemoveAxles(bpy.types.Operator):
+    bl_idname = "headers.copy_and_remove_axles"
+    bl_label = "Copy Parameters and Remove Imported Axles"
+    bl_options = {'REGISTER', 'INTERNAL'}
+
+    def execute(self, context):
+        # Retrieve the body object from the scene
         body = bpy.data.objects.get("body")
-        required_objects = ["wheelfl", "wheelfl.prm", "wheell.prm",
-                            "wheelfr", "wheelfr.prm", "wheelr.prm",
-                            "wheelbl", "wheelbl.prm", "wheelfl.prm.001", "wheell.prm.001",
-                            "wheelbr", "wheelbr.prm", "wheelfr.prm.001", "wheelr.prm.001", 
-                            "spring0", "spring.prm", "springsl.prm", "springs.prm",
-                            "spring1", "spring.prm.001", "springsr.prm", "springs.prm.001",
-                            "spring2", "spring.prm.002", "springsr.prm.001", "springs.prm.002",
-                            "spring3", "spring.prm.003", "springsl.prm.001", "springs.prm.003",
-                            "pin0", "pin.prm", "pinfl.prm",
-                            "pin1", "pin.prm.001", "pinfr.prm",
-                            "pin2", "pin.prm.002", "pinfr.prm.001",
-                            "pin3", "pin.prm.003", "pinfl.prm.001",
-                            "axle0", "axle.prm", "axlefl.prm",
-                            "axle1", "axle.prm.001", "axlefr.prm",
-                            "axle2", "axle.prm.002", "axlefr.prm.001",
-                            "axle3", "axle.prm.003", "axlefl.prm.001",
-                            "spinner", "aerial"]
+        if not body:
+            self.report({'ERROR'}, "Body object not found in the scene.")
+            return {'CANCELLED'}
 
-        for obj_name in required_objects:
-            obj = bpy.data.objects.get(obj_name)
-            if obj and obj.parent != body:
-                print(f"Warning: {obj_name} not found in the scene or not parented to body.")
-                return True  # Missing or unparented object found
+        # Initialize parameters string and processed set
+        params = ""
+        processed = set()
 
-        return False  # All objects properly parented
+        # Call append_axle_info to build the parameters string
+        params = append_axle_info(params, body, processed)
+
+        # Copy the parameters to the clipboard
+        bpy.context.window_manager.clipboard = params
+
+        # Report a message to the user
+        self.report({'INFO'}, "Axle parameters copied to clipboard.")
+
+        # Retrieve the imported object from the scene
+        imported_object = context.scene.get('imported_object')
+        if imported_object:
+            # Remove the imported axle
+            remove_imported_axles([imported_object])
+            # Clear the stored object after use
+            context.scene['imported_object'] = None
+
+        return {'FINISHED'}
+
+class SpringMessageBox(bpy.types.Operator):
+    bl_idname = "headers.spring_message_box"
+    bl_label = "Load the original spring for comparison"
+    bl_options = {'REGISTER', 'INTERNAL'}
+
+    def execute(self, context):
+        bpy.ops.headers.confirm_load_original_spring('INVOKE_DEFAULT')
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_confirm(self, event)
+
+class ConfirmLoadOriginalSpring(bpy.types.Operator):
+    bl_idname = "headers.confirm_load_original_spring"
+    bl_label = "Load the original spring for comparison"
+    bl_options = {'REGISTER', 'INTERNAL'}
+
+    def execute(self, context):
+        context.scene['existing_objects'] = list(bpy.data.objects.keys())
+        bpy.ops.import_scene.revolt('INVOKE_DEFAULT')
+        context.window_manager.modal_handler_add(self)
+        return {'RUNNING_MODAL'}
+
+    def modal(self, context, event):
+        if event.type == 'TIMER':
+            imported_objects = set(bpy.data.objects.keys()) - set(context.scene['existing_objects'])
+            if imported_objects:
+                imported_object = None
+                for obj_name in imported_objects:
+                    obj = bpy.data.objects.get(obj_name)
+                    if obj:
+                        imported_object = obj
+                        break  # Assuming only one imported object
+
+                # Store the single imported object in the scene
+                context.scene['imported_object'] = imported_object
+
+                compare_and_adjust_spring_lengths(imported_object)
+                bpy.ops.headers.copy_and_remove_springs('INVOKE_DEFAULT')
+
+                # Report a message to the user
+                self.report({'INFO'}, "Spring parameters copied to clipboard.")
+
+                return {'FINISHED'}
+
+        return {'PASS_THROUGH'}
+
+    def invoke(self, context, event):
+        context.window_manager.event_timer_add(0.1, window=context.window)
+        return self.execute(context)
+
+class CopyAndRemoveSprings(bpy.types.Operator):
+    bl_idname = "headers.copy_and_remove_springs"
+    bl_label = "Copy Parameters and Remove Imported Springs"
+    bl_options = {'REGISTER', 'INTERNAL'}
+
+    def execute(self, context):
+        # Retrieve the body object from the scene
+        body = bpy.data.objects.get("body")
+        if not body:
+            self.report({'ERROR'}, "Body object not found in the scene.")
+            return {'CANCELLED'}
+
+        # Initialize parameters string and processed set
+        params = ""
+        processed = set()
+
+        # Call append_spring_info to build the parameters string
+        params = append_spring_info(params, body, processed)
+
+        # Copy the parameters to the clipboard
+        bpy.context.window_manager.clipboard = params
+
+        # Report a message to the user
+        self.report({'INFO'}, "Spring parameters copied to clipboard.")
+
+        # Retrieve the imported object from the scene
+        imported_object = context.scene.get('imported_object')
+        if imported_object:
+            # Remove the imported spring
+            remove_imported_springs([imported_object])
+            # Clear the stored object after use
+            context.scene['imported_object'] = None
+
+        return {'FINISHED'}
+
+class PinMessageBox(bpy.types.Operator):
+    bl_idname = "headers.pin_message_box"
+    bl_label = "Load the original pin for comparison"
+    bl_options = {'REGISTER', 'INTERNAL'}
+
+    def execute(self, context):
+        bpy.ops.headers.confirm_load_original_pin('INVOKE_DEFAULT')
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_confirm(self, event)
+
+class ConfirmLoadOriginalPin(bpy.types.Operator):
+    bl_idname = "headers.confirm_load_original_pin"
+    bl_label = "Load the original pin for comparison"
+    bl_options = {'REGISTER', 'INTERNAL'}
+
+    def execute(self, context):
+        context.scene['existing_objects'] = list(bpy.data.objects.keys())
+        bpy.ops.import_scene.revolt('INVOKE_DEFAULT')
+        context.window_manager.modal_handler_add(self)
+        return {'RUNNING_MODAL'}
+
+    def modal(self, context, event):
+        if event.type == 'TIMER':
+            imported_objects = set(bpy.data.objects.keys()) - set(context.scene['existing_objects'])
+            if imported_objects:
+                imported_object = None
+                for obj_name in imported_objects:
+                    obj = bpy.data.objects.get(obj_name)
+                    if obj:
+                        imported_object = obj
+                        break  # Assuming only one imported object
+
+                # Store the single imported object in the scene
+                context.scene['imported_object'] = imported_object
+
+                compare_and_adjust_pin_lengths(imported_object)
+                bpy.ops.headers.copy_and_remove_pins('INVOKE_DEFAULT')
+
+                # Report a message to the user
+                self.report({'INFO'}, "Pin parameters copied to clipboard.")
+
+                return {'FINISHED'}
+
+        return {'PASS_THROUGH'}
+
+    def invoke(self, context, event):
+        context.window_manager.event_timer_add(0.1, window=context.window)
+        return self.execute(context)
+
+class CopyAndRemovePins(bpy.types.Operator):
+    bl_idname = "headers.copy_and_remove_pins"
+    bl_label = "Copy Parameters and Remove Imported Pins"
+    bl_options = {'REGISTER', 'INTERNAL'}
+
+    def execute(self, context):
+        # Retrieve the body object from the scene
+        body = bpy.data.objects.get("body")
+        if not body:
+            self.report({'ERROR'}, "Body object not found in the scene.")
+            return {'CANCELLED'}
+
+        # Initialize parameters string and processed set
+        params = ""
+        processed = set()
+
+        # Call append_pin_info to build the parameters string
+        params = append_pin_info(params, body, processed)
+
+        # Copy the parameters to the clipboard
+        bpy.context.window_manager.clipboard = params
+
+        # Report a message to the user
+        self.report({'INFO'}, "Pin parameters copied to clipboard.")
+
+        # Retrieve the imported object from the scene
+        imported_object = context.scene.get('imported_object')
+        if imported_object:
+            # Remove the imported pin
+            remove_imported_pins([imported_object])
+            # Clear the stored object after use
+            context.scene['imported_object'] = None
+
+        return {'FINISHED'}
+
+class CopyAerialParams(bpy.types.Operator):
+    bl_idname = "headers.copy_aerial_params"
+    bl_label = "Copy Aerial Parameters"
+    bl_description = "Copies aerial parameters into clipboard"
+
+    def execute(self, context):
+        body = bpy.data.objects.get("body")
+        processed = set()
+
+        params = ""
+        params = append_aerial_info(params, body, processed)
+
+        bpy.context.window_manager.clipboard = params
+        self.report({'INFO'}, "Aerial parameters copied to clipboard.")
+        return {"FINISHED"}
     
 """
 INSTANCES -----------------------------------------------------------------------
@@ -1514,9 +1745,8 @@ class ButtonHullGenerate(bpy.types.Operator):
         if hull_object:
             self.report({'INFO'}, "Convex hull generated successfully.")
         else:
-            self.report({'ERROR'}, "Convex hull generation failed.")
-        return {'FINISHED'}
-    
+            self.report({'ERROR'}, "Convex hull generation failed. Check the console for details.")
+        return {'FINISHED'}    
     
 """
 SHADOW -----------------------------------------------------------------------
