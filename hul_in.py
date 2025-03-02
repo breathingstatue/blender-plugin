@@ -82,7 +82,11 @@ def import_hull(filepath, scene):
         ob.show_wire = True
         ob.is_hull_convex = True
         ob["is_hull_convex"] = True
-        bpy.context.collection.objects.link(ob)
+        # Check if the object is already in the scene collection 
+        if ob.name not in bpy.context.scene.collection.objects: 
+            bpy.context.scene.collection.objects.link(ob) 
+        else: 
+            print(f"Object '{ob.name}' is already in the scene collection.")
 
     for sphere in hull.interior.spheres:
         create_sphere(scene, sphere.center, sphere.radius, "Hull_Sphere")
@@ -112,7 +116,11 @@ def create_sphere(scene, center, radius, filename):
     ob.display_type = "SOLID"
     ob.is_hull_sphere = True
     ob["is_hull_sphere"] = True
-    bpy.context.collection.objects.link(ob)
+    # Check if the object is already in the scene collection 
+    if ob.name not in bpy.context.scene.collection.objects: 
+        bpy.context.scene.collection.objects.link(ob) 
+    else: 
+        print(f"Object '{ob.name}' is already in the scene collection.")
     return ob
 
 

@@ -62,7 +62,11 @@ def import_file(filepath, scene):
             dprint("Creating Blender object for {}...".format(filename))
             
             obj = bpy.data.objects.new(filename, me)
-            bpy.context.scene.collection.objects.link(obj)
+            # Check if the object is already in the scene collection 
+            if obj.name not in bpy.context.scene.collection.objects: 
+                bpy.context.scene.collection.objects.link(obj) 
+            else: 
+                print(f"Object '{obj.name}' is already in the scene collection.")
             bpy.context.view_layer.objects.active = obj
             assign_uv_tex_material(obj)
     

@@ -167,7 +167,11 @@ def create_cube(scene, sptype, center, radius, filename):
         me = bpy.data.meshes[mname]
 
     ob = bpy.data.objects.new("{}_{}".format(mname, filename), me)
-    bpy.context.collection.objects.link(ob)
+    # Check if the object is already in the scene collection 
+    if ob.name not in bpy.context.scene.collection.objects: 
+        bpy.context.scene.collection.objects.link(ob) 
+    else: 
+        print(f"Object '{ob.name}' is already in the scene collection.")
     ob.location = center
     ob.scale = (radius, radius, radius)
     ob.display_type = "SOLID"

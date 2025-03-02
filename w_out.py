@@ -116,7 +116,11 @@ def create_split_mesh(original_mesh, face_indices, original_obj_name, created_ob
     new_mesh.validate()  # Validate the mesh
 
     new_obj = bpy.data.objects.new(name=f"{original_obj_name}_split_{len(created_objects)}", object_data=new_mesh)
-    bpy.context.collection.objects.link(new_obj)
+    # Check if the object is already in the scene collection 
+    if new_obj.name not in bpy.context.scene.collection.objects: 
+        bpy.context.collection.objects.link(new_obj)
+    else: 
+        print(f"Object '{new_obj.name}' is already in the scene collection.")
     created_objects.append(new_obj)
 
     for prop in original_mesh.keys():

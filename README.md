@@ -16,6 +16,7 @@ broader .m (model) support
 FULL CHANGELOG:
 
 20.25.2
+fixed a bug with multiple ViewLayers in Blender
 improved car import / parameters export
 especially the handling of length parameter
 

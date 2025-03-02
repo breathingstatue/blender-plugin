@@ -150,7 +150,11 @@ def import_car(params, filepath, scene, car_name):
             pass
     
         obj.location = obj_location
-        bpy.context.collection.objects.link(obj)
+        # Check if the object is already in the scene collection 
+        if obj.name not in bpy.context.scene.collection.objects: 
+            bpy.context.scene.collection.objects.link(obj) 
+        else: 
+            print(f"Object '{obj.name}' is already in the scene collection.")
         obj.name = name
         return obj
 

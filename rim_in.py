@@ -55,4 +55,8 @@ def import_file(filepath, scene):
         ob["is_mirror_plane"] = True
         
         # Link the object to the scene
-        scene.collection.objects.link(ob)
+        # Check if the object is already in the scene collection 
+        if ob.name not in bpy.context.scene.collection.objects: 
+            bpy.context.scene.collection.objects.link(ob) 
+        else: 
+            print(f"Object '{ob.name}' is already in the scene collection.")

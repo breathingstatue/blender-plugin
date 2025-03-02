@@ -66,7 +66,11 @@ def import_instance(filepath, scene, instance):
         print(f"PRM {prm_fname} already in scene. Duplicating...")  # Debug point 4
         data = scene.objects[prm_fname].data
         instance_obj = bpy.data.objects.new(name=prm_fname, object_data=data)
-        scene.collection.objects.link(instance_obj)
+        # Check if the object is already in the scene collection 
+        if instance_obj.name not in bpy.context.scene.collection.objects: 
+            bpy.context.scene.collection.objects.link(instance_obj) 
+        else: 
+            print(f"Object '{instance_obj.name}' is already in the scene collection.")
     elif prm_fname:
         prm_path = os.path.join(folder, prm_fname)
         print(f"Importing PRM from path: {prm_path}")  # Debug point 5
@@ -74,7 +78,11 @@ def import_instance(filepath, scene, instance):
     else:
         print(f"No PRM found for {instance_name}. Creating empty object.")  # Debug point 6
         instance_obj = bpy.data.objects.new(instance_name, None)
-        scene.collection.objects.link(instance_obj)
+        # Check if the object is already in the scene collection 
+        if instance_obj.name not in bpy.context.scene.collection.objects: 
+            bpy.context.scene.collection.objects.link(instance_obj) 
+        else: 
+            print(f"Object '{instance_obj.name}' is already in the scene collection.")
         instance_obj.empty_display_type = "SPHERE"
 
     print(f"Applying transformations to {instance_name}")  # Debug point 7

@@ -1257,17 +1257,20 @@ class MaterialAssignmentAuto(bpy.types.Operator):
 
     def assign_materials_to_all(self, mesh_objects):
         bpy.ops.object.select_all(action='DESELECT')
-
         for obj in mesh_objects:
-            obj.select_set(True)
+            # Check if the object is in the current view layer 
+            if obj.name in bpy.context.view_layer.objects: 
+                obj.select_set(True) 
+            else: 
+                self.report({'WARNING'}, f"Object {obj.name} is not in the current view layer.")
 
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.select_all(action='SELECT')
+        bpy.ops.object.mode_set(mode='EDIT') 
+        bpy.ops.mesh.select_all(action='SELECT') 
 
-        for obj in mesh_objects:
-            self.update_material_assignment(obj)
+        for obj in mesh_objects: 
+            self.update_material_assignment(obj) 
 
-        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.mode_set(mode='OBJECT') 
 
     def update_material_assignment(self, obj):
         material_map = {

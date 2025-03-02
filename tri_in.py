@@ -143,9 +143,13 @@ def create_trigger(location=(0, 0, 0), size=(1, 1, 1), rotation=(0, 0, 0), exist
     ob = bpy.data.objects.new(name=unique_object_name, object_data=mesh)
 
     # Link object to the scene and then to the specific collection
-    bpy.context.scene.collection.objects.link(ob)
-    new_collection.objects.link(ob)
-    bpy.context.scene.collection.objects.unlink(ob)
+    # Check if the object is already in the scene collection 
+    if ob.name not in bpy.context.scene.collection.objects: 
+        bpy.context.scene.collection.objects.link(ob)
+        new_collection.objects.link(ob)
+        bpy.context.scene.collection.objects.unlink(ob)
+    else: 
+        print(f"Object '{ob.name}' is already in the scene collection.")
 
     # Set the object's location, rotation, and scale
     ob.location = location
