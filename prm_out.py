@@ -63,7 +63,7 @@ def export_file(filepath, scene):
             if prm:
                 prm.write(file)
                 
-def get_texture_from_material(face, obj):
+def get_texture_from_material(face, obj, default_texture_name=None):
     # Check if the object has materials
     if obj.material_slots:
         if face.material_index < len(obj.material_slots):
@@ -73,7 +73,16 @@ def get_texture_from_material(face, obj):
                     if node.type == 'TEX_IMAGE':
                         image = node.image
                         if image:
-                            return image  # Return the existing image if found
+                            # Check if the image name matches 'car' or the object's name
+                            if image.name == 'car':
+                                print(f"Found car.bmp image for material: {mat.name} on {obj.name}")
+                                return image
+                            elif image.name == obj.name.split('.')[0]:
+                                print(f"Found image: {image.name} matching object name for material: {mat.name} on {obj.name}")
+                                return image
+                            else:
+                                print(f"Found image: {image.name} for material: {mat.name} on {obj.name}")
+                                return image
                         else:
                             print(f"No image found for material: {mat.name} on {obj.name}")
 
@@ -85,10 +94,18 @@ def get_texture_from_material(face, obj):
         # Fallback to car.bmp for car parts
         print(f"Checking for car.bmp fallback for {obj.name}...")
         car_texture = bpy.data.images.get('car')
-        
+
         if car_texture:
             print(f"Assigned car texture image to {obj.name}")
             return car_texture
+        elif default_texture_name:
+            # Use the selected default texture name
+            default_texture = bpy.data.images.get(default_texture_name)
+            if default_texture:
+                print(f"Assigned default texture image {default_texture_name} to {obj.name}")
+                return default_texture
+            else:
+                print(f"Default texture {default_texture_name} not found for {obj.name}")
         else:
             # Fallback to mesh material
             print(f"car.bmp not found for {obj.name}, using mesh material instead.")
@@ -133,7 +150,6 @@ def export_mesh(me, obj, scene, filepath, world=None):
                 verts=bm.verts
             )
     else:
-
         # Removes the parent for exporting
         parent = obj.parent
         if parent:
@@ -170,12 +186,12 @@ def export_mesh(me, obj, scene, filepath, world=None):
 
     if scene.triangulate_ngons:
         num_ngons = triangulate_ngons(bm)
-        if num_ngons > 0:  # Check if the number of n-gons is greater than zero
+        if num_ngons > 0:
             print("Triangulated {} n-gons".format(num_ngons))
 
     # Gets layers
     uv_layer = bm.loops.layers.uv.get("UVMap")
-    vc_layer = (bm.loops.layers.color.get("Col") or 
+    vc_layer = (bm.loops.layers.color.get("Col") or
                 bm.loops.layers.color.new("Col"))
     env_layer = (bm.loops.layers.color.get("Env") or
                  bm.loops.layers.color.new("Env"))
@@ -224,10 +240,12 @@ def export_mesh(me, obj, scene, filepath, world=None):
         if scene.use_tex_num and texnum_layer:
             poly.texture = face[texnum_layer]
         # Falls back to texture if not enabled or texnum layer not found
-        image = get_texture_from_material(face, obj)
+        image = get_texture_from_material(face, obj, scene.default_texture_name)
         if image:
+            print(f"Assigning texture: {image.name} to face")
             poly.texture = texture_to_int(image.name)
         else:
+            print(f"No texture assigned to face")
             poly.texture = -1
 
         # Sets vertex indices for the polygon
@@ -239,7 +257,7 @@ def export_mesh(me, obj, scene, filepath, world=None):
                 # Fills up unused indices with 0s
                 poly.vertex_indices.append(0)
 
-        # write the vertex colors
+        # Write the vertex colors
         for i in vert_order:
             if i < len(face.verts):
                 # Gets color from the channel or falls back to a default value
@@ -273,7 +291,7 @@ def export_mesh(me, obj, scene, filepath, world=None):
 
         prm.polygons.append(poly)
 
-    # export vertex positions and normals
+    # Export vertex positions and normals
     for vertex in bm.verts:
         coord = to_revolt_coord(vertex.co)
         normal = to_revolt_axis(vertex.normal)

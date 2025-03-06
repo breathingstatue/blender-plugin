@@ -143,7 +143,7 @@ from .layers import select_ncp_material, get_face_material, set_face_material, s
 from .layers import set_face_ncp_property, get_face_ncp_property, get_face_env, set_face_env, update_face_env, get_fin_envcol, set_fin_envcol
 from .layers import get_face_property, set_face_property, update_fin_envcol, set_rgb, get_rgb, update_fin_col, get_alpha_items
 from .layers import update_fin_env, update_rgb, update_no_envmapping, update_envmapping, remove_env_material
-from .operators import CopyAndRemoveAxles, ImportRV, ExportRV, RVIO_OT_ReadCarParameters, RVIO_OT_SelectRevoltDirectory, ButtonReExport
+from .operators import CopyAndRemoveAxles, ImportRV, SelectDefaultTextureOperator, ExportRV, RVIO_OT_ReadCarParameters, RVIO_OT_SelectRevoltDirectory, ButtonReExport
 from .operators import VertexAndAlphaLayer, VertexColorRemove, SetVertexColor, BakeShadow, BakeVertex, BatchBakeVertexToEnv, BakeVertexToRGBModelColor
 from .operators import SetVertexAlpha, SetFaceTextureNumber
 from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, MaterialAssignment, MaterialAssignmentAuto, TextureAssigner
@@ -967,12 +967,14 @@ def register():
     )
     
     bpy.types.Scene.copied_trigger_properties = bpy.props.PointerProperty(type=bpy.types.PropertyGroup)
+    bpy.types.Scene.default_texture_name = StringProperty(name="Default Texture Name")
     
     #Register Operators
     bpy.utils.register_class(DialogOperator)
     bpy.utils.register_class(ShadowSaveOperator)
     bpy.utils.register_class(ConfirmShadowSaveOperator)
     bpy.utils.register_class(ImportRV)
+    bpy.utils.register_class(SelectDefaultTextureOperator)
     bpy.utils.register_class(ExportRV)
     bpy.utils.register_class(RVIO_OT_ReadCarParameters)
     bpy.utils.register_class(ButtonReExport)
@@ -1111,11 +1113,13 @@ def unregister():
     bpy.utils.unregister_class(ButtonReExport)
     bpy.utils.unregister_class(RVIO_OT_ReadCarParameters)
     bpy.utils.unregister_class(ExportRV)
+    bpy.utils.unregister_class(SelectDefaultTextureOperator)
     bpy.utils.unregister_class(ImportRV)
     bpy.utils.unregister_class(ConfirmShadowSaveOperator)
     bpy.utils.unregister_class(ShadowSaveOperator)
     bpy.utils.unregister_class(DialogOperator)
     
+    del bpy.types.Scene.default_texture_name
     del bpy.types.Scene.copied_trigger_properties
     del bpy.types.Object.low_flag_slider
     del bpy.types.Object.flag_high

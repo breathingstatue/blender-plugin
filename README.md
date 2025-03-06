@@ -15,8 +15,13 @@ broader .m (model) support
 
 FULL CHANGELOG:
 
-20.25.2
+20.25.3
+fixed solution for different textures/car parts export
+car parts can have any default texture, not just car.bmp
+hotfixed Vertex Layer creation
 fixed a bug with multiple ViewLayers in Blender
+
+20.25.2
 improved car import / parameters export
 especially the handling of length parameter
 
