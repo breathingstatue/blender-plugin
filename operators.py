@@ -249,7 +249,7 @@ class ExportRV(bpy.types.Operator, ExportHelper):
         context.scene.last_exported_format = self.format_type
 
         # Check if any selected objects are car parts
-        car_part_prefixes = ["body", "wheelfl", "wheelfr", "wheelbl", "wheelbr", "wheell", "wheelr", "axle", "spring", "pin", "spinner"]
+        car_part_prefixes = ["body", "wheel", "axle", "spring", "pin", "spinner"]
         car_parts = [obj for obj in context.selected_objects if obj.type == 'MESH' and any(obj.name.startswith(prefix) for prefix in car_part_prefixes)]
 
         if car_parts:
