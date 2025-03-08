@@ -13,7 +13,7 @@ from mathutils import Color, Vector
 from . import common
 from . import rvstruct
 from . import img_in
-from . import prm_in
+from . import prm_in_for_w
 
 from .rvstruct import World
 from .common import int_to_texture, msg_box, to_blender_coord, COL_BBOX, create_material, to_blender_scale, COL_BCUBE, COL_CUBE
@@ -23,7 +23,7 @@ if "bpy" in locals():
     importlib.reload(common)
     importlib.reload(rvstruct)
     importlib.reload(img_in)
-    importlib.reload(prm_in)
+    importlib.reload(prm_in_for_w)
    
 # Define envidx here
 envidx = 0
@@ -32,7 +32,7 @@ def import_file(filepath, scene):
     """
     Imports a .w file and links it to the scene as a Blender object.
     """
-    from .prm_in import import_w_mesh
+    from .prm_in_for_w import import_w_mesh
     global envidx
     scene = bpy.context.scene
     envidx = 0

@@ -1,12 +1,33 @@
+"""
+Name:    prm_in_for_fin
+Purpose: Imports Probe mesh files (.prm)
+
+Description:
+Meshes used for track instances.
+"""
+
 import os
 import bpy
 import bmesh
+import importlib
 from mathutils import Vector
 from . import common
+from . import layers
+from .layers import set_face_env
 from . import rvstruct
+from . import img_in
+from . import w_in
 from .rvstruct import PRM
 from .common import to_blender_coord, to_blender_axis, FACE_QUAD, reverse_quad, FACE_ENV, dprint
+from .operators import MaterialAssignmentFin
 
+# Reload imports if 'bpy' is already in locals
+if "bpy" in locals():
+    importlib.reload(common)
+    importlib.reload(rvstruct)
+    importlib.reload(img_in)
+    
+# Example usage within your import function
 def import_file(filepath, scene):
     """
     Imports a .prm file and links it to the scene as a Blender object.
@@ -24,7 +45,7 @@ def import_file(filepath, scene):
         while file.tell() < file_end:
             meshes.append(PRM(file))
 
-    dprint(f"Imported {filename} ({len(meshes)} meshes)")
+    print(f"Imported {filename} ({len(meshes)} meshes)")
 
     for index, prm in enumerate(meshes):
         me = import_prm_mesh(prm, filename, filepath, scene)
@@ -38,14 +59,16 @@ def import_file(filepath, scene):
             me.name = "{}|q{}".format(bname, meshes.index(prm))
 
         if meshes.index(prm) == 0:
-            dprint("Creating Blender object for {}...".format(filename))
+            print("Creating Blender object for {}...".format(filename))
 
             obj = bpy.data.objects.new(filename, me)
-            bpy.context.scene.collection.objects.link(obj)
+            # Check if the object is already in the scene collection
+            if obj.name not in bpy.context.scene.collection.objects:
+                bpy.context.scene.collection.objects.link(obj)
+            else:
+                print(f"Object '{obj.name}' is already in the scene collection.")
             bpy.context.view_layer.objects.active = obj
-            assign_uv_tex_material(obj, filepath)
-
-            assign_material_to_prm(scene)
+            assign_uv_tex_material(obj)
 
     return obj
 
@@ -61,8 +84,8 @@ def import_prm_mesh(prm, filename, filepath, scene, envlist=None):
     return me
 
 def add_rvmesh_to_bmesh(prm, bm, me, filepath, scene, envlist=None):
-    from .common import get_car_texture_path
-
+    from .common import get_track_texture_path
+    
     uv_layer = bm.loops.layers.uv.new("UVMap")
     vc_layer = bm.loops.layers.color.new("Col")
     env_layer = bm.loops.layers.color.new("Env")
@@ -90,14 +113,13 @@ def add_rvmesh_to_bmesh(prm, bm, me, filepath, scene, envlist=None):
             face = bm.faces.new(verts)
             created_faces.append(face)
         except ValueError as e:
-            print(f"Could not create face: {e}")
+            dprint(f"Could not create face: {e}")
             continue
 
         if poly.texture >= 0:
-            texture_path, material_name = get_car_texture_path(filepath, poly.texture, scene)
-            print(f"Texture path for poly.texture {poly.texture}: {texture_path}")
-
+            texture_path = get_track_texture_path(filepath, poly.texture, scene)
             if texture_path and os.path.isfile(texture_path):
+                material_name = os.path.basename(texture_path)
                 material = bpy.data.materials.get(material_name)
                 if not material:
                     image = bpy.data.images.load(texture_path, check_existing=True)
@@ -107,38 +129,15 @@ def add_rvmesh_to_bmesh(prm, bm, me, filepath, scene, envlist=None):
                     tex_image = material.node_tree.nodes.new('ShaderNodeTexImage')
                     tex_image.image = image
                     material.node_tree.links.new(bsdf.inputs['Base Color'], tex_image.outputs['Color'])
-                    print(f"Created new material: {material_name}")
                 if material_name not in me.materials:
                     me.materials.append(material)
-                    print(f"Added material to mesh: {material_name}")
                 face.material_index = me.materials.find(material_name)
-            else:
-                # Fallback logic for car textures
-                car_texture = bpy.data.images.get('car') or bpy.data.images.get('car.bmp')
-                if car_texture:
-                    material_name = car_texture.name
-                    material = bpy.data.materials.get(material_name)
-                    if not material:
-                        material = bpy.data.materials.new(name=material_name)
-                        material.use_nodes = True
-                        bsdf = material.node_tree.nodes.get('Principled BSDF')
-                        tex_image = material.node_tree.nodes.new('ShaderNodeTexImage')
-                        tex_image.image = car_texture
-                        material.node_tree.links.new(bsdf.inputs['Base Color'], tex_image.outputs['Color'])
-                        print(f"Created fallback material: {material_name}")
-                    if material_name not in me.materials:
-                        me.materials.append(material)
-                        print(f"Added fallback material to mesh: {material_name}")
-                    face.material_index = me.materials.find(material_name)
-                else:
-                    print("No suitable fallback texture found.")
-                    print(f"No suitable texture found for face, skipping texture assignment.")
 
         face[type_layer] = poly.type
         face[texnum_layer] = poly.texture
-
+        
         for l in range(num_loops):
-            alpha = 1 - (float(colors[l].alpha) / 255)
+            alpha = 1-(float(colors[l].alpha) / 255)
             color = [float(c) / 255 for c in colors[l].color]
 
             face.loops[l][uv_layer].uv = (uvs[l].u, 1 - uvs[l].v)
@@ -187,57 +186,122 @@ def create_materials_for_attributes(me, bm, obj_name):
         materials[attr_name] = material
 
     return materials
+                    
+def assign_uv_tex_material(obj):
+    # Ensure the object is in object mode before modifying the mesh
+    if obj.mode == 'EDIT':
+        bpy.ops.object.mode_set(mode='OBJECT')
 
-def assign_uv_tex_material(obj, filepath):
-    bm = bmesh.from_edit_mesh(obj.data) if obj.mode == 'EDIT' else bmesh.new()
+    bm = bmesh.new()
     bm.from_mesh(obj.data)
 
     uv_layer = bm.loops.layers.uv.verify()
+    texnum_layer = bm.faces.layers.int.get("Texture Number") or bm.faces.layers.int.new("Texture Number")
 
-    # Ensure the mesh is updated in the viewport
-    if obj.mode != 'EDIT':
-        bm.to_mesh(obj.data)
-        bm.free()
+    # Fetch .bmp materials
+    bmp_materials = get_bmp_materials()
 
-    obj.data.update()
+    # Get the base name for the object
+    base_name = get_base_name_for_layers(obj)
 
-def assign_material_to_prm(scene):
-    """Assign material to all imported objects for both COL and UV_TEX."""
-    # Get all mesh objects in the scene
-    mesh_objects = [obj for obj in scene.objects if obj.type == 'MESH']
+    # Assign materials based on texture number
+    for face in bm.faces:
+        tex_num = face[texnum_layer]
+        if tex_num == -1:
+            continue
 
-    # Run texture assignment for both material choices
-    set_material_to_prm_col(mesh_objects)
+        # Construct the material key using the base name and texture suffix
+        texture_suffix = int_to_texture_suffix(tex_num)
+        material_key = f"{base_name}{texture_suffix}.bmp"
 
-    # Force an update of the view layer
-    bpy.context.view_layer.update()
+        if material_key in bmp_materials:
+            material = bmp_materials[material_key]
+            if material.name not in obj.data.materials:
+                obj.data.materials.append(material)
+            face.material_index = obj.data.materials.find(material.name)
 
-    set_material_to_prm_texture(mesh_objects)
+    bm.to_mesh(obj.data)
+    bm.free()
 
-def set_material_to_prm_col(mesh_objects):
-    """Sets the material to Vertex Colour (_Col) for all mesh objects."""
-    if not mesh_objects:
-        print("No mesh objects selected for material assignment.")
-        return
+    obj.data.update()  # Ensure the mesh updates in the viewport
+                
+def get_bmp_materials():
+    bmp_materials = {}
+    for mat in bpy.data.materials:
+        if mat.use_nodes:
+            for node in mat.node_tree.nodes:
+                if node.type == 'TEX_IMAGE' and node.image and node.image.filepath.lower().endswith('.bmp'):
+                    bmp_materials[node.image.name] = mat
+    return bmp_materials
 
-    for obj in mesh_objects:
-        obj.data.material_choice = 'COL'
-        bpy.context.view_layer.objects.active = obj
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.select_all(action='SELECT')
-        bpy.ops.object.assign_materials_auto()
-        bpy.ops.object.mode_set(mode='OBJECT')
+def get_base_name_for_layers(obj):
+    base_name = obj.name.split('.')[0]
 
-def set_material_to_prm_texture(mesh_objects):
-    """Sets the material to Texture (UV_TEX) for all mesh objects."""
-    if not mesh_objects:
-        print("No mesh objects selected for material assignment.")
-        return
+    # Remove any trailing digits from the base name
+    base_name = ''.join([char for char in base_name if not char.isdigit()])
 
-    for obj in mesh_objects:
-        obj.data.material_choice = 'UV_TEX'
-        bpy.context.view_layer.objects.active = obj
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.select_all(action='SELECT')
-        bpy.ops.object.assign_materials_auto()
-        bpy.ops.object.mode_set(mode='OBJECT')
+    return base_name
+
+def int_to_texture_suffix(tex_num):
+    # Convert an integer to a texture suffix (a, b, c, ..., z, aa, ab, ...)
+    suffix1 = chr(tex_num % 26 + 97)
+    suffix2_num = tex_num // 26 - 1
+    suffix2 = chr(suffix2_num % 26 + 97) if suffix2_num >= 0 else ''
+    return suffix2 + suffix1
+
+def apply_env_data(mesh_data, world, polygons, envlist, obj_name):
+    """
+    Apply environment settings to a mesh in Blender by setting vertex colors and adjusting the Principled BSDF node's base color and alpha.
+    """
+    global w_in
+
+    bm = bmesh.new()
+    bm.from_mesh(mesh_data)
+
+    # Ensure environment layers are added or retrieved correctly
+    env_layer = bm.loops.layers.color.get("Env") or bm.loops.layers.color.new("Env")
+    env_alpha_layer = bm.faces.layers.float.get("EnvAlpha") or bm.faces.layers.float.new("EnvAlpha")
+
+    # Retrieve or create the material with environmental settings
+    env_material_name = f"{obj_name}_Env"
+    env_material = bpy.data.materials.get(env_material_name)
+    if not env_material:
+        env_material = bpy.data.materials.new(name=env_material_name)
+        env_material.use_nodes = True
+        nodes = env_material.node_tree.nodes
+        links = env_material.node_tree.links
+        bsdf = nodes.new('ShaderNodeBsdfPrincipled')
+        mat_output = nodes.new('ShaderNodeOutputMaterial')
+        links.new(bsdf.outputs['BSDF'], mat_output.inputs['Surface'])
+    else:
+        nodes = env_material.node_tree.nodes
+        links = env_material.node_tree.links
+        bsdf = env_material.node_tree.nodes.get('Principled BSDF')
+        if not bsdf:
+            bsdf = env_material.node_tree.nodes.new('ShaderNodeBsdfPrincipled')
+
+    # Validate the number of faces and polygons
+    if len(bm.faces) == len(polygons):
+        for face_index, (face, poly) in enumerate(zip(bm.faces, polygons)):
+            if poly.type & FACE_ENV:
+                env_index = w_in.envidx % len(envlist)
+                env_col = envlist[env_index]
+                scaled_color = tuple(c / 255.0 for c in env_col.color)
+                scaled_alpha = env_col.alpha / 255.0
+
+                full_color = (*scaled_color, scaled_alpha)  # Ensure we have RGBA values
+
+                for loop in face.loops:
+                    loop[env_layer] = full_color  # Assign RGBA to the Env layer
+                face[env_alpha_layer] = scaled_alpha
+
+                if bsdf:
+                    bsdf.inputs['Base Color'].default_value = (*scaled_color, 1)
+                    bsdf.inputs['Alpha'].default_value = scaled_alpha
+
+                face.smooth = True
+                w_in.envidx += 1  # Increment the global index after processing each face
+
+    bm.to_mesh(mesh_data)
+    mesh_data.update()
+    bm.free()

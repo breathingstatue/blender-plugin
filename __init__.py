@@ -45,6 +45,7 @@ from . import (
     parameters_in,
     parameters_out,
     prm_in,
+    prm_in_for_fin,
     prm_out,
     prm_out_for_fin,
     rim_in,
@@ -115,6 +116,8 @@ if "parameters_in" in locals():
     importlib.reload(parameters_in)
 if "prm_in" in locals():
     importlib.reload(prm_in)
+if "prm_in_for_fin" in locals():
+    importlib.reload(prm_in_for_fin)
 if "prm_out" in locals():
     importlib.reload(prm_out)
 if "prm_out_for_fin" in locals():
@@ -143,13 +146,13 @@ from .layers import select_ncp_material, get_face_material, set_face_material, s
 from .layers import set_face_ncp_property, get_face_ncp_property, get_face_env, set_face_env, update_face_env, get_fin_envcol, set_fin_envcol
 from .layers import get_face_property, set_face_property, update_fin_envcol, set_rgb, get_rgb, update_fin_col, get_alpha_items
 from .layers import update_fin_env, update_rgb, update_no_envmapping, update_envmapping, remove_env_material
-from .operators import CopyAndRemoveAxles, ImportRV, SelectDefaultTextureOperator, ExportRV, RVIO_OT_ReadCarParameters, RVIO_OT_SelectRevoltDirectory, ButtonReExport
+from .operators import CopyAndRemoveAxles, ImportRV, ExportRV, SelectDefaultTexture, RVIO_OT_ReadCarParameters, RVIO_OT_SelectRevoltDirectory, ButtonReExport
 from .operators import VertexAndAlphaLayer, VertexColorRemove, SetVertexColor, BakeShadow, BakeVertex, BatchBakeVertexToEnv, BakeVertexToRGBModelColor
 from .operators import SetVertexAlpha, SetFaceTextureNumber
-from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, MaterialAssignment, MaterialAssignmentAuto, TextureAssigner
-from .operators import SetInstanceProperty, RemoveInstanceProperty, LaunchRV, TexturesSave, TexturesRename
+from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, MaterialAssignment, MaterialAssignmentAuto, MaterialAssignmentFin
+from .operators import TextureAssigner, SetInstanceProperty, RemoveInstanceProperty, LaunchRV, TexturesSave, TexturesRename
 from .operators import CopyAerialParams, AxleMessageBox, ConfirmLoadOriginalAxle, CopyAndRemoveAxles, SpringMessageBox, ConfirmLoadOriginalSpring
-from .operators import CopyAndRemoveSprings, PinMessageBox, ConfirmLoadOriginalPin, CopyAndRemovePins, CopyWheelParams 
+from .operators import CopyAndRemoveSprings, PinMessageBox, ConfirmLoadOriginalPin, CopyAndRemovePins, CopyWheelParams
 from .operators import ButtonZoneHide, AddTrackZone, ReverseTrackZone, ButtonTriggerHide, CreateTrigger
 from .operators import DuplicateTrigger, CopyTrigger, PasteTrigger, SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere
 from .operators import ButtonCopyUvToFrame, ButtonCopyFrameToUv, PreviewNextFrame, PreviewPrevFrame, TexAnimTransform, TexAnimGrid
@@ -974,7 +977,6 @@ def register():
     bpy.utils.register_class(ShadowSaveOperator)
     bpy.utils.register_class(ConfirmShadowSaveOperator)
     bpy.utils.register_class(ImportRV)
-    bpy.utils.register_class(SelectDefaultTextureOperator)
     bpy.utils.register_class(ExportRV)
     bpy.utils.register_class(RVIO_OT_ReadCarParameters)
     bpy.utils.register_class(ButtonReExport)
@@ -991,8 +993,10 @@ def register():
     bpy.utils.register_class(TexturesRename)
     bpy.utils.register_class(MaterialAssignment)
     bpy.utils.register_class(MaterialAssignmentAuto)
+    bpy.utils.register_class(MaterialAssignmentFin)
     bpy.utils.register_class(TextureAssigner)
     bpy.utils.register_class(CopyWheelParams)
+    bpy.utils.register_class(SelectDefaultTexture)
     bpy.utils.register_class(AxleMessageBox)
     bpy.utils.register_class(ConfirmLoadOriginalAxle)
     bpy.utils.register_class(CopyAndRemoveAxles)
@@ -1095,8 +1099,10 @@ def unregister():
     bpy.utils.unregister_class(CopyAndRemoveAxles)
     bpy.utils.unregister_class(ConfirmLoadOriginalAxle)
     bpy.utils.unregister_class(AxleMessageBox)
+    bpy.utils.unregister_class(SelectDefaultTexture)
     bpy.utils.unregister_class(CopyWheelParams)
     bpy.utils.unregister_class(TextureAssigner)
+    bpy.utils.unregister_class(MaterialAssignmentFin)
     bpy.utils.unregister_class(MaterialAssignmentAuto)
     bpy.utils.unregister_class(MaterialAssignment)
     bpy.utils.unregister_class(TexturesRename)
@@ -1113,7 +1119,6 @@ def unregister():
     bpy.utils.unregister_class(ButtonReExport)
     bpy.utils.unregister_class(RVIO_OT_ReadCarParameters)
     bpy.utils.unregister_class(ExportRV)
-    bpy.utils.unregister_class(SelectDefaultTextureOperator)
     bpy.utils.unregister_class(ImportRV)
     bpy.utils.unregister_class(ConfirmShadowSaveOperator)
     bpy.utils.unregister_class(ShadowSaveOperator)

@@ -17,7 +17,7 @@ from math import pi
 from mathutils import Matrix
 import time
 from . import common
-from .common import create_material, COL_HULL, int_to_texture, texture_to_int, get_texture_path, TRIGGER_TYPES, LOW_FLAG_OPTIONS, HIGH_FLAG_OPTIONS
+from .common import create_material, COL_HULL, int_to_texture, texture_to_int, TRIGGER_TYPES, LOW_FLAG_OPTIONS, HIGH_FLAG_OPTIONS
 import importlib
 
 from bpy.props import (

@@ -765,46 +765,55 @@ def check_for_export(obj):
 Non-Blender helper functions
 """
 
-def get_texture_path(filepath, tex_num, scene):
-	""" Gets the full texture path when given a file and its
-		polygon texture number. """
-		
-	from .carinfo import read_parameters
+def get_car_texture_path(filepath, tex_num, scene):
+    """Handles texture path retrieval for car models without relying on parameters.txt."""
+    path, fname = filepath.rsplit(os.sep, 1)
 
-	path, fname = filepath.rsplit(os.sep, 1)
+    # Checks if the loaded model is located in the custom folder
+    folder = path.rsplit(os.sep, 1)[1]
+    if folder == "custom":
+        path = path.rsplit(os.sep, 1)[0]
+        folder = path.rsplit(os.sep, 1)[1]
 
-	# Checks if the loaded model is located in the custom folder
-	folder = path.rsplit(os.sep, 1)[1]
-	if folder == "custom":
-		path = path.rsplit(os.sep, 1)[0]
-		folder = path.rsplit(os.sep, 1)[1]
+    if not os.path.isdir(path):
+        return None, None
 
-	if not os.path.isdir(path):
-		return None
+    # Attempt to find car.bmp or car.png in the folder
+    for texture_name in ['car.bmp', 'car.png']:
+        texture_path = os.path.join(path, texture_name)
+        if os.path.isfile(texture_path):
+            return texture_path, texture_name
 
-	# The file is part of a car
-	if "parameters.txt" in os.listdir(path):
-		filepath = os.path.join(path, "parameters.txt")
-		if not filepath in PARAMETERS:
-			PARAMETERS[filepath] = read_parameters(filepath)
-		tpage = PARAMETERS[filepath]["tpage"].split(os.sep)[-1]
+    # Fallback: Use the folder name to determine the texture
+    folder_texture = f"{folder}.bmp"
+    texture_path = os.path.join(path, folder_texture)
+    if os.path.isfile(texture_path):
+        return texture_path, "car.bmp"
 
-		return os.path.join(path, tpage)
+    return None, None
 
-	# The file is part of a track
-	elif is_track_folder(path): 
-		tpage = int_to_texture(tex_num, folder.lower())
-		return os.path.join(path, tpage)
-	else:
-		return os.path.join(path, int_to_texture(tex_num, "dummy"))
+def get_track_texture_path(filepath, tex_num, scene):
+    """Handles texture path retrieval for track models without using tpage."""
+    path, fname = filepath.rsplit(os.sep, 1)
 
+    # Checks if the loaded model is located in the custom folder
+    folder = path.rsplit(os.sep, 1)[1]
+    if folder == "custom":
+        path = path.rsplit(os.sep, 1)[0]
+        folder = path.rsplit(os.sep, 1)[1]
 
-def is_track_folder(path):
-	for f in os.listdir(path):
-		if ".inf" in f:
-			return True
-	return False
+    print(f"Folder derived: {folder} from path: {path}")
 
+    if not os.path.isdir(path):
+        print(f"Path is not a directory: {path}")
+        return None
+
+    # Directly use tex_num to determine the texture file name
+    texture_name = f"{folder}{chr(97 + tex_num)}.bmp"
+    texture_path = os.path.join(path, texture_name)
+    print(f"Constructed texture path: {texture_path}")
+
+    return texture_path
 
 def get_format(fstr):
 	"""

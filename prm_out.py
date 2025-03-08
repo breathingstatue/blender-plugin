@@ -7,7 +7,6 @@ Meshes used for cars and world meshes.
 
 """
 
-
 if "bpy" in locals():
     import imp
     imp.reload(common)
@@ -23,7 +22,6 @@ from . import common
 from . import rvstruct
 from . import img_in
 from . import layers
-
 from .common import dprint, get_all_lod, triangulate_ngons, queue_error, FACE_QUAD, FACE_PROP_MASK, texture_to_int, FACE_ENV
 from .common import to_revolt_coord, to_revolt_axis, rvbbox_from_bm, center_from_rvbbox, radius_from_bmesh
 from .layers import *
@@ -38,9 +36,14 @@ def export_file(filepath, scene):
 
     # Get all mesh objects in the scene
     mesh_objects = [obj for obj in scene.objects if obj.type == 'MESH']
+    print(f"Found {len(mesh_objects)} mesh objects in the scene.")
 
     # Run material assignment for both COL and UV_TEX
     set_material_to_col(mesh_objects)
+
+    # Force an update of the view layer
+    bpy.context.view_layer.update()
+
     set_material_to_texture(mesh_objects)
 
     # Checks if other LoDs are present
@@ -62,7 +65,7 @@ def export_file(filepath, scene):
             # Writes the PRM object to a file
             if prm:
                 prm.write(file)
-                
+
 def get_texture_from_material(face, obj, default_texture_name=None):
     # Check if the object has materials
     if obj.material_slots:
@@ -74,50 +77,36 @@ def get_texture_from_material(face, obj, default_texture_name=None):
                         image = node.image
                         if image:
                             # Check if the image name matches 'car' or the object's name
-                            if image.name == 'car':
-                                print(f"Found car.bmp image for material: {mat.name} on {obj.name}")
-                                return image
-                            elif image.name == obj.name.split('.')[0]:
-                                print(f"Found image: {image.name} matching object name for material: {mat.name} on {obj.name}")
+                            if image.name == 'car' or image.name == obj.name.split('.')[0]:
+                                print(f"Found matching image: {image.name} for material: {mat.name} on {obj.name}")
+                                # Rename the material to match the texture name without duplicating '.bmp'
+                                if not image.name.endswith('.bmp'):
+                                    mat.name = f"{image.name}.bmp"
+                                else:
+                                    mat.name = image.name
                                 return image
                             else:
                                 print(f"Found image: {image.name} for material: {mat.name} on {obj.name}")
+                                # Rename the material to match the texture name without duplicating '.bmp'
+                                if not image.name.endswith('.bmp'):
+                                    mat.name = f"{image.name}.bmp"
+                                else:
+                                    mat.name = image.name
                                 return image
                         else:
                             print(f"No image found for material: {mat.name} on {obj.name}")
 
-    # Check for car parts by name
-    car_part_prefixes = ["body", "wheel", "axle", "spring", "pin", "spinner"]
-    is_car_part = any(obj.name.startswith(prefix) for prefix in car_part_prefixes)
-
-    if is_car_part:
-        # Fallback to car.bmp for car parts
-        print(f"Checking for car.bmp fallback for {obj.name}...")
-        car_texture = bpy.data.images.get('car')
-
-        if car_texture:
-            print(f"Assigned car texture image to {obj.name}")
-            return car_texture
-        elif default_texture_name:
-            # Use the selected default texture name
-            default_texture = bpy.data.images.get(default_texture_name)
-            if default_texture:
-                print(f"Assigned default texture image {default_texture_name} to {obj.name}")
-                return default_texture
-            else:
-                print(f"Default texture {default_texture_name} not found for {obj.name}")
+    # Fallback to default texture if specified
+    if default_texture_name:
+        default_texture = bpy.data.images.get(default_texture_name)
+        if default_texture:
+            print(f"Using default texture image {default_texture_name} for {obj.name}")
+            return default_texture
         else:
-            # Fallback to mesh material
-            print(f"car.bmp not found for {obj.name}, using mesh material instead.")
-            if obj.material_slots:
-                for mat in obj.material_slots:
-                    if mat.material and mat.material.node_tree:
-                        for node in mat.material.node_tree.nodes:
-                            if node.type == 'TEX_IMAGE':
-                                return node.image
+            print(f"Default texture {default_texture_name} not found for {obj.name}")
 
     # Final fallback if no image is found
-    print(f"Error: No material found for {obj.name}")
+    print(f"Error: No material or texture found for {obj.name}")
     return None
 
 def export_mesh(me, obj, scene, filepath, world=None):
@@ -267,7 +256,7 @@ def export_mesh(me, obj, scene, filepath, world=None):
                 col = rvstruct.Color(color=(int(color[0] * 255),
                                             int(color[1] * 255),
                                             int(color[2] * 255)),
-                                     alpha=255-int(((alpha[0] + alpha[1] + alpha[2]) * 255)  / 3))
+                                     alpha=255 - int(((alpha[0] + alpha[1] + alpha[2]) * 255) / 3))
                 poly.colors.append(col)
             else:
                 # Writes white

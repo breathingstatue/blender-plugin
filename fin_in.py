@@ -6,15 +6,15 @@ Description:
 Imports Instance files.
 
 """
+
 import os
 import bpy
 import bmesh
 import mathutils
 import importlib
 from . import common
+from . import prm_in_for_fin
 from . import rvstruct
-from . import prm_in
-
 from .common import to_trans_matrix, to_blender_coord, FIN_SET_MODEL_RGB, FIN_ENV, FIN_HIDE, FIN_NO_MIRROR, FIN_NO_LIGHTS
 from .common import FIN_NO_OBJECT_COLLISION, FIN_NO_CAMERA_COLLISION
 from .rvstruct import Instances, Vector
@@ -66,22 +66,22 @@ def import_instance(filepath, scene, instance):
         print(f"PRM {prm_fname} already in scene. Duplicating...")  # Debug point 4
         data = scene.objects[prm_fname].data
         instance_obj = bpy.data.objects.new(name=prm_fname, object_data=data)
-        # Check if the object is already in the scene collection 
-        if instance_obj.name not in bpy.context.scene.collection.objects: 
-            bpy.context.scene.collection.objects.link(instance_obj) 
-        else: 
+        # Check if the object is already in the scene collection
+        if instance_obj.name not in bpy.context.scene.collection.objects:
+            bpy.context.scene.collection.objects.link(instance_obj)
+        else:
             print(f"Object '{instance_obj.name}' is already in the scene collection.")
     elif prm_fname:
         prm_path = os.path.join(folder, prm_fname)
         print(f"Importing PRM from path: {prm_path}")  # Debug point 5
-        instance_obj = prm_in.import_file(prm_path, scene)
+        instance_obj = prm_in_for_fin.import_file(prm_path, scene)
     else:
         print(f"No PRM found for {instance_name}. Creating empty object.")  # Debug point 6
         instance_obj = bpy.data.objects.new(instance_name, None)
-        # Check if the object is already in the scene collection 
-        if instance_obj.name not in bpy.context.scene.collection.objects: 
-            bpy.context.scene.collection.objects.link(instance_obj) 
-        else: 
+        # Check if the object is already in the scene collection
+        if instance_obj.name not in bpy.context.scene.collection.objects:
+            bpy.context.scene.collection.objects.link(instance_obj)
+        else:
             print(f"Object '{instance_obj.name}' is already in the scene collection.")
         instance_obj.empty_display_type = "SPHERE"
 
@@ -97,6 +97,10 @@ def import_instance(filepath, scene, instance):
 
     apply_environment_settings(instance_obj)
     model_color_material(instance_obj)
+
+    # Ensure the object is in object mode before proceeding
+    if instance_obj.mode == 'EDIT':
+        bpy.ops.object.mode_set(mode='OBJECT')
 
     print(f"Finished importing {instance_name}")  # Debug point 8
     return instance_obj
@@ -204,7 +208,7 @@ def setup_material_nodes(mat):
     output = nodes.new('ShaderNodeOutputMaterial')
     links = mat.node_tree.links
     links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
-    
+
     print(f"Material '{mat.name}' set up with principled shader.")
 
 def get_base_name_for_layers(obj):
@@ -227,17 +231,17 @@ def clean_instance_name(name):
     """
     # Lowercase the name to ensure consistency
     name = name.lower()
-    
+
     # If the name ends with '.prm', strip it temporarily to clean up the base name
     if name.endswith(".prm"):
         base_name = name[:-4]  # Strip off the '.prm' part
     else:
         base_name = name
-    
+
     # Find the first dot in the base name and strip anything after it
     if '.' in base_name:
         base_name = base_name.split('.')[0]
-    
+
     # Reattach the .prm extension if it was originally there
     return f"{base_name}.prm" if name.endswith(".prm") else base_name
 
@@ -256,23 +260,25 @@ def assign_material_to_all(scene):
             obj.select_set(True)
             obj.data.material_choice = 'COL'  # Set vertex color first
 
-    # Batch switch to edit mode
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.select_all(action='SELECT')
-    bpy.ops.object.assign_materials_auto()
-
-    # Switch back to object mode
+    # Ensure all objects are in object mode before proceeding
     bpy.ops.object.mode_set(mode='OBJECT')
 
-    # Assign UV_TEX to all selected objects in one go
+    # Assign COL materials
+    bpy.ops.object.assign_materials_fin()
+
+    # Deselect all objects first
+    bpy.ops.object.select_all(action='DESELECT')
+
+    # Select all mesh objects at once for faster batch processing
     for obj in mesh_objects:
         obj.select_set(True)
         obj.data.material_choice = 'UV_TEX'
 
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.select_all(action='SELECT')
-    bpy.ops.object.assign_materials_auto()
+    # Ensure all objects are in object mode before proceeding
     bpy.ops.object.mode_set(mode='OBJECT')
+
+    # Assign UV_TEX materials
+    bpy.ops.object.assign_materials_fin()
 
     # Mark objects as assigned to prevent reprocessing
     for obj in mesh_objects:

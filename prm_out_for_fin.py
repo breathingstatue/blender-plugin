@@ -1,12 +1,11 @@
 """
-Name:    prm_out
+Name:    prm_out_for_fin
 Purpose: Exports Probe mesh files (.prm)
 
 Description:
-Meshes used for cars and world meshes.
+Meshes used for instance meshes.
 
 """
-
 
 if "bpy" in locals():
     import imp
@@ -23,7 +22,6 @@ from . import common
 from . import rvstruct
 from . import img_in
 from . import layers
-
 from .common import dprint, get_all_lod, triangulate_ngons, queue_error, FACE_QUAD, FACE_PROP_MASK, texture_to_int, FACE_ENV
 from .common import to_revolt_coord, to_revolt_axis, rvbbox_from_bm, center_from_rvbbox, radius_from_bmesh
 from .layers import *
@@ -73,27 +71,12 @@ def get_texture_from_material(face, obj):
                         else:
                             print(f"No image found for material: {mat.name} on {obj.name}")
 
-    # Check for car parts by name
-    car_part_prefixes = ["body", "wheel", "axle", "spring", "pin", "spinner"]
-    is_car_part = any(obj.name.startswith(prefix) for prefix in car_part_prefixes)
-
-    if is_car_part:
-        # Fallback to car.bmp for car parts
-        print(f"Checking for car.bmp fallback for {obj.name}...")
-        car_texture = bpy.data.images.get('car')
-        
-        if car_texture:
-            print(f"Assigned car texture image to {obj.name}")
-            return car_texture
-        else:
-            # Fallback to mesh material
-            print(f"car.bmp not found for {obj.name}, using mesh material instead.")
-            if obj.material_slots:
-                for mat in obj.material_slots:
-                    if mat.material and mat.material.node_tree:
-                        for node in mat.material.node_tree.nodes:
-                            if node.type == 'TEX_IMAGE':
-                                return node.image
+    if obj.material_slots:
+        for mat in obj.material_slots:
+            if mat.material and mat.material.node_tree:
+                for node in mat.material.node_tree.nodes:
+                    if node.type == 'TEX_IMAGE':
+                        return node.image
 
     # Final fallback if no image is found
     print(f"Error: No material found for {obj.name}")

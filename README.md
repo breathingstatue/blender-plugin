@@ -1,10 +1,10 @@
 # blender-plugin
-I created a modified version of Marv's Blender Plugin for Re-Volt, that works in the current Blender (4.1)
+I created a modified version of Marv's Blender Plugin for Re-Volt, that works in the current Blender (4.3)
 
 INSTALLATION
 place 'io_revolt' in Blender/"version"/scripts/addons/
 
--Theman with the help of Chat GPT and a bunch of friends in the RV I/O community.
+-Theman with the help of AI and a bunch of friends in the RV I/O community.
 
 TO DO LIST:
 
@@ -16,6 +16,7 @@ broader .m (model) support
 FULL CHANGELOG:
 
 20.25.3
+maintenance on import / export modules regarding different materials
 fixed solution for different textures/car parts export
 car parts can have any default texture, not just car.bmp
 hotfixed Vertex Layer creation

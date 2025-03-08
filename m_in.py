@@ -89,7 +89,7 @@ def import_m_mesh(model, filename, filepath, scene, envlist=None):
     return me
 
 def add_rvmesh_to_bmesh(model, bm, me, filepath, scene, envlist=None):
-    from .common import get_texture_path
+    from .common import get_track_texture_path
     
     uv_layer = bm.loops.layers.uv.new("UVMap")
     vc_layer = bm.loops.layers.color.new("Col")
@@ -122,7 +122,7 @@ def add_rvmesh_to_bmesh(model, bm, me, filepath, scene, envlist=None):
             continue
 
         if poly.texture >= 0:
-            texture_path = get_texture_path(filepath, poly.texture, scene)
+            texture_path = get_track_texture_path(filepath, poly.texture, scene)
             if texture_path and os.path.isfile(texture_path):
                 material_name = os.path.basename(texture_path)
                 material = bpy.data.materials.get(material_name)

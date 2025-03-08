@@ -1,5 +1,4 @@
 ﻿import os
-from re import S
 import bpy
 import bmesh
 import importlib
@@ -23,22 +22,15 @@ def import_file(filepath, scene):
     Imports a parameters.txt file and loads car body and wheels.
     """
     PARAMETERS[filepath] = carinfo.read_parameters(filepath)
-    car_name = extract_car_name(filepath)
-    
+
     # Import the car and its parts
-    import_car(PARAMETERS[filepath], filepath, scene, car_name)
-    
-    # After import, ensure material is named car.bmp
-    ensure_car_bmp_material(filepath, car_name)
+    import_car(PARAMETERS[filepath], filepath, scene)
 
     PARAMETERS.pop(filepath)
 
-def import_car(params, filepath, scene, car_name):
+def import_car(params, filepath, scene):
     folder = os.sep.join(filepath.split(os.sep)[:-1])
     imported_objects = []
-
-    # Pass car_name and params to import_all_textures
-    import_all_textures(folder, car_name, params)
 
     if 'wheel' in params:
         wheel0loc = to_blender_coord(params["wheel"][0]["offset1"])
@@ -106,11 +98,11 @@ def import_car(params, filepath, scene, car_name):
         to_blender_angle(params['wheel'][2].get("camber", 0.0)),
         to_blender_angle(params['wheel'][3].get("camber", 0.0))
     ]
-    
+
     wheel_locations = [wheel0loc, wheel1loc, wheel2loc, wheel3loc]
     spring_locations = [spring0loc, spring1loc, spring2loc, spring3loc]
     pin_locations = [pin0loc, pin1loc, pin2loc, pin3loc]
-    
+
     def get_single_file_with_keyword(keyword):
         files = [f for f in os.listdir(folder) if keyword in f.lower() and f.lower().endswith('.prm')]
         return files[0] if len(files) == 1 else None
@@ -120,14 +112,14 @@ def import_car(params, filepath, scene, car_name):
         if model_path:
             print(f"Found model path with keyword '{keyword}': {model_path}")
             return os.path.join(folder, model_path)
-    
+
         if model_num >= 0:
             model_file = params['model'][model_num]
             if model_file is None:
                 print(f"Error: 'model_file' is None for model_num {model_num}")
                 return None
             print(f"Model file before split: {model_file}")
-        
+
             model_path = os.path.join(folder, model_file.split(os.sep)[-1])
             if os.path.exists(model_path):
                 print(f"Found model path: {model_path}")
@@ -136,7 +128,7 @@ def import_car(params, filepath, scene, car_name):
                 print(f"Model path does not exist: {model_path}")
         else:
             print(f"Invalid model_num: {model_num}")
-    
+
         return None
 
     def import_or_placeholder(path, name, obj_location):
@@ -148,12 +140,12 @@ def import_car(params, filepath, scene, car_name):
         else:
             print(f"Path is None for {name}.")
             pass
-    
+
         obj.location = obj_location
-        # Check if the object is already in the scene collection 
-        if obj.name not in bpy.context.scene.collection.objects: 
-            bpy.context.scene.collection.objects.link(obj) 
-        else: 
+        # Check if the object is already in the scene collection
+        if obj.name not in bpy.context.scene.collection.objects:
+            bpy.context.scene.collection.objects.link(obj)
+        else:
             print(f"Object '{obj.name}' is already in the scene collection.")
         obj.name = name
         return obj
@@ -166,6 +158,7 @@ def import_car(params, filepath, scene, car_name):
             body_obj.name = "body"
             imported_objects.append(body_obj)
             print(f"Imported body at {params['body']['offset']}")
+
         else:
             print("Warning: Missing data or path for the car body. Skipping body import.")
     except KeyError:
@@ -289,7 +282,6 @@ def import_car(params, filepath, scene, car_name):
                         # Calculate the scaled bounding box
                         scaled_min_x, scaled_max_x, scaled_max_z = calculate_bounding_box(pin)
                         print(f"Scaled bounding box for pin {pin_names[i]}: X({scaled_min_x}, {scaled_max_x}), Z({scaled_max_z})")
-
                         # Calculate the adjustments needed to even out the edges
                         if i % 2 == 0:
                             # For pins 0 and 2, move towards -x based on max_x difference
@@ -376,105 +368,10 @@ def import_car(params, filepath, scene, car_name):
     else:
         print("Warning: No aerial parameters found. Skipping aerial import.")
 
-    # Apply UV maps to textures for all imported objects
-    for obj in imported_objects:
-        apply_uv_maps_to_textures(obj)
+    # Load texture images
+    load_texture_images(folder)
 
     return imported_objects
-
-def extract_car_name(filepath):
-    """
-    Reads the car name from the parameters.txt file.
-    """
-    with open(filepath, 'r') as file:
-        for line in file:
-            if line.startswith("Name"):
-                # Extract the car name by stripping 'Name', spaces, and quotes
-                return line.split('\"')[1].strip()  # Get the text between the quotes
-    return "Unknown Car"  # Default if not found
-    
-def import_all_textures(folder, car_name, params):
-    """
-    Import all .bmp files in the given folder as textures.
-    If car.bmp is missing, try to load the car-specific texture (e.g., carname.bmp).
-    If that fails, check for a TPAGE entry in parameters.txt.
-    """
-    car_texture_found = False
-
-    for image_file in os.listdir(folder):
-        if image_file.lower().endswith('.bmp'):
-            img_path = os.path.join(folder, image_file)
-            img_name = os.path.splitext(image_file)[0]
-
-            # Import texture without appending car name
-            if img_name not in bpy.data.images:
-                img = bpy.data.images.load(img_path)
-                img.name = img_name  # Use the original name (without .bmp suffix)
-                print(f"Imported texture: {img_name}")
-
-            if img_name.lower() == "car" or img_name.lower() == car_name.lower():
-                car_texture_found = True
-
-    # Fallback to load car-specific texture if car.bmp is not found
-    if not car_texture_found:
-        fallback_texture = f"{car_name.lower()}.bmp"
-        fallback_path = os.path.join(folder, fallback_texture)
-        if os.path.exists(fallback_path):
-            fallback_name = os.path.splitext(fallback_texture)[0]  # Remove .bmp for naming
-            if fallback_name not in bpy.data.images:
-                img = bpy.data.images.load(fallback_path)
-                img.name = fallback_name
-                print(f"Fallback imported texture: {fallback_name}")
-                car_texture_found = True
-        else:
-            print(f"Warning: Neither car.bmp nor {fallback_texture} found in {folder}")
-
-    # Fallback to TPAGE if other methods fail
-    if not car_texture_found and 'TPAGE' in params:
-        tpage_texture = params['TPAGE'].split('\\')[-1]
-        tpage_name = os.path.splitext(tpage_texture)[0]  # Remove .bmp suffix
-        tpage_path = os.path.join(folder, tpage_texture)
-        if os.path.exists(tpage_path):
-            if tpage_name not in bpy.data.images:
-                img = bpy.data.images.load(tpage_path)
-                img.name = tpage_name
-                print(f"Imported TPAGE texture: {tpage_name}")
-        else:
-            print(f"Warning: TPAGE texture {tpage_texture} not found in {folder}")
-                
-def apply_uv_maps_to_textures(obj):
-    """
-    Apply UV maps to the object similar to how car.bmp is mapped.
-    """
-    # Ensure the object has valid mesh data
-    if obj is None or not isinstance(obj.data, bpy.types.Mesh):
-        print(f"Skipping UV map application: {obj.name} is not a mesh.")
-        return
-
-    # Check if the object has UV layers
-    if not obj.data.uv_layers:
-        print(f"No UV maps found for {obj.name}, skipping UV assignment.")
-        return
-
-    uv_map = obj.data.uv_layers.active.name if obj.data.uv_layers else None
-    if not uv_map:
-        print(f"No active UV map found for {obj.name}.")
-        return
-
-    for material_slot in obj.material_slots:
-        mat = material_slot.material
-        if not mat or not mat.use_nodes or not mat.node_tree:
-            continue
-        
-        for node in mat.node_tree.nodes:
-            if node.type == 'TEX_IMAGE':
-                # Check if the node has an ImageUser (only necessary if the node supports multiple images)
-                if hasattr(node, 'image_user'):
-                    # Ensure that the image_user attribute exists before accessing uv_map
-                    node.image_user.use_auto_refresh = True  # Just an example of a valid attribute
-                    print(f"Assigned UV map {uv_map} to {node.image.name} in {obj.name}")
-                else:
-                    print(f"ImageUser object has no attribute 'uv_map'. Skipping for {node.image.name}.")
 
 def get_extreme_face_vertices(obj):
     bm = bmesh.new()
@@ -531,7 +428,6 @@ def align_to_axis(obj, target_axis='Z'):
         ('z', 'y'): ('x', -90)
     }
     rotation_axis, angle = axis_map.get((principal_axis, target_axis.lower()), (None, 0))
-
     if rotation_axis:
         obj.rotation_euler.rotate_axis(rotation_axis.upper(), radians(angle))
         bpy.context.view_layer.update()
@@ -580,7 +476,7 @@ def check_alignment_and_orient(obj, wheel_loc):
         set_spring_orientation(obj, wheel_loc, True)
     else:
         pass
-    
+
 def set_spring_orientation(spring, wheel_loc, outward=True):
     direction = Vector(wheel_loc) - spring.location
     if outward:
@@ -591,7 +487,7 @@ def set_spring_orientation(spring, wheel_loc, outward=True):
     rot_quat = direction.to_track_quat('Z', 'Y')
     spring.rotation_euler = rot_quat.to_euler()
     print(f"Applied rotation to {spring.name}")
-    
+
 def align_to_direction(pin, target_location):
     # Calculate the direction vector from the pin to the target location
     direction = target_location - pin.location
@@ -640,7 +536,7 @@ def set_geometry_to_origin(obj):
 
     # Restore the original active object
     bpy.context.view_layer.objects.active = original_active
-    
+
 def set_orientation(obj, target_pos, flip=False):
     if obj is None:
         print("Attempted to set orientation on a None object.")
@@ -658,7 +554,7 @@ def set_orientation(obj, target_pos, flip=False):
         quat = quat @ flip_quat
 
     obj.rotation_euler = quat.to_euler()
-    
+
 def apply_camber_to_wheel(wheel, camber_angle, is_right_wheel=False):
     # Only apply camber if the angle is non-zero
     if camber_angle != 0.0:
@@ -673,30 +569,20 @@ def apply_camber_to_wheel(wheel, camber_angle, is_right_wheel=False):
         print(f"Applied camber of {math.degrees(camber_angle)} degrees to {wheel.name}")
     else:
         pass
-    
-def ensure_car_bmp_material(filepath, car_name):
+
+def load_texture_images(folder):
     """
-    Ensures the material for the car body is named 'car.bmp'.
-    If 'car.bmp' is not found but 'carname.bmp' exists, rename the material to 'car.bmp'.
+    Load all texture images in the folder to the scene, excluding default textures and specific files.
     """
-    folder = os.path.dirname(filepath)
-    car_texture_path = os.path.join(folder, "car.bmp")
-    fallback_texture_path = os.path.join(folder, f"{car_name.lower()}.bmp")
-    
-    # Check if car.bmp exists
-    if not os.path.exists(car_texture_path):
-        if os.path.exists(fallback_texture_path):
-            # Check if the material with the fallback name exists (including .bmp suffix)
-            fallback_name = os.path.basename(fallback_texture_path)
-            fallback_material = bpy.data.materials.get(fallback_name)
-            
-            if fallback_material:
-                # Rename the material to car.bmp (with .bmp suffix)
-                fallback_material.name = "car.bmp"
-                print(f"Renamed material '{fallback_name}' to 'car.bmp'")
-            else:
-                print(f"Fallback material '{fallback_name}' not found in Blender materials.")
-        else:
-            print("Neither car.bmp nor fallback texture found after import.")
-    else:
-        print("car.bmp already exists, no renaming necessary.")
+    excluded_files = {'carbox.bmp', 'carbox.png', 'shadow.bmp', 'shadow.png', 'car.bmp', 'car.png'}
+    folder_name = os.path.basename(folder)
+    excluded_files.update({f"{folder_name}.bmp", f"{folder_name}.png"})
+
+    image_files = [f for f in os.listdir(folder) if f.lower().endswith(('.bmp', '.png')) and f not in excluded_files]
+
+    for image_file in image_files:
+        image_path = os.path.join(folder, image_file)
+        image = bpy.data.images.load(image_path)
+        texture = bpy.data.textures.new(image_file, type='IMAGE')
+        texture.image = image
+        print(f"Loaded texture image: {image_file}")

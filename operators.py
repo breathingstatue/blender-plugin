@@ -19,9 +19,9 @@ import math
 import mathutils
 from mathutils import Vector as BlenderVector
 from bpy_extras.io_utils import ExportHelper
+from bpy_extras.io_utils import ImportHelper
 from . import common
 from . import tools
-from .fin_in import model_color_material
 from .hul_in import create_sphere
 from .texanim import *
 from .tools import generate_chull
@@ -192,42 +192,14 @@ class ImportRV(bpy.types.Operator):
         context.window_manager.fileselect_add(self)
         return {"RUNNING_MODAL"}
 
-class SelectDefaultTextureOperator(bpy.types.Operator):
-    bl_idname = "object.select_default_texture"
-    bl_label = "Select Default Texture"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    selected_texture: StringProperty(name="Selected Texture")
-
-    def execute(self, context):
-        selected_texture = bpy.data.images.get(self.selected_texture)
-
-        if selected_texture:
-            # Store the selected texture name in a custom property
-            context.scene.default_texture_name = self.selected_texture
-            return {'FINISHED'}
-
-        self.report({'WARNING'}, f"Texture {self.selected_texture} not found.")
-        return {'CANCELLED'}
-
-    def invoke(self, context, event):
-        # Display a dialog with a list of available textures
-        available_textures = [img.name for img in bpy.data.images]
-        return context.window_manager.invoke_props_dialog(self, width=300)
-
-    def draw(self, context):
-        layout = self.layout
-        layout.label(text="Select Default Texture:")
-        layout.prop_search(self, "selected_texture", bpy.data, "images", text="Texture")
-
-class ExportRV(bpy.types.Operator, ExportHelper):
+class ExportRV(bpy.types.Operator):
     bl_idname = "export_scene.revolt"
     bl_label = "Export Re-Volt Files"
     bl_description = "Export Re-Volt game files"
-
+    filepath: bpy.props.StringProperty(subtype="FILE_PATH")
     filename_ext = ""
 
-    format_type: EnumProperty(
+    format_type: bpy.props.EnumProperty(
         name="Format",
         description="Choose the file format to export",
         items=[
@@ -241,30 +213,83 @@ class ExportRV(bpy.types.Operator, ExportHelper):
             ('TAZ', "TAZ (.taz)", "Export as TAZ file"),
             ('TRI', "TRI (.tri)", "Export as TRI file"),
         ],
+        update=None  # Removing the update function
     )
 
     def execute(self, context):
-        # Save filepath for re-exporting the same file
+        # Debugging: Print the filepath and format type
+        print(f"Exporting to filepath: {self.filepath}")
+        print(f"Exporting format type: {self.format_type}")
+
+        # Ensure filepath is set
+        if not self.filepath:
+            print("Error: Filepath is not set.")
+            return {'CANCELLED'}
+
+        # Saves filepath for re-exporting the same file
         context.scene.last_exported_filepath = self.filepath
         context.scene.last_exported_format = self.format_type
-
-        # Check if any selected objects are car parts
-        car_part_prefixes = ["body", "wheel", "axle", "spring", "pin", "spinner"]
-        car_parts = [obj for obj in context.selected_objects if obj.type == 'MESH' and any(obj.name.startswith(prefix) for prefix in car_part_prefixes)]
-
-        if car_parts:
-            # Check if 'car.bmp' texture is available
-            car_texture = bpy.data.images.get('car')
-            if not car_texture:
-                # Prompt user to select a default texture
-                return bpy.ops.object.select_default_texture('INVOKE_DEFAULT')
 
         result = exec_export(self.filepath, self.format_type, context)
         return result
 
     def invoke(self, context, event):
+        # Open the file browser to select the export path
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
+
+class SelectDefaultTexture(bpy.types.Operator):
+    bl_idname = "wm.select_default_texture"
+    bl_label = "Select Default Texture"
+    bl_description = "Select the default texture for the exported object from the available textures in the scene"
+
+    texture_name: bpy.props.EnumProperty(
+        name="Texture",
+        description="Select the default texture",
+        items=lambda self, context: [
+            (img.name, img.name, "") for img in bpy.data.images
+            if img.name not in ["Render Result", "Viewer Node"]
+        ],
+    )
+
+    def execute(self, context):
+        # Store the selected texture name in the scene for later use
+        context.scene.default_texture_name = self.texture_name
+
+        # Debugging: Print the last exported format
+        print(f"Last exported format before execution: {context.scene.last_exported_format}")
+
+        # Ensure last_exported_format is set to a valid value
+        if not context.scene.last_exported_format:
+            context.scene.last_exported_format = 'PRM'  # Default to PRM or any valid format
+
+        # Continue with the export process by invoking the ExportRV operator
+        bpy.ops.export_scene.revolt('INVOKE_DEFAULT')
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        # Check if a single object is selected for export
+        if len(context.selected_objects) == 1:
+            obj = context.selected_objects[0]
+            car_part_prefixes = ["body", "wheel", "axle", "spring", "pin", "spinner"]
+            if any(obj.name.startswith(prefix) for prefix in car_part_prefixes):
+                # Check if 'car' or 'car.bmp' texture is present
+                car_texture = bpy.data.images.get('car')
+                car_bmp_texture = bpy.data.images.get('car.bmp')
+                if not car_texture and not car_bmp_texture:
+                    # Open a dialog to select from available textures in the scene
+                    return context.window_manager.invoke_props_dialog(self)
+                else:
+                    # If texture is present, directly invoke the export operator
+                    return bpy.ops.export_scene.revolt('INVOKE_DEFAULT')
+
+        # If not a car part, directly invoke the export operator
+        return bpy.ops.export_scene.revolt('INVOKE_DEFAULT')
+
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text="Default Texture:")
+        layout.prop(self, "texture_name")
 
 def exec_export(filepath, format_type, context):
     start_time = time.time()
@@ -1259,19 +1284,6 @@ class ButtonHullSphere(bpy.types.Operator):
 MATERIALS & TEXTURES ---------------------------------------------------------
 """
 
-class MaterialUtils:
-    @staticmethod
-    def get_texture_base_name(tex_num, existing_textures):
-        suffix1 = chr(tex_num % 26 + 97)
-        suffix2_num = tex_num // 26 - 1
-        suffix2 = chr(suffix2_num % 26 + 97) if suffix2_num >= 0 else ''
-        suffix = suffix2 + suffix1
-
-        for texture in existing_textures:
-            if texture.endswith(suffix + ".bmp"):
-                return existing_textures[texture].rsplit(suffix, 1)[0]
-        return None
-
 class MaterialAssignmentAuto(bpy.types.Operator):
     """Assign Materials to All Meshes Automatically"""
     bl_idname = "object.assign_materials_auto"
@@ -1279,6 +1291,393 @@ class MaterialAssignmentAuto(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     car_parts_prefixes = ["body", "wheel", "axle", "spring", "pin", "spinner"]
+
+    def execute(self, context):
+        if bpy.context.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        mesh_objects = [obj for obj in bpy.data.objects if obj.type == 'MESH']
+
+        original_active_object = context.view_layer.objects.active
+        if original_active_object and original_active_object.type == 'MESH':
+            active_material_choice = original_active_object.data.material_choice
+        else:
+            self.report({'WARNING'}, "No active mesh object with material choice found.")
+            return {'CANCELLED'}
+
+        # Get existing textures once and reuse the result
+        existing_textures = self.get_existing_textures()
+
+        for obj in mesh_objects:
+            obj.data.material_choice = active_material_choice
+
+        self.assign_materials_to_all(mesh_objects, existing_textures)
+
+        bpy.ops.object.select_all(action='DESELECT')
+        for obj in mesh_objects:
+            obj.select_set(True)
+        context.view_layer.objects.active = original_active_object
+
+        return {'FINISHED'}
+
+    def update_material_assignment(self, obj, existing_textures):
+        material_map = {
+            'UV_TEX': '_UVTex',
+            'COL': '_Col',
+            'ALPHA': '_Alpha',
+            'ENV': '_Env',
+            'RGB': '_RGBModelColor'
+        }
+
+        material_choice = obj.data.material_choice
+        material_suffix = material_map.get(material_choice, '_Col')
+
+        if material_choice == 'UV_TEX':
+            self.assign_uv_textures(obj, existing_textures)
+        else:
+            self.assign_regular_materials(obj, material_suffix)
+
+    def assign_materials_to_all(self, mesh_objects, existing_textures):
+        bpy.ops.object.select_all(action='DESELECT')
+
+        for obj in mesh_objects:
+            obj.select_set(True)
+
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.select_all(action='SELECT')
+
+        for obj in mesh_objects:
+            self.update_material_assignment(obj, existing_textures)
+
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+    def get_existing_textures(self):
+        textures = {}
+        for image in bpy.data.images:
+            name_parts = image.name.rsplit('.', 1)
+            if len(name_parts) > 1 and name_parts[-1].isalpha():
+                textures[image.name] = name_parts[0]
+                print(f"Added texture: {image.name} with base name: {name_parts[0]}")
+        return textures
+
+    def get_base_name_for_layers(self, obj):
+        base_name = obj.name.split('.')[0]
+
+        # Check if the object name contains any of the specific car part prefixes
+        car_parts_prefixes = ["pin", "axle", "spring"]
+        if any(prefix in base_name for prefix in car_parts_prefixes):
+            # Remove digits for these car parts
+            base_name = ''.join([char for char in base_name if not char.isdigit()])
+
+        print(f"Base name derived: {base_name} for object: {obj.name}")
+        return base_name
+
+    def get_texture_base_name(self, tex_num, existing_textures):
+        # Get the base name from the object name
+        obj_name = self.get_base_name_for_layers(bpy.context.active_object)
+        print(f"Checking base name: {obj_name} in existing textures: {existing_textures}")
+
+        # Check if any texture in existing_textures starts with the base name
+        for texture_name in existing_textures.keys():
+            if texture_name.startswith(obj_name):
+                return obj_name
+
+        # If not, check for a generic 'car' texture
+        if "car" in existing_textures:
+            return "car"
+
+        # If no match is found, return None
+        return None
+
+    def assign_uv_textures(self, obj, existing_textures):
+        bm = bmesh.from_edit_mesh(obj.data)
+        if bm is None:
+            return
+
+        texnum_layer = bm.faces.layers.int.get("Texture Number") or bm.faces.layers.int.new("Texture Number")
+
+        is_car_part = any(prefix in obj.name for prefix in self.car_parts_prefixes)
+        is_prm_object = obj.name.endswith('.prm')
+
+        for face in bm.faces:
+            if face.select:
+                tex_num = face[texnum_layer]
+                if tex_num == -1:
+                    continue
+
+                if is_car_part:
+                    material_name = "car.bmp"
+                    mat = bpy.data.materials.get(material_name)
+                    if mat:
+                        print(f"Assigned {material_name} to {obj.name}")
+                    else:
+                        base_material_name = self.get_texture_base_name(tex_num, existing_textures)
+                        if base_material_name:
+                            material_name = f"{base_material_name}{chr(97 + tex_num)}.bmp"
+                            mat = bpy.data.materials.get(material_name)
+                        else:
+                            print(f"No matching material found for tex_num {tex_num} in {obj.name}")
+                            continue
+                elif is_prm_object:
+                    # Directly use tex_num to determine the texture name
+                    material_name = f"{chr(97 + tex_num)}.bmp"
+                    mat = bpy.data.materials.get(material_name)
+                    if not mat:
+                        # If no direct match, try to find a texture with the same letter suffix
+                        for texture_name in existing_textures.keys():
+                            if texture_name.endswith(f"{chr(97 + tex_num)}.bmp"):
+                                material_name = texture_name
+                                mat = bpy.data.materials.get(material_name)
+                                break
+                        if not mat:
+                            print(f"Material {material_name} not found for {obj.name}")
+                            continue
+                else:
+                    base_material_name = self.get_texture_base_name(tex_num, existing_textures)
+                    if base_material_name:
+                        material_name = f"{base_material_name}{chr(97 + tex_num)}.bmp"
+                        mat = bpy.data.materials.get(material_name)
+                        if not mat:
+                            print(f"Material {material_name} not found for {obj.name}")
+                            continue
+                    else:
+                        print(f"No base material name found for tex_num {tex_num} in {obj.name}")
+                        continue
+
+                if mat and mat.name not in obj.data.materials:
+                    obj.data.materials.append(mat)
+                face.material_index = obj.data.materials.find(mat.name)
+
+        bmesh.update_edit_mesh(obj.data)
+        obj.data.update()
+
+    def assign_regular_materials(self, obj, material_suffix):
+        base_name = self.get_base_name_for_layers(obj)
+
+        potential_names = [
+            f"{base_name}{material_suffix}",
+            f"{base_name}.prm{material_suffix}",
+            f"{base_name}.w{material_suffix}",
+            f"{base_name}.m{material_suffix}"
+        ]
+
+        material = None
+        for mat_name in potential_names:
+            material = bpy.data.materials.get(mat_name)
+            if material:
+                break
+
+        if not material:
+            print(f"Material {potential_names[0]} not found. Trying generic suffix.")
+            material = bpy.data.materials.get(material_suffix)
+
+        if not material:
+            self.report({'WARNING'}, f"Material {potential_names[0]} not found.")
+            return
+
+        if material.name not in obj.data.materials:
+            obj.data.materials.append(material)
+
+        bm = bmesh.from_edit_mesh(obj.data)
+        if bm:
+            material_index = obj.data.materials.find(material.name)
+            for face in bm.faces:
+                if face.select:
+                    face.material_index = material_index
+            bmesh.update_edit_mesh(obj.data)
+
+class MaterialAssignment(bpy.types.Operator):
+    """Assign Materials to Selected Meshes Based on Material Choice"""
+    bl_idname = "object.assign_materials"
+    bl_label = "Assign Materials to Selected Meshes"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    car_parts_prefixes = ["body", "wheel", "axle", "spring", "pin", "spinner"]
+
+    def execute(self, context):
+        obj = context.active_object
+
+        if obj is None:
+            self.report({'WARNING'}, "No active object")
+            return {'CANCELLED'}
+
+        if obj.mode != 'EDIT':
+            self.report({'WARNING'}, "Switch to Edit Mode.")
+            return {'CANCELLED'}
+
+        if obj.type != 'MESH':
+            self.report({'WARNING'}, "Active object is not a mesh")
+            return {'CANCELLED'}
+
+        active_material_choice = context.active_object.data.material_choice if context.active_object else 'COL'
+
+        # Get existing textures once and reuse the result
+        existing_textures = self.get_existing_textures()
+
+        for obj in context.selected_objects:
+            if obj.type == 'MESH' and hasattr(obj.data, 'material_choice'):
+                obj.data.material_choice = active_material_choice
+                self.update_material_assignment(obj, existing_textures)
+
+        return {'FINISHED'}
+
+    def update_material_assignment(self, obj, existing_textures):
+        material_map = {
+            'UV_TEX': '_UVTex',
+            'COL': '_Col',
+            'ALPHA': '_Alpha',
+            'ENV': '_Env',
+            'RGB': '_RGBModelColor'
+        }
+
+        material_choice = obj.data.material_choice
+        material_suffix = material_map.get(material_choice, '_Col')
+
+        if material_choice == 'UV_TEX':
+            self.assign_uv_textures(obj, existing_textures)
+        else:
+            self.assign_regular_materials(obj, material_suffix)
+
+    def get_existing_textures(self):
+        textures = {}
+        for image in bpy.data.images:
+            name_parts = image.name.rsplit('.', 1)
+            if len(name_parts) > 1 and name_parts[-1].isalpha():
+                textures[image.name] = name_parts[0]
+                print(f"Added texture: {image.name} with base name: {name_parts[0]}")
+        return textures
+
+    def get_base_name_for_layers(self, obj):
+        base_name = obj.name.split('.')[0]
+
+        # Check if the object name contains any of the specific car part prefixes
+        car_parts_prefixes = ["pin", "axle", "spring"]
+        if any(prefix in base_name for prefix in car_parts_prefixes):
+            # Remove digits for these car parts
+            base_name = ''.join([char for char in base_name if not char.isdigit()])
+
+        print(f"Base name derived: {base_name} for object: {obj.name}")
+        return base_name
+
+    def get_texture_base_name(self, tex_num, existing_textures):
+        # Get the base name from the object name
+        obj_name = self.get_base_name_for_layers(bpy.context.active_object)
+        print(f"Checking base name: {obj_name} in existing textures: {existing_textures}")
+
+        # Check if any texture in existing_textures starts with the base name
+        for texture_name in existing_textures.keys():
+            if texture_name.startswith(obj_name):
+                return obj_name
+
+        # If not, check for a generic 'car' texture
+        if "car" in existing_textures:
+            return "car"
+
+        # If no match is found, return None
+        return None
+
+    def assign_uv_textures(self, obj, existing_textures):
+        bm = bmesh.from_edit_mesh(obj.data)
+        if bm is None:
+            return
+
+        texnum_layer = bm.faces.layers.int.get("Texture Number") or bm.faces.layers.int.new("Texture Number")
+
+        is_car_part = any(prefix in obj.name for prefix in self.car_parts_prefixes)
+        is_prm_object = obj.name.endswith('.prm')
+
+        for face in bm.faces:
+            if face.select:
+                tex_num = face[texnum_layer]
+                if tex_num == -1:
+                    continue
+
+                if is_car_part:
+                    material_name = "car.bmp"
+                    mat = bpy.data.materials.get(material_name)
+                    if mat:
+                        print(f"Assigned {material_name} to {obj.name}")
+                    else:
+                        base_material_name = self.get_texture_base_name(tex_num, existing_textures)
+                        if base_material_name:
+                            material_name = f"{base_material_name}{chr(97 + tex_num)}.bmp"
+                            mat = bpy.data.materials.get(material_name)
+                        else:
+                            print(f"No matching material found for tex_num {tex_num} in {obj.name}")
+                            continue
+                elif is_prm_object:
+                    # Directly use tex_num to determine the texture name
+                    material_name = f"{chr(97 + tex_num)}.bmp"
+                    mat = bpy.data.materials.get(material_name)
+                    if not mat:
+                        # If no direct match, try to find a texture with the same letter suffix
+                        for texture_name in existing_textures.keys():
+                            if texture_name.endswith(f"{chr(97 + tex_num)}.bmp"):
+                                material_name = texture_name
+                                mat = bpy.data.materials.get(material_name)
+                                break
+                        if not mat:
+                            print(f"Material {material_name} not found for {obj.name}")
+                            continue
+                else:
+                    base_material_name = self.get_texture_base_name(tex_num, existing_textures)
+                    if base_material_name:
+                        material_name = f"{base_material_name}{chr(97 + tex_num)}.bmp"
+                        mat = bpy.data.materials.get(material_name)
+                        if not mat:
+                            print(f"Material {material_name} not found for {obj.name}")
+                            continue
+                    else:
+                        print(f"No base material name found for tex_num {tex_num} in {obj.name}")
+                        continue
+
+                if mat and mat.name not in obj.data.materials:
+                    obj.data.materials.append(mat)
+                face.material_index = obj.data.materials.find(mat.name)
+
+        bmesh.update_edit_mesh(obj.data)
+        obj.data.update()
+
+    def assign_regular_materials(self, obj, material_suffix):
+        base_name = self.get_base_name_for_layers(obj)
+
+        potential_names = [
+            f"{base_name}{material_suffix}",
+            f"{base_name}.prm{material_suffix}",
+            f"{base_name}.w{material_suffix}",
+            f"{base_name}.m{material_suffix}"
+        ]
+
+        material = None
+        for mat_name in potential_names:
+            material = bpy.data.materials.get(mat_name)
+            if material:
+                break
+
+        if not material:
+            print(f"Material {potential_names[0]} not found. Trying generic suffix.")
+            material = bpy.data.materials.get(material_suffix)
+
+        if not material:
+            self.report({'WARNING'}, f"Material {potential_names[0]} not found.")
+            return
+
+        if material.name not in obj.data.materials:
+            obj.data.materials.append(material)
+
+        bm = bmesh.from_edit_mesh(obj.data)
+        if bm:
+            material_index = obj.data.materials.find(material.name)
+            for face in bm.faces:
+                if face.select:
+                    face.material_index = material_index
+            bmesh.update_edit_mesh(obj.data)
+
+class MaterialAssignmentFin(bpy.types.Operator):
+    """Assign Materials to All Meshes Automatically"""
+    bl_idname = "object.assign_materials_fin"
+    bl_label = "Assign Materials Automatically"
+    bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         if bpy.context.mode != 'OBJECT':
@@ -1307,12 +1706,9 @@ class MaterialAssignmentAuto(bpy.types.Operator):
 
     def assign_materials_to_all(self, mesh_objects):
         bpy.ops.object.select_all(action='DESELECT')
+
         for obj in mesh_objects:
-            # Check if the object is in the current view layer
-            if obj.name in bpy.context.view_layer.objects:
-                obj.select_set(True)
-            else:
-                self.report({'WARNING'}, f"Object {obj.name} is not in the current view layer.")
+            obj.select_set(True)
 
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.mesh.select_all(action='SELECT')
@@ -1348,242 +1744,49 @@ class MaterialAssignmentAuto(bpy.types.Operator):
         return textures
 
     def get_base_name_for_layers(self, obj):
+        # Strip out any suffix numbers or additional suffixes like '.prm'
         base_name = obj.name.split('.')[0]
-
-        # Remove any trailing digits from the base name
         base_name = ''.join([char for char in base_name if not char.isdigit()])
-
-        # Define the wheel-specific keywords in order of specificity
-        wheel_keywords = ["wheelfl", "wheelfr", "wheelbl", "wheelbr", "wheell", "wheelr", "wheel"]
-
-        # Check if the base name matches any of the wheel-specific keywords
-        for keyword in wheel_keywords:
-            if base_name.startswith(keyword):
-                return keyword
-
-        # For non-wheel parts, remove digits and return the base name
-        specific_keywords = ["body", "axle", "spring", "pin"]
-        if any(keyword in base_name for keyword in specific_keywords):
-            return base_name
-
         return base_name
 
+    def get_texture_base_name(self, tex_num, existing_textures):
+        # Check if the texture name matches the object name
+        obj_name = self.get_base_name_for_layers(bpy.context.active_object)
+        if obj_name in existing_textures:
+            return obj_name
+        return None
+
     def assign_uv_textures(self, obj):
-        bm = bmesh.from_edit_mesh(obj.data)
-        if bm is None:
-            return
+        # Ensure the object is in object mode before modifying the mesh
+        if obj.mode == 'EDIT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        bm = bmesh.new()
+        bm.from_mesh(obj.data)
 
         existing_textures = self.get_existing_textures()
         texnum_layer = bm.faces.layers.int.get("Texture Number") or bm.faces.layers.int.new("Texture Number")
 
-        # Define car part prefixes
-        car_parts_prefixes = ["body", "wheelfl", "wheelfr", "wheelbl", "wheelbr", "wheell", "wheelr", "axle", "spring", "pin", "spinner"]
-        is_car_part = any(obj.name.startswith(prefix) for prefix in car_parts_prefixes)
-
         for face in bm.faces:
-            if face.select:
-                tex_num = face[texnum_layer]
-                if tex_num == -1:
-                    continue
+            tex_num = face[texnum_layer]
+            if tex_num == -1:
+                continue
 
-                if is_car_part:
-                    # For car parts, use 'car.bmp'
-                    material_name = "car.bmp"
-                    mat = bpy.data.materials.get(material_name)
-                    if mat:
-                        print(f"Assigned {material_name} to {obj.name}")
-                    else:
-                        # Fallback to base material name if 'car.bmp' is not found
-                        base_material_name = MaterialUtils.get_texture_base_name(tex_num, existing_textures)
-                        if base_material_name:
-                            material_name = f"{base_material_name}{chr(97 + tex_num)}.bmp"
-                            mat = bpy.data.materials.get(material_name)
-                        else:
-                            print(f"No matching material found for tex_num {tex_num} in {obj.name}")
-                            continue
+            base_material_name = self.get_texture_base_name(tex_num, existing_textures)
+            if base_material_name:
+                material_name = f"{base_material_name}{chr(97 + tex_num)}.bmp"
+                mat = bpy.data.materials.get(material_name)
+                if mat:
+                    if mat.name not in obj.data.materials:
+                        obj.data.materials.append(mat)
+                    face.material_index = obj.data.materials.find(mat.name)
                 else:
-                    # For non-car parts, use the '_UVTex' suffix
-                    base_material_name = MaterialUtils.get_texture_base_name(tex_num, existing_textures)
-                    if base_material_name:
-                        material_name = f"{base_material_name}_UVTex"
-                        mat = bpy.data.materials.get(material_name)
-                    else:
-                        continue
+                    print(f"No matching material found for tex_num {tex_num} in {obj.name}")
 
-                if mat and mat.name not in obj.data.materials:
-                    obj.data.materials.append(mat)
-                face.material_index = obj.data.materials.find(mat.name)
+        bm.to_mesh(obj.data)
+        bm.free()
 
-        bmesh.update_edit_mesh(obj.data)
-        obj.data.update()
-
-    def assign_regular_materials(self, obj, material_suffix):
-        base_name = self.get_base_name_for_layers(obj)
-
-        # Dynamically check for _Col, _Env, _Alpha, etc.
-        potential_names = [
-            f"{base_name}{material_suffix}",
-            f"{base_name}.prm{material_suffix}",
-            f"{base_name}.w{material_suffix}",
-            f"{base_name}.m{material_suffix}"
-        ]
-
-        material = None
-        for mat_name in potential_names:
-            material = bpy.data.materials.get(mat_name)
-            if material:
-                break
-
-        # Fallback if no specific material is found
-        if not material:
-            print(f"Material {potential_names[0]} or related extensions not found. Trying generic suffix.")
-            material = bpy.data.materials.get(material_suffix)
-
-        if not material:
-            self.report({'WARNING'}, f"Material {potential_names[0]} or related extensions not found.")
-            return
-
-        # Assign material to object if not already present
-        if material.name not in obj.data.materials:
-            obj.data.materials.append(material)
-
-        bm = bmesh.from_edit_mesh(obj.data)
-        if bm:
-            material_index = obj.data.materials.find(material.name)
-            for face in bm.faces:
-                if face.select:
-                    face.material_index = material_index
-            bmesh.update_edit_mesh(obj.data)
-
-class MaterialAssignment(bpy.types.Operator):
-    """Assign Materials to Selected Meshes Based on Material Choice"""
-    bl_idname = "object.assign_materials"
-    bl_label = "Assign Materials to Selected Meshes"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    def execute(self, context):
-        obj = context.active_object
-
-        if obj is None:
-            self.report({'WARNING'}, "No active object")
-            return {'CANCELLED'}
-
-        if obj.mode != 'EDIT':
-            self.report({'WARNING'}, "Switch to Edit Mode.")
-            return {'CANCELLED'}
-
-        if obj.type != 'MESH':
-            self.report({'WARNING'}, "Active object is not a mesh")
-            return {'CANCELLED'}
-
-        active_material_choice = context.active_object.data.material_choice if context.active_object else 'COL'
-
-        # Sync material choices across selected objects
-        for obj in context.selected_objects:
-            if obj.type == 'MESH' and hasattr(obj.data, 'material_choice'):
-                obj.data.material_choice = active_material_choice
-
-        # Apply material assignments to all selected meshes
-        for obj in context.selected_objects:
-            if obj.type == 'MESH' and hasattr(obj.data, 'material_choice'):
-                self.update_material_assignment(obj)
-
-        return {'FINISHED'}
-
-    def update_material_assignment(self, obj):
-        material_map = {
-            'UV_TEX': '_UVTex',
-            'COL': '_Col',
-            'ALPHA': '_Alpha',
-            'ENV': '_Env',
-            'RGB': '_RGBModelColor'
-        }
-
-        material_choice = obj.data.material_choice
-        material_suffix = material_map.get(material_choice, '_Col')
-
-        if material_choice == 'UV_TEX':
-            self.assign_uv_textures(obj)
-        else:
-            self.assign_regular_materials(obj, material_suffix)
-
-    def get_existing_textures(self):
-        textures = {}
-        for image in bpy.data.images:
-            name_parts = image.name.rsplit('.', 1)
-            if len(name_parts) > 1 and name_parts[-1].isalpha():
-                textures[image.name] = name_parts[0]
-        return textures
-
-    def get_base_name_for_layers(self, obj):
-        base_name = obj.name.split('.')[0]
-
-        # Remove any trailing digits from the base name
-        base_name = ''.join([char for char in base_name if not char.isdigit()])
-
-        # Define the wheel-specific keywords in order of specificity
-        wheel_keywords = ["wheelfl", "wheelfr", "wheelbl", "wheelbr", "wheell", "wheelr", "wheel"]
-
-        # Check if the base name matches any of the wheel-specific keywords
-        for keyword in wheel_keywords:
-            if base_name.startswith(keyword):
-                return keyword
-
-        # For non-wheel parts, remove digits and return the base name
-        specific_keywords = ["body", "axle", "spring", "pin"]
-        if any(keyword in base_name for keyword in specific_keywords):
-            return base_name
-
-        return base_name
-
-    def assign_uv_textures(self, obj):
-        bm = bmesh.from_edit_mesh(obj.data)
-        if bm is None:
-            return
-
-        existing_textures = self.get_existing_textures()
-        texnum_layer = bm.faces.layers.int.get("Texture Number") or bm.faces.layers.int.new("Texture Number")
-
-        # Define car part prefixes
-        car_parts_prefixes = ["body", "wheefl", "wheefr", "wheebl", "wheebr", "wheell", "wheelr", "axle", "spring", "pin", "spinner"]
-        is_car_part = any(obj.name.startswith(prefix) for prefix in car_parts_prefixes)
-
-        for face in bm.faces:
-            if face.select:
-                tex_num = face[texnum_layer]
-                if tex_num == -1:
-                    continue
-
-                if is_car_part:
-                    # For car parts, use 'car.bmp'
-                    material_name = "car.bmp"
-                    mat = bpy.data.materials.get(material_name)
-                    if mat:
-                        print(f"Assigned {material_name} to {obj.name}")
-                    else:
-                        # Fallback to base material name if 'car.bmp' is not found
-                        base_material_name = MaterialUtils.get_texture_base_name(tex_num, existing_textures)
-                        if base_material_name:
-                            material_name = f"{base_material_name}{chr(97 + tex_num)}.bmp"
-                            mat = bpy.data.materials.get(material_name)
-                        else:
-                            print(f"No matching material found for tex_num {tex_num} in {obj.name}")
-                            continue
-                else:
-                    # For non-car parts, use the '_UVTex' suffix
-                    base_material_name = MaterialUtils.get_texture_base_name(tex_num, existing_textures)
-                    if base_material_name:
-                        material_name = f"{base_material_name}_UVTex"
-                        mat = bpy.data.materials.get(material_name)
-                    else:
-                        continue
-
-                if mat and mat.name not in obj.data.materials:
-                    obj.data.materials.append(mat)
-                face.material_index = obj.data.materials.find(mat.name)
-
-        bmesh.update_edit_mesh(obj.data)
-        obj.data.update()
+        obj.data.update()  # Ensure the mesh updates in the viewport
 
     def assign_regular_materials(self, obj, material_suffix):
         base_name = self.get_base_name_for_layers(obj)
@@ -1591,8 +1794,6 @@ class MaterialAssignment(bpy.types.Operator):
         potential_names = [
             f"{base_name}{material_suffix}",
             f"{base_name}.prm{material_suffix}",
-            f"{base_name}.w{material_suffix}",
-            f"{base_name}.m{material_suffix}"
         ]
 
         material = None
@@ -3078,4 +3279,5 @@ def menu_func_import(self, context):
     self.layout.operator(ImportRV.bl_idname, text="Re-Volt (.prm, .w, .ncp, .fin, .rim., .hul, .taz, .tri, .m, parameters.txt)")
 
 def menu_func_export(self, context):
-    self.layout.operator(ExportRV.bl_idname, text="Re-Volt (.prm, .w, .ncp, .fin, .rim, .hul, .taz, .tri, .m)")
+    # Use the SelectDefaultTexture operator to start the export process
+    self.layout.operator(SelectDefaultTexture.bl_idname, text="Re-Volt (.prm, .w, .ncp, .fin, .rim, .hul, .taz, .tri, .m)")
