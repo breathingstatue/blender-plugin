@@ -13,7 +13,7 @@ class RVIO_PT_RevoltIOToolPanel(bpy.types.Panel):
 
         row = self.layout.row(align=True)
         row.operator("import_scene.revolt", text="Import", icon="IMPORT")
-        row.operator("export_scene.revolt", text="Export", icon="EXPORT")
+        row.operator("wm.select_default_texture", text="Export", icon="EXPORT")
         row.operator("export_scene.revolt_redo", text="Re-Export", icon="FILE_REFRESH")
         
         box = self.layout.box()

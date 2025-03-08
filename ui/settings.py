@@ -21,7 +21,7 @@ class RVIO_PT_RevoltSettingsPanel(bpy.types.Panel):
             layout.prop(scene, "split_size_faces", slider=True)
             layout.label(text="Actual Split Size: {}".format(scene.actual_split_size))
         layout.prop(scene, "triangulate_ngons", text="Triangluate Ngons")
-        layout.prop(scene, "use_tex_num", text="Export w/o Texture")
+        layout.prop(scene, "use_tex_num", text="Use Texture Number")
         layout.prop(scene, "apply_scale", text="Apply Scale")
         layout.prop(scene, "apply_rotation", text= "Apply Rotation")
         layout.prop(scene, "apply_translation", text= "Apply Translation")
