@@ -6,14 +6,9 @@ Description:
 Marv's Add-On for Re-Volt with Theman's update 
 """
 
-from collections import defaultdict
-from venv import create
 import bpy
 import bmesh
-import os
-import os.path
-import importlib
-from bpy.app.handlers import persistent  # For the scene update handler
+from bpy.app.handlers import persistent
 from bpy.props import (
     BoolProperty,
     BoolVectorProperty,
@@ -26,6 +21,7 @@ from bpy.props import (
     FloatVectorProperty,
     PointerProperty
 )
+import importlib
 
 # Importing modules from the add-on's package
 from . import (
@@ -46,6 +42,7 @@ from . import (
     parameters_out,
     prm_in,
     prm_in_for_fin,
+    prm_in_for_w,
     prm_out,
     prm_out_for_fin,
     rim_in,
@@ -69,75 +66,12 @@ from .ui import (
     helpers,
     instances,
     light,
+    migpanel,
     objectpanel,
     settings,
     texanim,
     vertex,
-    migpanel,
 )
-
-# Reloads potentially changed modules on reload (F8 in Blender)
-importlib.reload(common)
-importlib.reload(layers)
-importlib.reload(operators)
-importlib.reload(texanim)
-importlib.reload(tools)
-
-# Reloads ui
-importlib.reload(headers)
-importlib.reload(faceprops)
-importlib.reload(instances)
-importlib.reload(light)
-importlib.reload(objectpanel)
-importlib.reload(vertex)
-importlib.reload(texanim)
-importlib.reload(helpers)
-importlib.reload(settings)
-
-if "fin_in" in locals():
-    importlib.reload(fin_in)
-if "fin_out" in locals():
-    importlib.reload(fin_out)
-if "hul_in" in locals():
-    importlib.reload(hul_in)
-if "hul_out" in locals():
-    importlib.reload(hul_out)
-if "img_in" in locals():
-    importlib.reload(img_in)
-if "m_in" in locals():
-    importlib.reload(m_in)
-if "m_out" in locals():
-    importlib.reload(m_out)
-if "ncp_in" in locals():
-    importlib.reload(ncp_in)
-if "ncp_out" in locals():
-    importlib.reload(ncp_out)
-if "parameters_in" in locals():
-    importlib.reload(parameters_in)
-if "prm_in" in locals():
-    importlib.reload(prm_in)
-if "prm_in_for_fin" in locals():
-    importlib.reload(prm_in_for_fin)
-if "prm_out" in locals():
-    importlib.reload(prm_out)
-if "prm_out_for_fin" in locals():
-    importlib.reload(prm_out_for_fin)
-if "rim_in" in locals():
-    importlib.reload(rim_in)
-if "rim_out" in locals():
-    importlib.reload(rim_out)
-if "ta_csv_in" in locals():
-    importlib.reload(ta_csv_in)
-if "ta_csv_out" in locals():
-    importlib.reload(ta_csv_out)
-if "tri_in" in locals():
-    importlib.reload(tri_in)
-if "tri_out" in locals():
-    importlib.reload(tri_out)
-if "w_in" in locals():
-    importlib.reload(w_in)
-if "w_out" in locals():
-    importlib.reload(w_out)
 
 from .common import DialogOperator, ShadowSaveOperator, ConfirmShadowSaveOperator, TEX_ANIM_MAX
 from .common import TEX_PAGES_MAX, FACE_DOUBLE, FACE_TRANSLUCENT, FACE_MIRROR, FACE_TRANSL_TYPE, FACE_TEXANIM, FACE_NOENV, FACE_ENV, FACE_CLOTH
@@ -179,7 +113,7 @@ from .ui.migpanel import RVIO_PT_RevoltMIGPanel
 bl_info = {
 "name": "Re-Volt",
 "author": "Marvin Thiel & Theman",
-"version": (20, 25, 3),
+"version": (20, 25, 34),
 "blender": (4, 3, 2),
 "location": "File > Import-Export",
 "description": "Import and export Re-Volt file formats.",
@@ -689,7 +623,8 @@ def register():
             ('COL', "Color", "Assign Color Material"),
             ('ALPHA', "Alpha", "Assign Vertex Alpha Material"),
             ('ENV', "EnvMap", "Assign Env / EnvAlpha Material"),
-            ('RGB', "Model Color (Instance)", "Assign RGB Model Color")
+            ('RGB', "Model Color (Instance)", "Assign RGB Model Color"),
+            ('NCP', "NCP Material (Preview)", "Assign NCP Preview")
         ],
     )
     

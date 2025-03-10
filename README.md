@@ -15,7 +15,9 @@ broader .m (model) support
 
 FULL CHANGELOG:
 
-20.25.3
+20.25.35
+added NCP Material Preview
+cleaned the __init__ module
 maintenance on import / export modules regarding different materials
 fixed solution for different textures/car parts export
 car parts can have any default texture, not just car.bmp

@@ -530,13 +530,13 @@ def set_face_ncp_property(mesh, value, prop_mask):
 def get_face_material(self):
     edit_object = bpy.context.edit_object
     bm = get_edit_bmesh(edit_object)
-    
+
     if edit_object is None or edit_object.type != 'MESH' or not edit_object.mode == 'EDIT':
         return 0
-    
+
     if not bm or not hasattr(bm, 'faces'):
         return 0
-    
+
     material_layer = bm.faces.layers.int.get("Material") or bm.faces.layers.int.new("Material")
 
     selected_faces = [face for face in bm.faces if face.select]
@@ -546,7 +546,7 @@ def get_face_material(self):
 
     first_material = selected_faces[0][material_layer]
     materials_differ = any(face[material_layer] != first_material for face in selected_faces)
-    
+
     return -1 if materials_differ else first_material
 
 def set_face_material(self, value):
@@ -557,7 +557,6 @@ def set_face_material(self, value):
     bm = bmesh.from_edit_mesh(edit_object.data)
     material_layer = bm.faces.layers.int.get("Material") or bm.faces.layers.int.new("Material")
 
-    # Ensure the material name matches the in-game material name
     material_info = next((item for item in MATERIALS if item[0] == str(value)), None)
     if material_info:
         material_name = material_info[1]
@@ -584,23 +583,20 @@ def set_face_material(self, value):
 
 def select_ncp_material(self, context):
     edit_object = bpy.context.edit_object
-    
-    # Ensure the edit_object is valid and in Edit Mode
+
     if edit_object is None or edit_object.type != 'MESH' or not edit_object.mode == 'EDIT':
         print("Error: No active mesh in Edit Mode.")
         return
-    
-    # Get the bmesh of the edit mesh
+
     bm = get_edit_bmesh(edit_object)
     if bm is None or not hasattr(bm, 'faces'):
         print("Error: Failed to initialize bmesh or bmesh has no faces.")
         return
-    
-    # Get or create the 'Material' layer
+
     material_layer = bm.faces.layers.int.get("Material")
     if material_layer is None:
         material_layer = bm.faces.layers.int.new("Material")
-    
+
     mat = int(self.select_material)
     count = 0
     count_sel = 0
@@ -612,16 +608,14 @@ def select_ncp_material(self, context):
                 face.select = True
             else:
                 count_sel += 1
-    
+
     if count == 0:
         material_name = MATERIALS[mat + 1][1] if mat + 1 < len(MATERIALS) else "Unknown"
         msg_box(f"No {material_name} materials found.")
     else:
         print(f"Selected {count} faces with the material '{material_name}'.")
-    
-    # Update the mesh in the editor
-    bmesh.update_edit_mesh(edit_object.data, destructive=False)
 
+    bmesh.update_edit_mesh(edit_object.data, destructive=False)
         
 def get_base_name_for_layers(obj):
     name_parts = obj.name.split('.')

@@ -28,7 +28,7 @@ from .tools import generate_chull
 from .rvstruct import *
 from . import carinfo
 from .common import get_format, FORMAT_PRM, FORMAT_FIN, FORMAT_NCP, FORMAT_HUL, FORMAT_W, FORMAT_M, FORMAT_RIM, FORMAT_TA_CSV
-from .common import FORMAT_TAZ, FORMAT_TRI, FORMAT_UNK
+from .common import FORMAT_TAZ, FORMAT_TRI, FORMAT_UNK, MATERIALS, COLORS
 from .common import get_errors, msg_box, FORMATS, to_revolt_scale, FORMAT_CAR, TEX_PAGES_MAX, int_to_texture, to_revolt_coord
 from .layers import set_face_env, create_or_assign_env_material
 from .parameters_out import append_aerial_info, append_axle_info, append_back_left_wheel, append_back_right_wheel
@@ -1326,7 +1326,8 @@ class MaterialAssignmentAuto(bpy.types.Operator):
             'COL': '_Col',
             'ALPHA': '_Alpha',
             'ENV': '_Env',
-            'RGB': '_RGBModelColor'
+            'RGB': '_RGBModelColor',
+            'NCP': '_NCP'  # Add NCP Material to the map
         }
 
         material_choice = obj.data.material_choice
@@ -1334,6 +1335,8 @@ class MaterialAssignmentAuto(bpy.types.Operator):
 
         if material_choice == 'UV_TEX':
             self.assign_uv_textures(obj, existing_textures)
+        elif material_choice == 'NCP':
+            self.assign_ncp_materials(obj)
         else:
             self.assign_regular_materials(obj, material_suffix)
 
@@ -1451,6 +1454,36 @@ class MaterialAssignmentAuto(bpy.types.Operator):
         bmesh.update_edit_mesh(obj.data)
         obj.data.update()
 
+    def assign_ncp_materials(self, obj):
+        bm = bmesh.from_edit_mesh(obj.data)
+        if bm is None:
+            return
+
+        material_layer = bm.faces.layers.int.get("Material") or bm.faces.layers.int.new("Material")
+
+        for face in bm.faces:
+            if face.select:
+                material_index = face[material_layer]
+                if -1 < material_index < len(MATERIALS):
+                    material_info = MATERIALS[material_index]
+                    material_name = material_info[1]
+
+                    mat = bpy.data.materials.get(material_name)
+                    if not mat:
+                        mat = bpy.data.materials.new(name=material_name)
+                        mat.use_nodes = True
+                        bsdf = mat.node_tree.nodes.get('Principled BSDF')
+                        if bsdf:
+                            bsdf.inputs['Base Color'].default_value = (*COLORS[material_index], 1.0)
+
+                    if mat.name not in obj.data.materials:
+                        obj.data.materials.append(mat)
+
+                    face.material_index = obj.data.materials.find(mat.name)
+
+        bmesh.update_edit_mesh(obj.data)
+        obj.data.update()
+
     def assign_regular_materials(self, obj, material_suffix):
         base_name = self.get_base_name_for_layers(obj)
 
@@ -1527,7 +1560,8 @@ class MaterialAssignment(bpy.types.Operator):
             'COL': '_Col',
             'ALPHA': '_Alpha',
             'ENV': '_Env',
-            'RGB': '_RGBModelColor'
+            'RGB': '_RGBModelColor',
+            'NCP': '_NCP'  # Add NCP Material to the map
         }
 
         material_choice = obj.data.material_choice
@@ -1535,8 +1569,40 @@ class MaterialAssignment(bpy.types.Operator):
 
         if material_choice == 'UV_TEX':
             self.assign_uv_textures(obj, existing_textures)
+        elif material_choice == 'NCP':
+            self.assign_ncp_materials(obj)
         else:
             self.assign_regular_materials(obj, material_suffix)
+
+    def assign_ncp_materials(self, obj):
+        bm = bmesh.from_edit_mesh(obj.data)
+        if bm is None:
+            return
+
+        material_layer = bm.faces.layers.int.get("Material") or bm.faces.layers.int.new("Material")
+
+        for face in bm.faces:
+            if face.select:
+                material_index = face[material_layer]
+                if -1 < material_index < len(MATERIALS):
+                    material_info = MATERIALS[material_index]
+                    material_name = material_info[1]
+
+                    mat = bpy.data.materials.get(material_name)
+                    if not mat:
+                        mat = bpy.data.materials.new(name=material_name)
+                        mat.use_nodes = True
+                        bsdf = mat.node_tree.nodes.get('Principled BSDF')
+                        if bsdf:
+                            bsdf.inputs['Base Color'].default_value = (*COLORS[material_index], 1.0)
+
+                    if mat.name not in obj.data.materials:
+                        obj.data.materials.append(mat)
+
+                    face.material_index = obj.data.materials.find(mat.name)
+
+        bmesh.update_edit_mesh(obj.data)
+        obj.data.update()
 
     def get_existing_textures(self):
         textures = {}
