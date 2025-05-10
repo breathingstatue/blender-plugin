@@ -19,6 +19,12 @@ class RVIO_PT_RevoltMIGPanel(bpy.types.Panel):
         col.operator("scene.add_track_zone", icon="MATCUBE", text="Create Track Zone")
         col.operator("scene.zone_hide", icon="RESTRICT_VIEW_ON")
         col.operator("object.reverse_track_zones", icon='ARROW_LEFTRIGHT', text="Reverse Zone IDs")
+        
+        box = layout.box()
+        box.label(text="Objects")
+        col = box.column(align=True)
+        col.prop(context.scene, "selected_fob_object_id", text="Select Object")
+        col.operator("object.create_fob", icon="PLUS")
 
         box = layout.box()
         box.label(text="Triggers")

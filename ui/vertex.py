@@ -28,6 +28,10 @@ class RVIO_PT_VertexPanel(bpy.types.Panel):
             col.operator("vertexcolor.set_color", text="Set Color")
             col.prop(scene, "vertex_alpha_percentage", text="Alpha Level")
             col.operator("vertexcolor.set_alpha", text="Set Alpha")
+            col = layout.column(align=True)
+            col.label(text="CAR AUTO SHADER")
+            col.prop(scene, "car_shader_color")
+            col.operator("object.car_auto_shader", icon='SHADING_RENDERED')
         else:
             box = layout.box()
             col = box.column(align=True)

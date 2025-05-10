@@ -1,6 +1,7 @@
 import bpy
 import bmesh
 from ..common import LOW_FLAG_OPTIONS, HIGH_FLAG_OPTIONS
+from ..fob_subtypes import OBJECT_TYPE_NAMES, OBJECT_SUBTYPE_DESCRIPTIONS, OBJECT_SUBTYPE_VALUES
 from ..tools import get_high_flag_items
 from ..operators import *
 from ..rvstruct import *
@@ -24,6 +25,60 @@ class RVIO_PT_RevoltObjectPanel(bpy.types.Panel):
         tz_col.prop(obj, "is_track_zone", text="Is Track Zone")
         if obj and obj.is_track_zone:
             tz_col.prop(obj, "track_zone_id", text="Track Zone ID", slider=True)
+            
+        # FOB Object properties
+        if obj.get("is_fob_object"):
+            obj_type_id = obj.get("fob_type", -1)
+            if obj_type_id not in OBJECT_TYPE_NAMES:
+                return  # Unknown type — skip entirely
+
+            obj_type_name = OBJECT_TYPE_NAMES[obj_type_id]
+            labels = OBJECT_SUBTYPE_DESCRIPTIONS.get(obj_type_id, [])
+            subtype_values = OBJECT_SUBTYPE_VALUES.get(obj_type_id, {})
+
+            fob_box = layout.box()
+            fob_box.label(text="FOB Object Properties")
+            col = fob_box.column(align=True)
+
+            col.label(text=f"Object Type: {obj_type_name}")
+            col.prop(obj, "fob_type", text="Object ID")
+
+            for i in range(4):
+                if i not in subtype_values:
+                    continue
+
+                allowed = subtype_values[i]
+                if not isinstance(allowed, list) or not allowed:
+                    continue
+
+                subtype_prop = f"fob_subtype_{i+1}"
+                subtype_value = obj.get(subtype_prop, 0)
+                label = labels[i] if i < len(labels) and labels[i] else f"Subtype {i+1}"
+
+                row = col.row()
+                row.prop(obj, subtype_prop, text=label)
+
+                # String list: display name or invalid
+                if all(isinstance(v, str) for v in allowed):
+                    if 0 <= subtype_value < len(allowed):
+                        row.label(text=f"{allowed[subtype_value]} ({subtype_value})")
+                    else:
+                        row.label(text=f"(Invalid: {subtype_value})")
+
+                # Integer range: show range and flag invalids
+                elif all(isinstance(v, int) for v in allowed):
+                    min_val = min(allowed)
+                    max_val = max(allowed)
+                    if subtype_value < min_val or subtype_value > max_val:
+                        row.label(text=f"(Invalid: {subtype_value}) [{min_val}-{max_val}]")
+                    else:
+                        row.label(text=f"{subtype_value} [{min_val}-{max_val}]")
+
+                # Fallback
+                else:
+                    row.label(text=str(subtype_value))
+
+            col.operator("object.duplicate_fob", icon="DUPLICATE")
             
         #Trigger properties
         tri_box = layout.box()
@@ -71,6 +126,13 @@ class RVIO_PT_RevoltObjectPanel(bpy.types.Panel):
         hull_box.prop(obj, "is_hull_sphere", text="is Hull Sphere")
         hull_box.prop(obj, "is_hull_convex", text="is Hull Convex")
         
+        # Model properties
+        model_box = layout.box()
+        model_box.label(text="Model Properties:")
+        model_col = model_box.column(align=True)
+        model_col.operator("object.mark_as_model", text="Mark/Unmark as .m Model")
+        model_col.prop(obj, "is_model", text="Is Model (.m)")
+        
         # Debug properties
         box = layout.box()
         box.label(text="Debug Properties:")
@@ -80,3 +142,9 @@ class RVIO_PT_RevoltObjectPanel(bpy.types.Panel):
         col.prop(obj, "is_bbox", text="Object is a Boundary Box")
         col.prop(obj, "ignore_ncp", text="Ignore for .ncp")
         col.operator("object.set_bcube_mesh_indices")
+        
+def get_subtype_label(obj_type, subtype_index, raw_value):
+    subtype_dict = OBJECT_SUBTYPE_VALUES.get(obj_type, {}).get(subtype_index)
+    if isinstance(subtype_dict, list) and 0 <= raw_value < len(subtype_dict):
+        return f"{subtype_dict[raw_value]} ({raw_value})"
+    return str(raw_value)

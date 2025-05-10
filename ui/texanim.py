@@ -1,5 +1,7 @@
 import bpy
 import bmesh
+from .. import common
+from ..common import texnum_to_label
 
 class RVIO_PT_AnimModesPanel(bpy.types.Panel):
     bl_idname = "RVIO_PT_AnimModesPanel"
@@ -31,7 +33,9 @@ class RVIO_PT_AnimModesPanel(bpy.types.Panel):
         row.prop(scene, "ta_frame_start")
         row.prop(scene, "ta_frame_end")
         row = box.row(align=True)
-        row.prop(scene, "ta_texture", icon="TEXTURE")
+        row.label(text=f"Texture: {texnum_to_label(scene.ta_texture)} ({scene.ta_texture})")
+        row.prop(scene, "ta_texture", text="")
+        row = box.row(align=True)
         row.prop(scene, "ta_delay", text="Frame Time")
         row = box.row(align=True)
         row.operator("texanim.transform")
@@ -42,7 +46,9 @@ class RVIO_PT_AnimModesPanel(bpy.types.Panel):
         row.prop(scene, "grid_x")
         row.prop(scene, "grid_y")
         row = box.row(align=True)
-        row.prop(scene, "ta_texture", icon="TEXTURE")
+        row.label(text=f"Texture: {texnum_to_label(scene.ta_texture)} ({scene.ta_texture})")
+        row.prop(scene, "ta_texture", text="")
+        row = box.row(align=True)
         row.prop(scene, "ta_delay", text="Frame Time")
         row = box.row(align=True)
         row.operator("texanim.grid", icon="GRID")

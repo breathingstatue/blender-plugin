@@ -1,5 +1,6 @@
 import bpy
 import bmesh
+from ..common import int_to_texture, TEX_PAGES_MAX
 
 class RVIO_PT_RevoltFacePropertiesPanel(bpy.types.Panel):
     bl_label = "Face Properties"
@@ -22,7 +23,6 @@ class RVIO_PT_RevoltFacePropertiesPanel(bpy.types.Panel):
         box.label(text="Texture / Material")
         col = box.column(align=True)
         col.prop(mesh, "material_choice")
-        # Create a row to place buttons side by side
         row = col.row(align=True)
         row.operator("object.assign_materials_auto", text="Set to All")
         row.operator("object.assign_materials", text="Set to Selected")
@@ -30,10 +30,12 @@ class RVIO_PT_RevoltFacePropertiesPanel(bpy.types.Panel):
         col.operator("object.assign_texture", text="Car Skin")
         col = box.column(align=True)
         col.operator("mesh.set_face_texnum")
+        col = box.column(align=True)
+        col.operator("mesh.clear_extra_assignments")
 
         if obj.mode == 'EDIT':
             box = layout.box()
-            box.label(text="PRM Properties:")
+            box.label(text="Face Properties:")
             col = box.column(align=True)
             col.prop(mesh, "face_double_sided", text="Double sided")
             col.prop(mesh, "face_translucent", text="Translucent")
@@ -69,10 +71,20 @@ class RVIO_PT_RevoltFacePropertiesPanel(bpy.types.Panel):
             col.prop(mesh, "face_material", text="Set")
             col.prop(mesh, "select_material", text="Find")
             
+            col = layout.column(align=True)
+
             box = layout.box()
-            box.label(text="Texture Settings:")
-            col = box.column(align=True)
-            col.prop(mesh, "face_texture", text="Texture Number")
+            box.label(text="Set Texture")
+
+            tex_num = mesh.face_texture
+
+            if tex_num == -3:
+                box.label(text="(No Face Selected)")
+            elif tex_num == -2:
+                box.label(text="(Multiple Textures Selected)")
+            else:
+                box.operator("mesh.set_face_texture_dropdown", text="Change Texture Page")
+
         else:
             box =layout.box()
             box.label(text="SWITCH TO EDIT MODE FOR PROPERTIES.")

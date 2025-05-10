@@ -39,7 +39,7 @@ class RVIO_PT_RevoltSettingsPanel(bpy.types.Panel):
         layout.prop(scene, "w_import_cubes", text="w_import_cubes")
         layout.prop(scene, "w_import_big_cubes", text="w_import_big_cubes")
         layout.separator()
-
+        
         # NCP Export settings
         layout.label(text="Export Collision (.ncp):")
         layout.prop(scene, "ncp_export_selected", text="ncp_export_selected")

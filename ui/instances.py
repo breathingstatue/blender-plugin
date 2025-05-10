@@ -29,16 +29,16 @@ class RVIO_PT_RevoltInstancesPanel(bpy.types.Panel):
                     except SystemError as e:
                         col.label(text="Unable to access EnvMap Color in current mode.")
             else:
-                col.label(text="Switch to Edit Mode for EnvMap Color.")
-            col.prop(obj, "fin_model_rgb", text="Use Model Color")
+                col.label(text="SWITCH TO EDIT MODE FOR ENVMAP COLOR")
+            col.prop(obj, "fin_model_rgb", text="Use Modeling Color")
             if obj.mode == 'EDIT':
                 if getattr(obj, "fin_model_rgb", False):
                     try:
-                        col.prop(obj, "fin_col", text="RGB Model Color")
+                        col.prop(obj, "fin_col", text="RGB Modeling Color")
                     except SystemError as e:
-                        col.label(text="Unable to access Model Color in current mode.")
+                        col.label(text="Unable to access Modeling Color in current mode.")
             else:
-                col.label(text="Switch to Edit Mode for Model Color.")
+                col.label(text="SWITCH TO EDIT MODE FOR MODELING COLOR")
             col.prop(obj, "fin_hide", text="Hide")
             col.prop(obj, "fin_priority", text="Fin Priority", slider=True)
             col.prop(obj, "fin_lod_bias", text="LoD Bias", slider=True)
@@ -46,5 +46,7 @@ class RVIO_PT_RevoltInstancesPanel(bpy.types.Panel):
             col.prop(obj, "fin_no_lights", text="Not affected by Lights")
             col.prop(obj, "fin_no_cam_coll", text="No Camera Collision")
             col.prop(obj, "fin_no_obj_coll", text="No Object Collision")
+            col.operator("object.mark_as_model", text="Mark/Unmark as .m Model")
+            col.prop(obj, "is_model", text="Is Model (.m)")
         else:
             pass
