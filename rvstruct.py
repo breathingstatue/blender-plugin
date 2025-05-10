@@ -1,4 +1,4 @@
-"""
+﻿"""
 Name:    rvstruct
 Purpose: Reading and writing RV files
 
@@ -13,6 +13,7 @@ Supported Formats:
 - .prm (Probe Mesh)
 - .w (World)
 - .fin (Instance)
+- .fob (Objects)
 - .pan (PosNode)
 - .ncp (Collision)
 - .hul (Hull collision)
@@ -23,7 +24,6 @@ Supported Formats:
 
 Missing Formats:
 - .fan (AiNodes)
-- .fob (Objects)
 - .fld (ForceFields)
 - .lit (Lights)
 """
@@ -1725,3 +1725,84 @@ class Trigger:
             "matrix": self.matrix,
             "size": self.size,
         }
+
+class Objects:
+    def __init__(self):
+        self.objects = []
+
+    def read(self, file):
+        count_data = file.read(4)
+        if len(count_data) < 4:
+            return
+        count = struct.unpack('<I', count_data)[0]
+        for _ in range(count):
+            chunk = file.read(56)
+            if len(chunk) < 56:
+                break
+            obj = Object()
+            obj.read(chunk)
+            self.objects.append(obj)
+
+    def write(self, file):
+        file.write(struct.pack('<I', len(self.objects)))
+        for obj in self.objects:
+            file.write(obj.write())
+            
+class Object:
+    from .fob_subtypes import OBJECT_TYPE_NAMES, OBJECT_SUBTYPE_DESCRIPTIONS, OBJECT_SUBTYPE_VALUES
+    
+    def __init__(self, obj_id=0, subinfos=None, position=(0.0, 0.0, 0.0), rotation=None):
+        self.obj_id = obj_id
+        self.subinfos = subinfos if subinfos else [0, 0, 0, 0]
+        self.position = position
+        self.rotation = rotation  # None or 6 floats (forward + up vectors)
+
+    def read(self, data):
+        self.obj_id = struct.unpack_from('<I', data, 0)[0]
+        self.subinfos = list(struct.unpack_from('<4I', data, 4))
+        self.position = struct.unpack_from('<3f', data, 20)
+
+        rot_data = data[32:56]
+        rot_floats = struct.unpack('<6f', rot_data)
+
+        identity = (0.0, 0.0, 1.0, 0.0, 0.0, 1.0)
+
+        if all(abs(a - b) < 1e-6 for a, b in zip(rot_floats, identity)):
+            self.rotation = None
+        else:
+            self.rotation = rot_floats
+
+    def write(self):
+        buffer = bytearray()
+        buffer.extend(struct.pack('<I', self.obj_id))            # 4 bytes
+        buffer.extend(struct.pack('<4I', *self.subinfos))        # 16 bytes
+        buffer.extend(struct.pack('<3f', *self.position))        # 12 bytes
+
+        if self.rotation:
+            buffer.extend(struct.pack('<6f', *(clean_float(f) for f in self.rotation)))     # 24 bytes
+        else:
+            buffer.extend(struct.pack('<6f', 0.0, 0.0, 1.0, 0.0, 0.0, 1.0))
+
+        assert len(buffer) == 56, f"Expected 56 bytes, got {len(buffer)}"
+        return bytes(buffer)
+
+    def get_type_name(self):
+        from .fob_subtypes import OBJECT_TYPE_NAMES
+        return OBJECT_TYPE_NAMES.get(self.obj_id, f"Unknown({self.obj_id})")
+
+    def get_subtype_descriptions(self):
+        from .fob_subtypes import OBJECT_SUBTYPE_DESCRIPTIONS
+        return OBJECT_SUBTYPE_DESCRIPTIONS.get(self.obj_id, ["sub1", "sub2", "sub3", "sub4"])
+
+    def get_subtype_values(self, index):
+        from .fob_subtypes import OBJECT_SUBTYPE_VALUES
+        return OBJECT_SUBTYPE_VALUES.get(self.obj_id, {}).get(index, None)
+
+    def get_subtype_label(self, index):
+        values = self.get_subtype_values(index)
+        if values and isinstance(values, list) and self.subinfos[index] < len(values):
+            return values[self.subinfos[index]]
+        return str(self.subinfos[index])
+    
+def clean_float(f):
+    return 0.0 if abs(f) < 1e-6 else round(f, 6)

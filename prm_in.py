@@ -1,3 +1,10 @@
+"""
+Name:    prm_in
+Purpose: Imports Probe mesh files (.prm)
+
+Description:
+Meshes used for cars.
+"""
 import os
 import bpy
 import bmesh
@@ -43,9 +50,11 @@ def import_file(filepath, scene):
             obj = bpy.data.objects.new(filename, me)
             bpy.context.scene.collection.objects.link(obj)
             bpy.context.view_layer.objects.active = obj
-            assign_uv_tex_material(obj, filepath)
+            set_material_to_prm_col([obj])  # First assign COL
+            assign_uv_tex_material(obj, filepath)  # Then assign UV_TEX
 
-            assign_material_to_prm(scene)
+            mesh_objects = [obj for obj in scene.objects if obj.type == 'MESH']
+            set_material_to_prm_texture(mesh_objects)
 
     return obj
 
@@ -90,7 +99,6 @@ def add_rvmesh_to_bmesh(prm, bm, me, filepath, scene, envlist=None):
             face = bm.faces.new(verts)
             created_faces.append(face)
         except ValueError as e:
-            print(f"Could not create face: {e}")
             continue
 
         if poly.texture >= 0:
@@ -201,33 +209,6 @@ def assign_uv_tex_material(obj, filepath):
 
     obj.data.update()
 
-def assign_material_to_prm(scene):
-    """Assign material to all imported objects for both COL and UV_TEX."""
-    # Get all mesh objects in the scene
-    mesh_objects = [obj for obj in scene.objects if obj.type == 'MESH']
-
-    # Run texture assignment for both material choices
-    set_material_to_prm_col(mesh_objects)
-
-    # Force an update of the view layer
-    bpy.context.view_layer.update()
-
-    set_material_to_prm_texture(mesh_objects)
-
-def set_material_to_prm_col(mesh_objects):
-    """Sets the material to Vertex Colour (_Col) for all mesh objects."""
-    if not mesh_objects:
-        print("No mesh objects selected for material assignment.")
-        return
-
-    for obj in mesh_objects:
-        obj.data.material_choice = 'COL'
-        bpy.context.view_layer.objects.active = obj
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.select_all(action='SELECT')
-        bpy.ops.object.assign_materials_auto()
-        bpy.ops.object.mode_set(mode='OBJECT')
-
 def set_material_to_prm_texture(mesh_objects):
     """Sets the material to Texture (UV_TEX) for all mesh objects."""
     if not mesh_objects:
@@ -239,5 +220,19 @@ def set_material_to_prm_texture(mesh_objects):
         bpy.context.view_layer.objects.active = obj
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.mesh.select_all(action='SELECT')
-        bpy.ops.object.assign_materials_auto()
+        bpy.ops.object.assign_materials_impexp()
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+def set_material_to_prm_col(mesh_objects):
+    """Sets the material to Vertex Colour (COL) for all mesh objects."""
+    if not mesh_objects:
+        print("No mesh objects selected for material assignment.")
+        return
+
+    for obj in mesh_objects:
+        obj.data.material_choice = 'COL'
+        bpy.context.view_layer.objects.active = obj
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.select_all(action='SELECT')
+        bpy.ops.object.assign_materials_impexp()
         bpy.ops.object.mode_set(mode='OBJECT')

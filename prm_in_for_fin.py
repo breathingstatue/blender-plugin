@@ -1,6 +1,6 @@
-"""
+﻿"""
 Name:    prm_in_for_fin
-Purpose: Imports Probe mesh files (.prm)
+Purpose: Imports Probe mesh files (.prm) for Instance (.fin)
 
 Description:
 Meshes used for track instances.
@@ -19,7 +19,6 @@ from . import img_in
 from . import w_in
 from .rvstruct import PRM
 from .common import to_blender_coord, to_blender_axis, FACE_QUAD, reverse_quad, FACE_ENV, dprint
-from .operators import MaterialAssignmentFin
 
 # Reload imports if 'bpy' is already in locals
 if "bpy" in locals():
@@ -28,7 +27,7 @@ if "bpy" in locals():
     importlib.reload(img_in)
     
 # Example usage within your import function
-def import_file(filepath, scene):
+def import_file(filepath, scene, texture_base_name=None):
     """
     Imports a .prm file and links it to the scene as a Blender object.
     It also imports all LoDs of a PRM file, which can be sequentially written
@@ -68,7 +67,7 @@ def import_file(filepath, scene):
             else:
                 print(f"Object '{obj.name}' is already in the scene collection.")
             bpy.context.view_layer.objects.active = obj
-            assign_uv_tex_material(obj)
+            assign_uv_tex_material(obj, texture_base_name=texture_base_name)
 
     return obj
 
@@ -84,7 +83,7 @@ def import_prm_mesh(prm, filename, filepath, scene, envlist=None):
     return me
 
 def add_rvmesh_to_bmesh(prm, bm, me, filepath, scene, envlist=None):
-    from .common import get_track_texture_path
+    from .common import get_world_texture_path
     
     uv_layer = bm.loops.layers.uv.new("UVMap")
     vc_layer = bm.loops.layers.color.new("Col")
@@ -113,11 +112,10 @@ def add_rvmesh_to_bmesh(prm, bm, me, filepath, scene, envlist=None):
             face = bm.faces.new(verts)
             created_faces.append(face)
         except ValueError as e:
-            dprint(f"Could not create face: {e}")
             continue
 
         if poly.texture >= 0:
-            texture_path = get_track_texture_path(filepath, poly.texture, scene)
+            texture_path = get_world_texture_path(filepath, poly.texture, scene)
             if texture_path and os.path.isfile(texture_path):
                 material_name = os.path.basename(texture_path)
                 material = bpy.data.materials.get(material_name)
@@ -187,7 +185,7 @@ def create_materials_for_attributes(me, bm, obj_name):
 
     return materials
                     
-def assign_uv_tex_material(obj):
+def assign_uv_tex_material(obj, texture_base_name=None):
     # Ensure the object is in object mode before modifying the mesh
     if obj.mode == 'EDIT':
         bpy.ops.object.mode_set(mode='OBJECT')
@@ -202,7 +200,7 @@ def assign_uv_tex_material(obj):
     bmp_materials = get_bmp_materials()
 
     # Get the base name for the object
-    base_name = get_base_name_for_layers(obj)
+    base_name = get_base_name_for_layers(obj, override=texture_base_name)
 
     # Assign materials based on texture number
     for face in bm.faces:
@@ -234,12 +232,11 @@ def get_bmp_materials():
                     bmp_materials[node.image.name] = mat
     return bmp_materials
 
-def get_base_name_for_layers(obj):
+def get_base_name_for_layers(obj, override=None):
+    if override:
+        return override
     base_name = obj.name.split('.')[0]
-
-    # Remove any trailing digits from the base name
     base_name = ''.join([char for char in base_name if not char.isdigit()])
-
     return base_name
 
 def int_to_texture_suffix(tex_num):

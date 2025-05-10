@@ -5,7 +5,6 @@ Purpose: Providing variables and functions available for all modules
 Description:
 Contains values that are specific to Re-Volt, functions for converting units
 and helper functions for Blender. 
-
 """
 
 # Prevents the global dict from being reloaded
@@ -14,10 +13,11 @@ if "bpy" not in locals():
 
 import bpy
 import bmesh
+import re
 import os
 import math
 import mathutils
-from math import sqrt
+from math import sqrt, radians
 from mathutils import Color, Matrix, Vector
 
 # Global dictionaries
@@ -32,6 +32,7 @@ SCALE =             0.01
 
 TEX_PAGES_MAX =     64
 TEX_ANIM_MAX =      1024
+MAX_MODEL_SLOTS =	64
 
 FACE_QUAD =         1       # 0x1
 FACE_DOUBLE =       2       # 0x2
@@ -188,65 +189,65 @@ COL_SPHERE = Color(rgb(60, 60, 80))
 COL_HULL = Color(rgb(0, 20, 180))
 
 TRIGGER_TYPES = {
-    0: "Piano",
-    1: "Split",
-    2: "Track Dir",
-    3: "CameraRail",
-    4: "AI Home",
-    5: "CameraShorten",
-    6: "Object Thrower",
-    7: "Gap Camera",
-    8: "Reposition Car",
-    9: "Custom Animation",
+	0: "Piano",
+	1: "Split",
+	2: "Track Dir",
+	3: "CameraRail",
+	4: "AI Home",
+	5: "CameraShorten",
+	6: "Object Thrower",
+	7: "Gap Camera",
+	8: "Reposition Car",
+	9: "Custom Animation",
 }
 
 LOW_FLAG_OPTIONS = {
-    0: {"name": "PianoFlagLow", "range": (0, 63), "description": "Unknown"},
-    1: {"name": "TriggerOrder", "range": (0, 2000), "description": "Order Number"},
-    2: {
-        "name": "Direction",
-        "values": {
-            0: "Chicane Left",
-            1: "180 Left",
-            2: "90 Left",
-            3: "45 Left",
-            4: "Chicane Right",
-            5: "180 Right",
-            6: "90 Right",
-            7: "45 Right",
-            8: "Ahead",
-            9: "Danger",
-            10: "Fork",
-            11: "Dummy"
-        },
-        "range": (0, 11)
-    },
-    3: {"name": "CameraID", "range": (0, 2000), "description": "Camera ID"},
-    4: {"name": "AIHomeFlagLow", "range": (0, 2000), "description": "Unknown"},
-    5: {
-        "name": "Zoom",
-        "values": {
-            0: "1/8",
-            1: "1/4",
-            2: "3/8",
-            3: "1/2",
-            4: "5/8",
-            5: "3/4",
-            6: "7/8"
-        },
-        "range": (0, 6)
-    },
-    6: {"name": "ObjectID", "range": (0, 2000), "description": "Object ID"},
-    7: {"name": "CameraID", "range": (0, 1000), "description": "Camera ID"},
-    8: {"name": None, "range": None, "description": None},
-    9: {"name": "ObjectID", "range": (0, 2000), "description": "Object ID"},
+	0: {"name": "PianoFlagLow", "range": (0, 63), "description": "Unknown"},
+	1: {"name": "TriggerOrder", "range": (0, 2000), "description": "Order Number"},
+	2: {
+		"name": "Direction",
+		"values": {
+			0: "Chicane Left",
+			1: "180 Left",
+			2: "90 Left",
+			3: "45 Left",
+			4: "Chicane Right",
+			5: "180 Right",
+			6: "90 Right",
+			7: "45 Right",
+			8: "Ahead",
+			9: "Danger",
+			10: "Fork",
+			11: "Dummy"
+		},
+		"range": (0, 11)
+	},
+	3: {"name": "CameraID", "range": (0, 2000), "description": "Camera ID"},
+	4: {"name": "AIHomeFlagLow", "range": (0, 2000), "description": "Unknown"},
+	5: {
+		"name": "Zoom",
+		"values": {
+			0: "1/8",
+			1: "1/4",
+			2: "3/8",
+			3: "1/2",
+			4: "5/8",
+			5: "3/4",
+			6: "7/8"
+		},
+		"range": (0, 6)
+	},
+	6: {"name": "ObjectID", "range": (0, 2000), "description": "Object ID"},
+	7: {"name": "CameraID", "range": (0, 1000), "description": "Camera ID"},
+	8: {"name": None, "range": None, "description": None},
+	9: {"name": "ObjectID", "range": (0, 2000), "description": "Object ID"},
 }
 
 HIGH_FLAG_OPTIONS = {
-    0: {"name": "PianoFlagHigh", "range": (0, 63), "description": "Unknown"},
-    2: {"name": "TriggerOrder", "range": (0, 63), "description": "Order Number"},
-    4: {"name": "AIHomeFlagHigh", "range": (0, 63), "description": "Unknown"},
-    9: {"name": "LapOfTrigger", "range": (0, 63), "description": "Lap of Trigger"},
+	0: {"name": "PianoFlagHigh", "range": (0, 63), "description": "Unknown"},
+	2: {"name": "TriggerOrder", "range": (0, 63), "description": "Order Number"},
+	4: {"name": "AIHomeFlagHigh", "range": (0, 63), "description": "Unknown"},
+	9: {"name": "LapOfTrigger", "range": (0, 63), "description": "Lap of Trigger"},
 }
 
 """
@@ -306,14 +307,14 @@ def to_blender_axis(vec):
 
 # Converts camber angle from degrees to radians
 def to_blender_angle(camber_angle):
-    return math.radians(camber_angle)
+	return math.radians(camber_angle)
 
 def to_revolt_camber(camber_in_radians):
-    # Convert radians to degrees for Re-Volt
-    camber_in_degrees = math.degrees(camber_in_radians)
+	# Convert radians to degrees for Re-Volt
+	camber_in_degrees = math.degrees(camber_in_radians)
 
-    # Optionally apply any transformations if needed for Re-Volt's system
-    return camber_in_degrees
+	# Optionally apply any transformations if needed for Re-Volt's system
+	return camber_in_degrees
 
 def to_blender_coord(vec):
 	return (vec[0] * SCALE, vec[2] * SCALE, -vec[1] * SCALE)
@@ -391,47 +392,47 @@ def reverse_quad(quad, tri=False):
 		return quad[2::-1]
 	else:
 		return quad[::-1]
-
-
-def texture_to_int(string):
-    # Assigns texture A to cars
-    if "car" in string:
-        return 0
-
-    if ".bmp" in string:
-        base, ext = string.split(".", 1)
-        try:
-            num = int(base)
-        except:
-            # Checks if the last letter of the file name matches old naming convention
-            if base[-1].isalpha():
-                num = ord(base[-1]) - 97
-            else:
-                return -1
-
-        # Returns texture A if it's not a fitting track texture
-        if num >= TEX_PAGES_MAX or num < 0:
-            return 0
-
-        return num
-
-    # .bmp is not in the texture name, assumes no texture
-    else:
+	
+def texture_to_int(string, prefix=""):
+    """Converts a texture filename to texture index, assuming suffixes like a, b, ..., z, aa, ba, ..., ab, bb..."""
+    if not string:
         return -1
 
+    name = string.lower().split(".")[0]
+
+    if "car" in name:
+        return 0
+
+    if not prefix:
+        prefix = bpy.context.scene.get("level_texture_base", "")
+
+    if prefix and name.startswith(prefix.lower()):
+        suffix = name[len(prefix):]
+    else:
+        match = re.search(r'([a-z]{1,2})$', name)
+        suffix = match.group(1) if match else ""
+
+    if suffix == "":
+        return 0
+
+    if len(suffix) == 1:
+        return ord(suffix[0]) - ord('a')
+    elif len(suffix) == 2:
+        major = ord(suffix[0]) - ord('a')
+        minor = ord(suffix[1]) - ord('a')
+        return (minor + 1) * 26 + major
+
+    return -1
+
 def int_to_texture(tex_num, name=""):
-	# The first suffix cycles through a-z repeatedly
-	suffix1 = chr(tex_num % 26 + 97)
-	
-	# The second suffix increments once after every 26 textures
-	suffix2_num = tex_num // 26 - 1  # Adjusted to start from -1
-	suffix2 = ''
-	
-	# Only append the second suffix if it's 0 or greater
-	if suffix2_num >= 0:
-		suffix2 = chr(suffix2_num % 26 + 97)
-	
-	return name + suffix2 + suffix1 + ".bmp"
+    """Converts integer texture index to string suffix, following: a, b, ..., z, aa, ba, ..., ab, bb..."""
+    if tex_num < 26:
+        suffix = chr(97 + tex_num)
+    else:
+        major = tex_num % 26
+        minor = tex_num // 26 - 1
+        suffix = chr(97 + major) + chr(97 + minor)
+    return name + suffix + ".bmp"
 
 def create_material(name, diffuse, alpha):
 	""" Creates a material, mostly used for debugging objects """
@@ -481,14 +482,12 @@ def get_edit_bmesh(obj):
 
 	except KeyError:
 		# KeyError occurs if obj.name is not in dic - create a new bmesh
-		dprint("Bmesh is gone, creating new one...")
 		bm = bmesh.from_edit_mesh(obj.data)
 		dic[obj.name] = bm
 		return bm
 
 	except Exception as e:
 		# Handle other unexpected errors
-		dprint(f"Unexpected error: {e}")
 		return None
 
 
@@ -628,75 +627,6 @@ class DialogOperator(bpy.types.Operator):
 		for line in str.split(dialog_message, "\n"):
 			column.label(text=line)
 			
-class ConfirmShadowSaveOperator(bpy.types.Operator):
-    bl_idname = "lighttools.confirm_shadow_save"
-    bl_label = "Save Shadow?"
-    bl_description = "Do you want to save the shadow?"
-
-    def execute(self, context):
-        """Run the save shadow image confirmation."""
-        bpy.ops.lighttools.save_shadow('INVOKE_DEFAULT')
-        return {'FINISHED'}
-
-    def draw(self, context):
-        layout = self.layout
-        layout.label(text="Save shadow as .bmp or .png?")  # Message in the dialog
-    
-    def invoke(self, context, event):
-        """Invoke the props_dialog method, which automatically adds OK/Cancel buttons."""
-        return context.window_manager.invoke_props_dialog(self)
-
-class ShadowSaveOperator(bpy.types.Operator):
-    bl_idname = "lighttools.save_shadow"
-    bl_label = "Save Shadow Confirmation"
-    
-    # Property to hold the path where the image will be saved
-    filepath: bpy.props.StringProperty(subtype="FILE_PATH", default="//shadow")
-    
-    # Property for choosing between BMP and PNG
-    file_format: bpy.props.EnumProperty(
-        name="File Format",
-        description="Choose file format",
-        items=[
-            ('BMP', "BMP", "Save as .bmp"),
-            ('PNG', "PNG", "Save as .png")
-        ],
-        default='BMP'
-    )
-    
-    def execute(self, context):
-        """Save the shadow image after confirmation."""
-        shadow_image = bpy.data.images.get("shadow")
-        if shadow_image:
-            # Set the file format and filepath extension accordingly
-            shadow_image.filepath_raw = self.filepath
-            shadow_image.file_format = self.file_format
-
-            # Update the extension based on the selected file format
-            if self.file_format == 'BMP' and not self.filepath.lower().endswith(".bmp"):
-                shadow_image.filepath_raw += ".bmp"
-            elif self.file_format == 'PNG' and not self.filepath.lower().endswith(".png"):
-                shadow_image.filepath_raw += ".png"
-
-            shadow_image.save()
-            self.report({'INFO'}, f"Shadow saved to {shadow_image.filepath_raw}")
-        else:
-            self.report({'ERROR'}, "Shadow image not found")
-        return {'FINISHED'}
-    
-    def draw(self, context):
-        """Draw the file format selection in the file browser."""
-        layout = self.layout
-        layout.prop(self, "file_format", text="File Format")
-    
-    def invoke(self, context, event):
-        """Open file browser for saving when 'OK' is clicked."""
-        self.filepath = "//shadow"
-        
-        wm = context.window_manager
-        wm.fileselect_add(self)  # Opens file browser for saving the file
-        return {'RUNNING_MODAL'}
-
 def msg_box(message, icon="INFO"):
 	global dialog_message
 	global dialog_icon
@@ -766,54 +696,95 @@ Non-Blender helper functions
 """
 
 def get_car_texture_path(filepath, tex_num, scene):
-    """Handles texture path retrieval for car models without relying on parameters.txt."""
-    path, fname = filepath.rsplit(os.sep, 1)
+	"""Handles texture path retrieval for car models without relying on parameters.txt."""
+	path, fname = filepath.rsplit(os.sep, 1)
 
-    # Checks if the loaded model is located in the custom folder
-    folder = path.rsplit(os.sep, 1)[1]
-    if folder == "custom":
-        path = path.rsplit(os.sep, 1)[0]
-        folder = path.rsplit(os.sep, 1)[1]
+	# Checks if the loaded model is located in the custom folder
+	folder = path.rsplit(os.sep, 1)[1]
+	if folder == "custom":
+		path = path.rsplit(os.sep, 1)[0]
+		folder = path.rsplit(os.sep, 1)[1]
 
-    if not os.path.isdir(path):
-        return None, None
+	if not os.path.isdir(path):
+		return None, None
 
-    # Attempt to find car.bmp or car.png in the folder
-    for texture_name in ['car.bmp', 'car.png']:
-        texture_path = os.path.join(path, texture_name)
-        if os.path.isfile(texture_path):
-            return texture_path, texture_name
+	# Attempt to find car.bmp or car.png in the folder
+	for texture_name in ['car.bmp', 'car.png']:
+		texture_path = os.path.join(path, texture_name)
+		if os.path.isfile(texture_path):
+			return texture_path, texture_name
 
-    # Fallback: Use the folder name to determine the texture
-    folder_texture = f"{folder}.bmp"
-    texture_path = os.path.join(path, folder_texture)
-    if os.path.isfile(texture_path):
-        return texture_path, "car.bmp"
+	# Fallback: Use the folder name to determine the texture
+	folder_texture = f"{folder}.bmp"
+	texture_path = os.path.join(path, folder_texture)
+	if os.path.isfile(texture_path):
+		return texture_path, "car.bmp"
 
-    return None, None
+	return None, None
 
-def get_track_texture_path(filepath, tex_num, scene):
-    """Handles texture path retrieval for track models without using tpage."""
-    path, fname = filepath.rsplit(os.sep, 1)
-
-    # Checks if the loaded model is located in the custom folder
-    folder = path.rsplit(os.sep, 1)[1]
-    if folder == "custom":
-        path = path.rsplit(os.sep, 1)[0]
-        folder = path.rsplit(os.sep, 1)[1]
-
-    print(f"Folder derived: {folder} from path: {path}")
-
-    if not os.path.isdir(path):
-        print(f"Path is not a directory: {path}")
+def get_world_texture_path(filepath, tex_num, scene):
+    if tex_num < 0 or tex_num >= 64:
+        print(f"Invalid texture number: {tex_num}")
         return None
 
-    # Directly use tex_num to determine the texture file name
-    texture_name = f"{folder}{chr(97 + tex_num)}.bmp"
-    texture_path = os.path.join(path, texture_name)
-    print(f"Constructed texture path: {texture_path}")
+    suffix = int_to_texture(tex_num, "")[:-4]
 
-    return texture_path
+    level_folder = os.path.dirname(filepath)
+    level_base = scene.get("level_texture_base", os.path.basename(level_folder).lower())
+    texture_name = f"{level_base}{suffix}.bmp"
+
+    full_path = os.path.join(level_folder, texture_name)
+    if os.path.isfile(full_path):
+        return full_path
+
+    print(f"[Texture Not Found] {texture_name}")
+    return None
+
+def get_model_texture_path(filepath, tex_index, scene, model_name):
+    if tex_index == -1:
+        print(f"[Info] Texture index -1 for model '{model_name}', assuming no texture (vertex colors only).")
+        return None
+
+    if tex_index < 0 or tex_index >= 64:
+        print(f"[Error] Invalid texture index: {tex_index}")
+        return None
+
+    if not model_name:
+        print("[Error] get_model_texture_path called without model_name.")
+        return None
+
+    mode = None
+    base = ""
+    folder = ""
+
+    for i in range(MAX_MODEL_SLOTS):
+        if scene.get(f"m_model_name_{i}", "").lower() == model_name.lower():
+            mode = scene.get(f"m_texture_mode_{i}", "VERTEX_COLOR")
+            path = scene.get(f"m_texture_path_{i}", "")
+
+            if mode == "LEVEL_TEXTURES":
+                base = os.path.basename(path.rstrip("/\\"))
+                folder = path
+            elif mode == "TEXTURE_NAME":
+                base = os.path.splitext(os.path.basename(path))[0]
+                folder = os.path.dirname(path)
+            else:  # VERTEX_COLOR
+                return None
+            break
+    else:
+        print(f"[Error] No texture settings found for model '{model_name}'.")
+        return None
+
+    # Apply correct suffix logic
+    suffix = int_to_texture(tex_index, "")[:-4]  # remove ".bmp"
+    texture_name = f"{base}.bmp" if mode == "TEXTURE_NAME" else f"{base}{suffix}.bmp"
+
+    full_path = os.path.join(folder, texture_name)
+    if os.path.isfile(full_path):
+        return full_path
+
+    print(f"[Texture Not Found] {texture_name} in {folder}")
+    return None
 
 def get_format(fstr):
 	"""
@@ -835,6 +806,8 @@ def get_format(fstr):
 		return FORMAT_TA_CSV
 	elif ext == "fin":
 		return FORMAT_FIN
+	elif ext == "fob":
+		return FORMAT_FOB
 	elif ext == "hul":
 		return FORMAT_HUL
 	elif ext in ["ncp"]:
@@ -853,3 +826,114 @@ def get_format(fstr):
 		return FORMAT_TRI
 	else:
 		return FORMAT_UNK
+	
+def get_model_materials(self, context):
+	return [(mat.name, mat.name, "") for mat in bpy.data.materials if mat.name.lower().endswith('.bmp')]
+
+def clean_model_base_name(name):
+	"""
+	Cleans model base name:
+	- Lowercases
+	- Strips .001 / _01 suffixes
+	- Strips file extensions like .prm, .m, .w, .bmp
+	- Truncates to max 8 characters
+	"""
+	name = name.lower()
+	name = re.sub(r'[\._-]\d+$', '', name)
+	name = re.sub(r'\.(prm|m|w|bmp)$', '', name)
+	return name[:8]
+
+def texnum_to_label(index):
+    if index < 26:
+        return chr(97 + index)
+    else:
+        major = index % 26
+        minor = index // 26 - 1
+        return chr(97 + major) + chr(97 + minor)
+
+def set_level_texture_base_from_filepath(scene, filepath):
+    base = os.path.splitext(os.path.basename(filepath))[0].lower()
+    scene["level_texture_base"] = base
+    print(f"[INFO] Set level_texture_base = '{base}'")
+	
+def create_directional_fob_mesh(name="FOB_Object"):
+    mesh = bpy.data.meshes.new(name + "_Mesh")
+    obj = bpy.data.objects.new(name, mesh)
+
+    bm = bmesh.new()
+
+    # Rotation matrix: +90 degrees around X
+    rot_x_90 = Matrix.Rotation(radians(90), 4, 'X')
+
+    def rot(v):
+        return (rot_x_90 @ v.to_4d()).xyz
+
+    # Shift cube so the front face is at Y = 0.0 (before rotation)
+    corners = [
+        Vector((-0.5, -0.5, -0.5)), Vector((0.5, -0.5, -0.5)),
+        Vector((0.5,  0.0, -0.5)), Vector((-0.5, 0.0, -0.5)),
+        Vector((-0.5, -0.5,  0.5)), Vector((0.5, -0.5,  0.5)),
+        Vector((0.5,  0.0,  0.5)), Vector((-0.5, 0.0,  0.5))
+    ]
+    verts = [bm.verts.new(rot(c)) for c in corners]
+
+    # Cube edges
+    edges = [
+        (0, 1), (1, 2), (2, 3), (3, 0),
+        (4, 5), (5, 6), (6, 7), (7, 4),
+        (0, 4), (1, 5), (2, 6), (3, 7)
+    ]
+    for e in edges:
+        bm.edges.new((verts[e[0]], verts[e[1]]))
+
+    # Tip pointing forward (which becomes UP after 90° X rotation)
+    tip = bm.verts.new(rot(Vector((0.0, 1.2, 0.0))))
+    for i in (2, 3, 6, 7):
+        bm.edges.new((verts[i], tip))
+
+    bm.to_mesh(mesh)
+    bm.free()
+    mesh.update()
+    return obj
+
+def create_directional_fob_mesh_ui(name="FOB_Object"):
+    mesh = bpy.data.meshes.new(name + "_Mesh")
+    obj = bpy.data.objects.new(name, mesh)
+
+    bm = bmesh.new()
+
+    def rot(v):
+        return v.to_4d()
+
+    # Shift cube backward on Y so tip can extend cleanly in +Y
+    corners = [
+        Vector((-0.5, -0.5, -0.5)), Vector((0.5, -0.5, -0.5)),
+        Vector((0.5,  0.0, -0.5)), Vector((-0.5, 0.0, -0.5)),
+        Vector((-0.5, -0.5,  0.5)), Vector((0.5, -0.5,  0.5)),
+        Vector((0.5,  0.0,  0.5)), Vector((-0.5, 0.0,  0.5))
+    ]
+    verts = [bm.verts.new((rot(c)).xyz) for c in corners]
+
+    # Cube edges
+    edges = [
+        (0, 1), (1, 2), (2, 3), (3, 0),
+        (4, 5), (5, 6), (6, 7), (7, 4),
+        (0, 4), (1, 5), (2, 6), (3, 7)
+    ]
+    for e in edges:
+        bm.edges.new((verts[e[0]], verts[e[1]]))
+
+    # Tip pointing forward in +Y
+    tip = bm.verts.new(Vector((0.0, 1.2, 0.0)))
+    for i in (2, 3, 6, 7):  # Front/top face (Y+)
+        bm.edges.new((verts[i], tip))
+
+    bm.to_mesh(mesh)
+    bm.free()
+    mesh.update()
+    return obj
+
+
+def generate_fob_name(obj_id):
+    last_index = max((o.get("fob_creation_index", -1) for o in bpy.data.objects if o.get("is_fob_object")), default=-1) + 1
+    return f"FOB_{last_index}_{obj_id}", last_index

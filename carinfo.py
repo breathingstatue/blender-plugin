@@ -4,7 +4,6 @@ Purpose: Reading parameters.txt files
 
 Description:
 Used to import entire cars and getting texture paths for models.
-
 """
 
 import os

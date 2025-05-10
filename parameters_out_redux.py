@@ -1,9 +1,9 @@
 """
-Name:    parameters_out
+Name:    parameters_out_redux
 Purpose: Exporting cars parameters useful for the parameters.txt files
 
 Description:
-Prints all car parameters into clipboard.
+Prints most valuable car parameters into clipboard.
 
 """
 
@@ -105,20 +105,9 @@ def append_front_left_wheel(params, body, processed):
         params += f"ModelNum\t1\n"
         params += f"Offset1\t\t{location[0]:.6f} {location[1]:.6f} {location[2]:.6f}\n"
         params += f"Offset2\t\t-0.000000 0.000000 0.000000\n"
-        params += f"IsPresent\tTRUE\nIsPowered\tTRUE\nIsTurnable\tTRUE\n"
-        params += f"SteerRatio\t-0.500000\nEngineRatio\t12000.000000\n"
-        params += f"Radius\t\t12.000000\n"
-        params += f"Mass\t\t0.150000\n"
-        params += f"Gravity\t\t2200.000000\n"
-        params += f"MaxPos\t\t5.000000\n"
-        params += f"SkidWidth\t10.000000\n"
-        params += f"ToeIn\t\t0.000000\n"
         camber_value = get_camber_for_wheel(child, 0)
         if camber_value is not None:
             params += f"Camber\t{camber_value:.6f}\n"
-        params += f"AxleFriction\t0.020000\n"
-        params += f"Grip\t\t0.014000\n"
-        params += f"StaticFriction\t1.500000\nKineticFriction\t1.500000\n"
         params += "}\t\t; End Wheel\n"
         processed.add(child.name)
     else:
@@ -139,20 +128,9 @@ def append_front_right_wheel(params, body, processed):
         params += f"ModelNum\t2\n"
         params += f"Offset1\t\t{location[0]:.6f} {location[1]:.6f} {location[2]:.6f}\n"
         params += f"Offset2\t\t0.000000 0.000000 0.000000\n"
-        params += f"IsPresent\tTRUE\nIsPowered\tTRUE\nIsTurnable\tTRUE\n"
-        params += f"SteerRatio\t-0.500000\nEngineRatio\t12000.000000\n"
-        params += f"Radius\t\t12.000000\n"
-        params += f"Mass\t\t0.150000\n"
-        params += f"Gravity\t\t2200.000000\n"
-        params += f"MaxPos\t\t5.000000\n"
-        params += f"SkidWidth\t10.000000\n"
-        params += f"ToeIn\t\t0.000000\n"
         camber_value = get_camber_for_wheel(child, 1)
         if camber_value is not None:
             params += f"Camber\t{camber_value:.6f}\n"
-        params += f"AxleFriction\t0.020000\n"
-        params += f"Grip\t\t0.014000\n"
-        params += f"StaticFriction\t1.500000\nKineticFriction\t1.500000\n"
         params += "}\t\t; End Wheel\n"
         processed.add(child.name)
     else:
@@ -173,20 +151,9 @@ def append_back_left_wheel(params, body, processed):
         params += f"ModelNum\t3\n"
         params += f"Offset1\t\t{location[0]:.6f} {location[1]:.6f} {location[2]:.6f}\n"
         params += f"Offset2\t\t-0.000000 0.000000 0.000000\n"
-        params += f"IsPresent\tTRUE\nIsPowered\tTRUE\nIsTurnable\tFALSE\n"
-        params += f"SteerRatio\t0.100000\nEngineRatio\t12000.000000\n"
-        params += f"Radius\t\t13.000000\n"
-        params += f"Mass\t\t0.150000\n"
-        params += f"Gravity\t\t2200.000000\n"
-        params += f"MaxPos\t\t5.000000\n"
-        params += f"SkidWidth\t10.000000\n"
-        params += f"ToeIn\t\t0.000000\n"
         camber_value = get_camber_for_wheel(child, 2)
         if camber_value is not None:
             params += f"Camber\t{camber_value:.6f}\n"
-        params += f"AxleFriction\t0.050000\n"
-        params += f"Grip\t\t0.014000\n"
-        params += f"StaticFriction\t1.500000\nKineticFriction\t1.500000\n"
         params += "}\t\t; End Wheel\n"
         processed.add(child.name)
     else:
@@ -207,20 +174,9 @@ def append_back_right_wheel(params, body, processed):
         params += f"ModelNum\t4\n"
         params += f"Offset1\t\t{location[0]:.6f} {location[1]:.6f} {location[2]:.6f}\n"
         params += f"Offset2\t\t0.000000 0.000000 0.000000\n"
-        params += f"IsPresent\tTRUE\nIsPowered\tTRUE\nIsTurnable\tFALSE\n"
-        params += f"SteerRatio\t0.100000\nEngineRatio\t12000.000000\n"
-        params += f"Radius\t\t13.000000\n"
-        params += f"Mass\t\t0.150000\n"
-        params += f"Gravity\t\t2200.000000\n"
-        params += f"MaxPos\t\t5.000000\n"
-        params += f"SkidWidth\t10.000000\n"
-        params += f"ToeIn\t\t0.000000\n"
         camber_value = get_camber_for_wheel(child, 3)
         if camber_value is not None:
             params += f"Camber\t{camber_value:.6f}\n"
-        params += f"AxleFriction\t0.050000\n"
-        params += f"Grip\t\t0.014000\n"
-        params += f"StaticFriction\t1.500000\nKineticFriction\t1.500000\n"
         params += "}\t\t; End Wheel\n"
         processed.add(child.name)
     else:
@@ -317,9 +273,6 @@ def append_spring_info(params, body, processed):
         params += f"ModelNum\t5\n"
         params += f"Offset\t\t{x:.6f} {y:.6f} {z:.6f}\n"
         params += f"Length\t\t{spring_length_revolt:.6f}\n"
-        params += f"Stiffness\t400.000000\n"
-        params += f"Damping\t\t9.000000\n"
-        params += f"Restitution\t-0.950000\n"
         params += f"}}\t\t; End Spring\n"
         processed.add(spring_obj.name)
 
@@ -711,8 +664,6 @@ def append_spinner_info(params, body, processed):
         params += f"\nSPINNER {{\t; Start Spinner\n"
         params += f"ModelNum\t13\n"
         params += f"Offset\t\t{x:.6f} {y:.6f} {z:.6f}\n"
-        params += f"Axis\t\t0.000000 1.000000 0.000000\n"
-        params += f"AngVel\t\t1.000000\n"
         params += f"}}\t\t; End Spinner\n"
         processed.add(spinner.name)
     else:
@@ -738,10 +689,6 @@ def append_aerial_info(params, body, processed):
         params += f"SecModelNum\t17\n"
         params += f"TopModelNum\t18\n"
         params += f"Offset\t\t{location[0]:.6f} {location[1]:.6f} {location[2]:.6f}\n"
-        params += f"Direction\t0.000000 -1.000000 0.000000\n"
-        params += f"Length\t\t20.000000\n"
-        params += f"Stiffness\t2000.000000\n"
-        params += f"Damping\t\t5.500000\n"
         params += "}\t\t; End Aerial\n"
         processed.add(aerial.name)
     else:

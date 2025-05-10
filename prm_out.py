@@ -188,9 +188,9 @@ def export_mesh(me, obj, scene, filepath, world=None):
                        bm.faces.layers.float.new("EnvAlpha"))
     va_layer = (bm.loops.layers.color.get("Alpha") or
                 bm.loops.layers.color.new("Alpha"))
-    texnum_layer = bm.faces.layers.int.get("Texture Number")
-    type_layer = (bm.faces.layers.int.get("Type") or
-                  bm.faces.layers.int.new("Type"))
+    texnum_layer = (bm.faces.layers.int.get("Texture Number") or
+                bm.loops.layers.int.new("Texture Number"))
+    type_layer = bm.faces.layers.int.get("Type")
 
     # Creates an empty PRM or Mesh structure
     if world is None:
@@ -229,13 +229,15 @@ def export_mesh(me, obj, scene, filepath, world=None):
         if scene.use_tex_num and texnum_layer:
             poly.texture = face[texnum_layer]
         # Falls back to texture if not enabled or texnum layer not found
-        image = get_texture_from_material(face, obj, scene.default_texture_name)
+        image = get_texture_from_material(face, obj) if world else get_texture_from_material(face, obj, scene.default_texture_name)
         if image:
             print(f"Assigning texture: {image.name} to face")
             poly.texture = texture_to_int(image.name)
         else:
             print(f"No texture assigned to face")
             poly.texture = -1
+            
+        print(f"Face texture index = {poly.texture} ({image.name if image else 'NO IMAGE'})")
 
         # Sets vertex indices for the polygon
         vert_order = [2, 1, 0, 3] if not is_quad else [3, 2, 1, 0]
@@ -312,7 +314,7 @@ def set_material_to_col(mesh_objects):
         bpy.context.view_layer.objects.active = obj
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.mesh.select_all(action='SELECT')
-        bpy.ops.object.assign_materials_auto()
+        bpy.ops.object.assign_materials_impexp()
         bpy.ops.object.mode_set(mode='OBJECT')
 
 def set_material_to_texture(mesh_objects):
@@ -326,5 +328,5 @@ def set_material_to_texture(mesh_objects):
         bpy.context.view_layer.objects.active = obj
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.mesh.select_all(action='SELECT')
-        bpy.ops.object.assign_materials_auto()
+        bpy.ops.object.assign_materials_impexp()
         bpy.ops.object.mode_set(mode='OBJECT')

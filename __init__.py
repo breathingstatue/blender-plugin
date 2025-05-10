@@ -29,6 +29,9 @@ from . import (
     common,
     fin_in,
     fin_out,
+    fob_in,
+    fob_out,
+    fob_subtypes,
     hul_in,
     hul_out,
     img_in,
@@ -40,6 +43,7 @@ from . import (
     operators,
     parameters_in,
     parameters_out,
+    parameters_out_redux,
     prm_in,
     prm_in_for_fin,
     prm_in_for_w,
@@ -63,7 +67,6 @@ from . import (
 from .ui import (
     faceprops,
     headers,
-    helpers,
     instances,
     light,
     migpanel,
@@ -73,35 +76,31 @@ from .ui import (
     vertex,
 )
 
-from .common import DialogOperator, ShadowSaveOperator, ConfirmShadowSaveOperator, TEX_ANIM_MAX
+from .common import DialogOperator, TEX_ANIM_MAX, MAX_MODEL_SLOTS
 from .common import TEX_PAGES_MAX, FACE_DOUBLE, FACE_TRANSLUCENT, FACE_MIRROR, FACE_TRANSL_TYPE, FACE_TEXANIM, FACE_NOENV, FACE_ENV, FACE_CLOTH
 from .common import FACE_SKIP, NCP_DOUBLE, NCP_NO_SKID, NCP_OIL, NCP_NON_PLANAR, NCP_OBJECT_ONLY, NCP_CAMERA_ONLY, NCP_NOCOLL, MATERIALS
-from .layers import select_ncp_material, get_face_material, set_face_material, set_face_texture, get_face_texture, update_envmapping, update_no_envmapping
-from .layers import set_face_ncp_property, get_face_ncp_property, get_face_env, set_face_env, update_face_env, get_fin_envcol, set_fin_envcol
+from .fob_subtypes import OBJECT_TYPE_NAMES
+from .layers import select_ncp_material, get_face_material, set_face_material, set_face_texture, get_face_texture, update_envmapping
+from .layers import update_no_envmapping, set_face_ncp_property, get_face_ncp_property, get_face_env, set_face_env, update_face_env, get_fin_envcol, set_fin_envcol
 from .layers import get_face_property, set_face_property, update_fin_envcol, set_rgb, get_rgb, update_fin_col, get_alpha_items
 from .layers import update_fin_env, update_rgb, update_no_envmapping, update_envmapping, remove_env_material
-from .operators import CopyAndRemoveAxles, ImportRV, ExportRV, SelectDefaultTexture, RVIO_OT_ReadCarParameters, RVIO_OT_SelectRevoltDirectory, ButtonReExport
+from .operators import CopyAndRemoveAxles, ImportRV, ExportRV, ExportExtension, RVIO_OT_ReadCarParameters, RVIO_OT_SelectRevoltDirectory, ButtonReExport
 from .operators import VertexAndAlphaLayer, VertexColorRemove, SetVertexColor, BakeShadow, BakeVertex, BatchBakeVertexToEnv, BakeVertexToRGBModelColor
-from .operators import SetVertexAlpha, SetFaceTextureNumber
-from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, MaterialAssignment, MaterialAssignmentAuto, MaterialAssignmentFin
-from .operators import TextureAssigner, SetInstanceProperty, RemoveInstanceProperty, LaunchRV, TexturesSave, TexturesRename
+from .operators import SetVertexAlpha, SetFaceTextureNumber, MFileExtension, TexturePrefixPrompt, SetFaceTextureDropdown, SetLevelTexturePrefix
+from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, MaterialAssignment, MaterialAssignmentAuto, MaterialAssignmentImportExport
+from .operators import TextureAssigner, SetInstanceProperty, RemoveInstanceProperty, LaunchRV, TexturesSave, TexturesRename, ClearExtraAssignments
 from .operators import CopyAerialParams, AxleMessageBox, ConfirmLoadOriginalAxle, CopyAndRemoveAxles, SpringMessageBox, ConfirmLoadOriginalSpring
 from .operators import CopyAndRemoveSprings, PinMessageBox, ConfirmLoadOriginalPin, CopyAndRemovePins, CopyWheelParams
-from .operators import ButtonZoneHide, AddTrackZone, ReverseTrackZone, ButtonTriggerHide, CreateTrigger
-from .operators import DuplicateTrigger, CopyTrigger, PasteTrigger, SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere
-from .operators import ButtonCopyUvToFrame, ButtonCopyFrameToUv, PreviewNextFrame, PreviewPrevFrame, TexAnimTransform, TexAnimGrid
+from .operators import ButtonZoneHide, AddTrackZone, ReverseTrackZone, ButtonTriggerHide, CreateTrigger, MarkAsModel, CreateFobObject
+from .operators import DuplicateFobObject, DuplicateTrigger, CopyTrigger, PasteTrigger, SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere
+from .operators import ButtonCopyUvToFrame, ButtonCopyFrameToUv, PreviewNextFrame, PreviewPrevFrame, TexAnimTransform, TexAnimGrid, CarAutoShader
 from .operators import menu_func_import, menu_func_export
-from .rvstruct import World, PRM, Mesh, BoundingBox, Vector, Matrix, Polygon, Vertex, UV, BigCube, TexAnimation
-from .rvstruct import Frame, Color, Instances, Instance, PosNodes, PosNode, NCP, Polyhedron, Plane, LookupGrid
-from .rvstruct import LookupList, Hull, ConvexHull, Edge, Interior, Sphere, RIM, MirrorPlane, TrackZones, Zone
-from .rvstruct import Triggers, Trigger
 from .texanim import update_ta_max_frames, update_ta_current_slot, update_ta_current_frame, update_ta_current_frame_uv
 from .texanim import update_ta_current_frame_delay, update_ta_current_frame_tex, update_ta_max_slots
 from .tools import get_trigger_type_items, get_trigger_type, set_trigger_type, get_low_flag_items, get_low_flag, set_low_flag, get_high_flag_items
 from .tools import get_high_flag, set_high_flag
 from .ui.faceprops import RVIO_PT_RevoltFacePropertiesPanel
 from .ui.headers import RVIO_PT_RevoltIOToolPanel
-from .ui.helpers import RVIO_PT_RevoltHelpersPanelMesh
 from .ui.instances import RVIO_PT_RevoltInstancesPanel
 from .ui.light import RVIO_PT_RevoltLightPanel
 from .ui.texanim import RVIO_PT_AnimModesPanel
@@ -113,7 +112,7 @@ from .ui.migpanel import RVIO_PT_RevoltMIGPanel
 bl_info = {
 "name": "Re-Volt",
 "author": "Marvin Thiel & Theman",
-"version": (20, 25, 34),
+"version": (20, 25, 50),
 "blender": (4, 3, 2),
 "location": "File > Import-Export",
 "description": "Import and export Re-Volt file formats.",
@@ -283,7 +282,7 @@ def register():
     )
   
     bpy.types.Scene.use_tex_num = bpy.props.BoolProperty(
-        name = "Use Number for Textures",
+        name = "Use Number for Texture",
         default = False,
         description = "Uses the texture number from the texture layer "
                       "accessible in the tool shelf in Edit mode.\n"
@@ -418,11 +417,10 @@ def register():
 
     bpy.types.Scene.shadow_strength = bpy.props.IntProperty(
         name="Shadow Strength",
-        description="Adjust the brightness of the shadow",
+        description="Controls shadow boldness (1 = thin, 7 = bold)",
         default=4,
         min=1,
-        max=8,
-        subtype='FACTOR'
+        max=7
     )
     
     bpy.types.Scene.shadow_table = bpy.props.StringProperty(
@@ -594,26 +592,12 @@ def register():
     )
     
     bpy.types.Mesh.face_texture = bpy.props.IntProperty(
-        name = "Texture",
-        get = get_face_texture,
-        set = set_face_texture,
-        default = 0,
-        min = -1,
-        max = TEX_PAGES_MAX-1,
-        description = "Texture page number:\n-1 is none,\n"
-                      "0 is texture page A\n"
-                      "1 is texture page B\n"
-                      "2 is texture page C\n"
-                      "3 is texture page D\n"
-                      "4 is texture page E\n"
-                      "5 is texture page F\n"
-                      "6 is texture page G\n"
-                      "7 is texture page H\n"
-                      "8 is texture page I\n"
-                      "9 is texture page J\n"
-                      "For this number to have an effect, "
-                      "the \"Use Texture Number\" export setting needs to be "
-                      "enabled"
+        name="Texture",
+        get=get_face_texture,
+        set=set_face_texture,
+        description="Texture page number:\n-1 is none,\n0 is texture page A, 1 is B, etc.",
+        min=-1,
+        max=63
     )
     
     bpy.types.Mesh.material_choice = bpy.props.EnumProperty(
@@ -662,7 +646,7 @@ def register():
     
     bpy.types.Mesh.face_texture_animation = bpy.props.BoolProperty(
         name = "Animated",
-        description = "Uses texture animation for this poly (only in .w files)",
+        description = "Uses texture animation for this poly (.w only)",
         get=lambda self: bool(get_face_property(self, FACE_TEXANIM)),
         set=lambda self, value: set_face_property(self, value, FACE_TEXANIM)
     )
@@ -676,10 +660,8 @@ def register():
     )
     
     bpy.types.Mesh.face_envmapping = bpy.props.BoolProperty(
-        name = "EnvMapping (.w)",
-        description = "Enables the environment map for this poly (.w only).\n"
-                      "If enabled on pickup.m, sparks will appear \n"
-                      "around the poly",
+        name = "EnvMapping",
+        description = "Enables the environment map for this poly (.w and .m files)",
         get=lambda self: bool(get_face_property(self, FACE_ENV)),
         set=lambda self, value: set_face_property(self, value, FACE_ENV),
         update=update_envmapping
@@ -785,6 +767,14 @@ def register():
         description="Choose an alpha percentage for the vertex color layer",
         items=get_alpha_items(),
         default='0'
+    )
+    
+    bpy.types.Scene.car_shader_color = bpy.props.FloatVectorProperty(
+        name="Shader Base Color",
+        subtype='COLOR',
+        min=0.0, max=1.0,
+        default=(1.0, 1.0, 1.0),
+        description="Base color used for vertex shading"
     )
 
     bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
@@ -905,12 +895,59 @@ def register():
     )
     
     bpy.types.Scene.copied_trigger_properties = bpy.props.PointerProperty(type=bpy.types.PropertyGroup)
+    
+    bpy.types.Object.fob_type = bpy.props.IntProperty(name="Object ID")
+    bpy.types.Object.fob_subtype_1 = bpy.props.IntProperty(name="Subtype 1")
+    bpy.types.Object.fob_subtype_2 = bpy.props.IntProperty(name="Subtype 2")
+    bpy.types.Object.fob_subtype_3 = bpy.props.IntProperty(name="Subtype 3")
+    bpy.types.Object.fob_subtype_4 = bpy.props.IntProperty(name="Subtype 4")
+    bpy.types.Object.fob_creation_index = bpy.props.IntProperty(name="Creation Index")
+
+    bpy.types.Scene.selected_fob_object_id = bpy.props.EnumProperty(
+        name="Select Object",
+        description="Choose the type of object to create",
+        items=[(str(k), f"{v} ({k})", "") for k, v in OBJECT_TYPE_NAMES.items()],
+        default='0'
+    )
+    
+    bpy.types.Scene.level_texture_base = bpy.props.StringProperty(
+        name="Level Texture Base",
+        description="Prefix used for level textures, like 'box', 'arena', etc.",
+        default=""
+    )
+    
     bpy.types.Scene.default_texture_name = StringProperty(name="Default Texture Name")
+    
+    bpy.types.Scene.pending_import_filepath = bpy.props.StringProperty(name="Pending Import Filepath")
+    
+    bpy.types.Object.is_model = bpy.props.BoolProperty(
+        name="Is Model (.m)",
+        description="Marks the instance as referencing a .m (Model) file instead of .prm",
+        default=False
+    )
+    
+    bpy.types.Scene.selected_car_texture = bpy.props.StringProperty(
+        name="Selected Car Texture",
+        description="Fallback texture for car material assignment"
+    )
+
+    for i in range(MAX_MODEL_SLOTS):
+        setattr(bpy.types.Scene, f"m_texture_path_{i}", bpy.props.StringProperty(subtype="FILE_PATH"))
+        setattr(bpy.types.Scene, f"m_texture_mode_{i}", bpy.props.EnumProperty(
+            items=[
+                ("LEVEL_TEXTURES", "Level Textures", ""),
+                ("TEXTURE_NAME", "Single Texture", ""),
+                ("VERTEX_COLOR", "Vertex Color", "")
+            ],
+            name=f"Texture Mode {i}",
+            default="VERTEX_COLOR"
+        ))
+        setattr(bpy.types.Scene, f"m_model_name_{i}", bpy.props.StringProperty())
+        
+    bpy.types.Scene.prompt_required = bpy.props.BoolProperty(default=False)
     
     #Register Operators
     bpy.utils.register_class(DialogOperator)
-    bpy.utils.register_class(ShadowSaveOperator)
-    bpy.utils.register_class(ConfirmShadowSaveOperator)
     bpy.utils.register_class(ImportRV)
     bpy.utils.register_class(ExportRV)
     bpy.utils.register_class(RVIO_OT_ReadCarParameters)
@@ -926,12 +963,13 @@ def register():
     bpy.utils.register_class(LaunchRV)
     bpy.utils.register_class(TexturesSave)
     bpy.utils.register_class(TexturesRename)
+    bpy.utils.register_class(ClearExtraAssignments)
     bpy.utils.register_class(MaterialAssignment)
     bpy.utils.register_class(MaterialAssignmentAuto)
-    bpy.utils.register_class(MaterialAssignmentFin)
+    bpy.utils.register_class(MaterialAssignmentImportExport)
     bpy.utils.register_class(TextureAssigner)
     bpy.utils.register_class(CopyWheelParams)
-    bpy.utils.register_class(SelectDefaultTexture)
+    bpy.utils.register_class(ExportExtension)
     bpy.utils.register_class(AxleMessageBox)
     bpy.utils.register_class(ConfirmLoadOriginalAxle)
     bpy.utils.register_class(CopyAndRemoveAxles)
@@ -954,23 +992,30 @@ def register():
     bpy.utils.register_class(PreviewPrevFrame)
     bpy.utils.register_class(TexAnimTransform)
     bpy.utils.register_class(TexAnimGrid)
+    bpy.utils.register_class(CarAutoShader)
     bpy.utils.register_class(ButtonZoneHide)
     bpy.utils.register_class(AddTrackZone)
     bpy.utils.register_class(ReverseTrackZone)
     bpy.utils.register_class(ButtonTriggerHide)
     bpy.utils.register_class(CreateTrigger)
+    bpy.utils.register_class(MarkAsModel)
+    bpy.utils.register_class(CreateFobObject)
+    bpy.utils.register_class(DuplicateFobObject)
     bpy.utils.register_class(DuplicateTrigger)
     bpy.utils.register_class(CopyTrigger)
     bpy.utils.register_class(PasteTrigger)
     bpy.utils.register_class(SetBCubeMeshIndices)
     bpy.utils.register_class(SetVertexAlpha)
     bpy.utils.register_class(SetFaceTextureNumber)
+    bpy.utils.register_class(MFileExtension)
+    bpy.utils.register_class(TexturePrefixPrompt)
+    bpy.utils.register_class(SetFaceTextureDropdown)
+    bpy.utils.register_class(SetLevelTexturePrefix)
     bpy.utils.register_class(RVIO_OT_SelectRevoltDirectory)
     
     # Register UI
     bpy.utils.register_class(RVIO_PT_RevoltFacePropertiesPanel)
     bpy.utils.register_class(RVIO_PT_RevoltIOToolPanel)
-    bpy.utils.register_class(RVIO_PT_RevoltHelpersPanelMesh)
     bpy.utils.register_class(RVIO_PT_RevoltSettingsPanel)
     bpy.utils.register_class(RVIO_PT_AnimModesPanel)
     bpy.utils.register_class(RVIO_PT_VertexPanel)
@@ -995,23 +1040,30 @@ def unregister():
     bpy.utils.unregister_class(RVIO_PT_VertexPanel)
     bpy.utils.unregister_class(RVIO_PT_AnimModesPanel)
     bpy.utils.unregister_class(RVIO_PT_RevoltSettingsPanel)
-    bpy.utils.unregister_class(RVIO_PT_RevoltHelpersPanelMesh)
     bpy.utils.unregister_class(RVIO_PT_RevoltIOToolPanel)
     bpy.utils.unregister_class(RVIO_PT_RevoltFacePropertiesPanel)
     
     # Unregister Operators
     bpy.utils.unregister_class(RVIO_OT_SelectRevoltDirectory)
+    bpy.utils.unregister_class(SetLevelTexturePrefix)
+    bpy.utils.unregister_class(SetFaceTextureDropdown)
+    bpy.utils.unregister_class(TexturePrefixPrompt)
+    bpy.utils.unregister_class(MFileExtension)
     bpy.utils.unregister_class(SetFaceTextureNumber)
     bpy.utils.unregister_class(SetVertexAlpha)
     bpy.utils.unregister_class(SetBCubeMeshIndices)
     bpy.utils.unregister_class(PasteTrigger)
     bpy.utils.unregister_class(CopyTrigger)
     bpy.utils.unregister_class(DuplicateTrigger)
+    bpy.utils.unregister_class(DuplicateFobObject)
+    bpy.utils.unregister_class(CreateFobObject)
+    bpy.utils.unregister_class(MarkAsModel)
     bpy.utils.unregister_class(CreateTrigger)
     bpy.utils.unregister_class(ButtonTriggerHide)
     bpy.utils.unregister_class(ReverseTrackZone)
     bpy.utils.unregister_class(AddTrackZone)
     bpy.utils.unregister_class(ButtonZoneHide)
+    bpy.utils.unregister_class(CarAutoShader)
     bpy.utils.unregister_class(TexAnimGrid)
     bpy.utils.unregister_class(TexAnimTransform)
     bpy.utils.unregister_class(PreviewPrevFrame)
@@ -1034,12 +1086,13 @@ def unregister():
     bpy.utils.unregister_class(CopyAndRemoveAxles)
     bpy.utils.unregister_class(ConfirmLoadOriginalAxle)
     bpy.utils.unregister_class(AxleMessageBox)
-    bpy.utils.unregister_class(SelectDefaultTexture)
+    bpy.utils.unregister_class(ExportExtension)
     bpy.utils.unregister_class(CopyWheelParams)
     bpy.utils.unregister_class(TextureAssigner)
-    bpy.utils.unregister_class(MaterialAssignmentFin)
+    bpy.utils.unregister_class(MaterialAssignmentImportExport)
     bpy.utils.unregister_class(MaterialAssignmentAuto)
     bpy.utils.unregister_class(MaterialAssignment)
+    bpy.utils.unregister_class(ClearExtraAssignments)
     bpy.utils.unregister_class(TexturesRename)
     bpy.utils.unregister_class(TexturesSave)
     bpy.utils.unregister_class(LaunchRV)
@@ -1055,11 +1108,26 @@ def unregister():
     bpy.utils.unregister_class(RVIO_OT_ReadCarParameters)
     bpy.utils.unregister_class(ExportRV)
     bpy.utils.unregister_class(ImportRV)
-    bpy.utils.unregister_class(ConfirmShadowSaveOperator)
-    bpy.utils.unregister_class(ShadowSaveOperator)
     bpy.utils.unregister_class(DialogOperator)
     
+    del bpy.types.Scene.prompt_required
+    
+    for i in range(MAX_MODEL_SLOTS):
+        for key in (f"m_texture_path_{i}", f"m_texture_mode_{i}", f"m_model_name_{i}"):
+            if key in bpy.types.Scene.__annotations__:
+                del bpy.types.Scene.__annotations__[key]
+    
+    del bpy.types.Scene.selected_car_texture
+    del bpy.types.Object.is_model
+    del bpy.types.Scene.pending_import_filepath
     del bpy.types.Scene.default_texture_name
+    del bpy.types.Scene.level_texture_base
+    del bpy.types.Object.fob_creation_index
+    del bpy.types.Object.fob_subtype_4
+    del bpy.types.Object.fob_subtype_3
+    del bpy.types.Object.fob_subtype_2
+    del bpy.types.Object.fob_subtype_1
+    del bpy.types.Object.fob_type
     del bpy.types.Scene.copied_trigger_properties
     del bpy.types.Object.low_flag_slider
     del bpy.types.Object.flag_high
@@ -1084,6 +1152,7 @@ def unregister():
     bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
     bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
 
+    del bpy.types.Scene.car_shader_color
     del bpy.types.Scene.vertex_alpha_percentage
     del bpy.types.Scene.vertex_alpha
     del bpy.types.Scene.vertex_color_picker
@@ -1126,7 +1195,6 @@ def unregister():
     del bpy.types.Scene.ta_max_slots
     del bpy.types.Scene.texture_animations
     del bpy.types.Scene.shadow_table
-    del bpy.types.Scene.shadow_strength
     del bpy.types.Scene.shadow_resolution
     del bpy.types.Scene.shadow_quality
     del bpy.types.Object.ignore_ncp

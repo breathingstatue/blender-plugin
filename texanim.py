@@ -130,120 +130,112 @@ def copy_uv_to_frame(context):
     scene = context.scene
     obj = context.object
 
-    if context.object.data:
-        try:
-            bm = bmesh.from_edit_mesh(obj.data)
-            if bm is None:
-                msg_box("Failed to access BMesh. Ensure the object is in Edit Mode.", "ERROR")
-                return
-            
-            uv_layer = bm.loops.layers.uv.get("UVMap")
-            if not uv_layer:
-                msg_box("Please create a UV layer first", "ERROR")
-                return
-            
-            # Iterate over selected faces
-            selected_faces = [f for f in bm.faces if f.select]
-            if not selected_faces:
-                msg_box("Please select at least one face", "ERROR")
-                return
+    if not obj or obj.type != 'MESH' or not obj.data:
+        msg_box("Please select a valid mesh object in Edit Mode.", "ERROR")
+        return
 
-            for face in selected_faces:
-                for lnum, loop in enumerate(face.loops):
-                    uv = loop[uv_layer].uv
-                    if lnum == 0:
-                        scene.ta_current_frame_uv0 = (uv[0], uv[1])
-                    elif lnum == 1:
-                        scene.ta_current_frame_uv1 = (uv[0], uv[1])
-                    elif lnum == 2:
-                        scene.ta_current_frame_uv2 = (uv[0], uv[1])
-                    elif lnum == 3:
-                        scene.ta_current_frame_uv3 = (uv[0], uv[1])
+    if obj.mode != 'EDIT':
+        bpy.ops.object.mode_set(mode='EDIT')
+
+    bm = bmesh.from_edit_mesh(obj.data)
             
-            # Update the BMesh data back to the mesh
-            bmesh.update_edit_mesh(obj.data)
+    uv_layer = bm.loops.layers.uv.get("UVMap")
+    if not uv_layer:
+        msg_box("Please create a UV layer first", "ERROR")
+        return
+            
+    # Iterate over selected faces
+    selected_faces = [f for f in bm.faces if f.select]
+    if not selected_faces:
+        msg_box("Please select at least one face", "ERROR")
+        return
+
+    for face in selected_faces:
+        for lnum, loop in enumerate(face.loops):
+            uv = loop[uv_layer].uv
+            if lnum == 0:
+                scene.ta_current_frame_uv0 = (uv[0], uv[1])
+            elif lnum == 1:
+                scene.ta_current_frame_uv1 = (uv[0], uv[1])
+            elif lnum == 2:
+                scene.ta_current_frame_uv2 = (uv[0], uv[1])
+            elif lnum == 3:
+                scene.ta_current_frame_uv3 = (uv[0], uv[1])
+            
+    # Update the BMesh data back to the mesh
+    bmesh.update_edit_mesh(obj.data)
         
-        except RuntimeError as e:
-            msg_box(f"An error occurred: {str(e)}", "ERROR")
-    
-    else:
-        print("No object for UV anim")
-
 def copy_frame_to_uv(context):
     scene = context.scene
     obj = context.object
 
-    if obj.data:
-        bm = get_edit_bmesh(obj)
-        
-        # Check if bm is None
-        if bm is None:
-            msg_box("No BMesh data available. Ensure the object is in edit mode and has a valid mesh.", "ERROR")
-            return
-        
-        # Get the texture number from the current frame
-        texture_number = scene.ta_current_frame_tex
-        
-        # Generate the texture letter using the int_to_texture function
-        texture_letter = int_to_texture(texture_number)
-        
-        # Find the matching texture image
-        texture_image = find_matching_texture(texture_letter)
-        
-        if not texture_image:
-            msg_box(f"Texture ending with '{texture_letter}' not found in images!", "ERROR")
-            return
-        
-        # Look for the material that uses this texture image
-        material = find_material_using_texture(obj, texture_image)
-        
-        if not material:
-            msg_box(f"Material using texture '{texture_image.name}' not found!", "ERROR")
-            return
-        
-        # Get the index of the material in the object's material slots
-        material_index = obj.data.materials.find(material.name)
-        
-        # Iterate over selected faces
-        selected_faces = [f for f in bm.faces if f.select]
-        if not selected_faces:
-            msg_box("Please select at least one face", "ERROR")
-            return
+    if not obj or obj.type != 'MESH' or not obj.data:
+        msg_box("Please select a valid mesh object in Edit Mode.", "ERROR")
+        return
 
-        # Assign the material to the selected faces
-        for sel_face in selected_faces:
-            sel_face.material_index = material_index
+    if obj.mode != 'EDIT':
+        bpy.ops.object.mode_set(mode='EDIT')
 
-        # Now handle UV coordinates only if UV layer exists
-        uv_layer = bm.loops.layers.uv.get("UVMap")
-        if not uv_layer:
-            msg_box("Please create a UV layer first")
-            return
+    bm = bmesh.from_edit_mesh(obj.data)
+        
+    # Get the texture number from the current frame
+    texture_number = scene.ta_current_frame_tex
+        
+    # Generate the texture letter using the int_to_texture function
+    texture_letter = int_to_texture(texture_number)
+        
+    # Find the matching texture image
+    texture_image = find_matching_texture(texture_letter)
+        
+    if not texture_image:
+        msg_box(f"Texture ending with '{texture_letter}' not found in images!", "ERROR")
+        return
+        
+    # Look for the material that uses this texture image
+    material = find_material_using_texture(obj, texture_image)
+        
+    if not material:
+        msg_box(f"Material using texture '{texture_image.name}' not found!", "ERROR")
+        return
+        
+    # Get the index of the material in the object's material slots
+    material_index = obj.data.materials.find(material.name)
+        
+    # Iterate over selected faces
+    selected_faces = [f for f in bm.faces if f.select]
+    if not selected_faces:
+        msg_box("Please select at least one face", "ERROR")
+        return
 
-        for sel_face in selected_faces:
-            for lnum, loop in enumerate(sel_face.loops):
-                uv = getattr(scene, f"ta_current_frame_uv{lnum}")
-                loop[uv_layer].uv = uv
+    # Assign the material to the selected faces
+    for sel_face in selected_faces:
+        sel_face.material_index = material_index
 
-        # Update the BMesh data back to the mesh
-        bmesh.update_edit_mesh(obj.data)
-    else:
-        print("No object for UV anim")
+    # Now handle UV coordinates only if UV layer exists
+    uv_layer = bm.loops.layers.uv.get("UVMap")
+    if not uv_layer:
+        msg_box("Please create a UV layer first")
+        return
 
+    for sel_face in selected_faces:
+        for lnum, loop in enumerate(sel_face.loops):
+            uv = getattr(scene, f"ta_current_frame_uv{lnum}")
+            loop[uv_layer].uv = uv
+
+    # Update the BMesh data back to the mesh
+    bmesh.update_edit_mesh(obj.data)
+    
 def find_matching_texture(texture_letter):
     # Remove the file extension if present in the texture letter
     texture_letter = texture_letter.replace(".bmp", "").lower()
-    print(f"Looking for texture ending with: {texture_letter}")
     
     # Iterate through all images in bpy.data.images
     for image in bpy.data.images:
         image_name_lower = image.name.lower()
         base_name, extension = os.path.splitext(image_name_lower)
-        print(f"Checking image: {image.name}, base_name: {base_name}, extension: {extension}")
         
         # Check if the base name ends with the texture letter
         if base_name.endswith(texture_letter):
-            print(f"Found matching texture: {image.name}")
             return image
 
     return None

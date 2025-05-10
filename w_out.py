@@ -54,10 +54,13 @@ def create_split_mesh(original_mesh, face_indices, original_obj_name, created_ob
     vc_layers = {layer.name: split_bm.loops.layers.color.new(layer.name) for layer in original_bm.loops.layers.color} if original_bm.loops.layers.color else {}
 
     env_layer = split_bm.loops.layers.color.new("Env") if original_bm.loops.layers.color.get("Env") else None
-    env_alpha_layer = split_bm.faces.layers.float.new("EnvAlpha") if original_bm.faces.layers.float.get("EnvAlpha") else None
+    env_alpha_src = original_bm.faces.layers.float.get("EnvAlpha")
+    env_alpha_layer = split_bm.faces.layers.float.new("EnvAlpha") if env_alpha_src else None
     va_layer = split_bm.loops.layers.color.new("Alpha") if original_bm.loops.layers.color.get("Alpha") else None
-    texnum_layer = split_bm.faces.layers.int.new("Texture Number") if original_bm.faces.layers.int.get("Texture Number") else None
-    type_layer = split_bm.faces.layers.int.new("Type") if original_bm.faces.layers.int.get("Type") else None
+    texnum_src = original_bm.faces.layers.int.get("Texture Number")
+    texnum_layer = split_bm.faces.layers.int.new("Texture Number") if texnum_src else None
+    type_src = original_bm.faces.layers.int.get("Type")
+    type_layer = split_bm.faces.layers.int.new("Type") if type_src else None
 
     # Custom properties layers
     custom_props_layers = {}
@@ -78,7 +81,6 @@ def create_split_mesh(original_mesh, face_indices, original_obj_name, created_ob
         try:
             new_face = split_bm.faces.new(new_verts)
         except ValueError:
-            print(f"Skipping invalid face creation for vertices: {[v.index for v in new_verts]}")
             continue
 
         # Ensure the material index is valid before assigning it
@@ -97,15 +99,15 @@ def create_split_mesh(original_mesh, face_indices, original_obj_name, created_ob
         if env_layer:
             for l, loop in enumerate(face.loops):
                 new_loop[env_layer] = loop[original_bm.loops.layers.color["Env"]]
-        if env_alpha_layer:
-            new_face[env_alpha_layer] = face[original_bm.faces.layers.float["EnvAlpha"]]
+        if env_alpha_layer and env_alpha_src:
+            new_face[env_alpha_layer] = face[env_alpha_src]
         if va_layer:
             for l, loop in enumerate(face.loops):
                 new_loop[va_layer] = loop[original_bm.loops.layers.color["Alpha"]]
-        if texnum_layer:
-            new_face[texnum_layer] = face[original_bm.faces.layers.int["Texture Number"]]
-        if type_layer:
-            new_face[type_layer] = face[original_bm.faces.layers.int["Type"]]
+        if texnum_layer and texnum_src:
+            new_face[texnum_layer] = face[texnum_src]
+        if type_layer and type_src:
+            new_face[type_layer] = face[type_src]
 
         for prop, layer in custom_props_layers.items():
             if layer:
@@ -131,7 +133,6 @@ def create_split_mesh(original_mesh, face_indices, original_obj_name, created_ob
             setattr(new_obj, prop, getattr(original_mesh, prop))
 
     split_bm.free()
-    print(f"Created and linked new mesh with {len(face_indices)} faces.")
     return new_obj
 
 def calculate_bounding_box(mesh):
@@ -303,7 +304,7 @@ def fast_batch_assign_materials(mesh_objects, material_choice):
     bpy.ops.mesh.select_all(action='SELECT')
 
     # Apply material assignment for all selected objects
-    bpy.ops.object.assign_materials_auto()
+    bpy.ops.object.assign_materials_impexp()
 
     # Switch back to object mode after processing
     bpy.ops.object.mode_set(mode='OBJECT')

@@ -6,23 +6,22 @@ place 'io_revolt' in Blender/"version"/scripts/addons/
 
 -Theman with the help of AI and a bunch of friends in the RV I/O community.
 
-TO DO LIST:
 
-20.25.?
-Objects (.fob)
-Car AutoShader
-broader .m (model) support
+20.25.50
+Objects import / export / duplicate (.fob)
+Car Auto Shader
+fixed some functions (e.g. 'Rename Textures' and 'Save Textures to Disk')
+improved UI
+fixed CarShadow generator
+improved handling of textures / texture pages
+broader .m (Model) Support
 
 FULL CHANGELOG:
 
 20.25.35
-added NCP Material Preview
-cleaned the __init__ module
-maintenance on import / export modules regarding different materials
-fixed solution for different textures/car parts export
-car parts can have any default texture, not just car.bmp
-hotfixed Vertex Layer creation
-fixed a bug with multiple ViewLayers in Blender
+added NCP Material Preview 
+car parts can have any default texture, not just car.bmp 
+fixed a bug with multiple ViewLayers in Blender 
 
 20.25.2
 improved car import / parameters export

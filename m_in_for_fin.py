@@ -1,9 +1,9 @@
 ﻿"""
-Name:    m_in
-Purpose: Imports Re-Volt model files (.m)
+Name:    m_in_for_fin
+Purpose: Imports Re-Volt model files (.m) for Instances (.fin)
 
 Description:
-Imports Models.
+Imports Models for Instance files.
 """
 
 import os
@@ -27,13 +27,15 @@ if "bpy" in locals():
     importlib.reload(rvstruct)
     importlib.reload(img_in)
 
-def import_file(filepath, scene, model_name=None):
+def import_file(filepath, scene, model_name=None, texture_base_name=None):
     meshes = []
     obj = None
 
     with open(filepath, 'rb') as file:
         filename = os.path.basename(filepath)
         base_name = os.path.splitext(os.path.basename(filepath))[0].lower()
+        if not model_name:
+            model_name = base_name
         file.seek(0, os.SEEK_END)
         file_end = file.tell()
         file.seek(0, os.SEEK_SET)
@@ -62,44 +64,19 @@ def import_file(filepath, scene, model_name=None):
             dprint(f"Creating Blender object for {filename}...")
             obj = bpy.data.objects.new(filename, me)
 
-            # Tag this object as a model so that texture assignment uses the correct slot
-            obj["is_model"] = True
-            
-            # Register model in an unused texture slot
-            for i in range(MAX_MODEL_SLOTS):
-                if not scene.get(f"m_model_name_{i}", ""):
-                    scene[f"m_model_name_{i}"] = base_name
-                    scene[f"m_texture_mode_{i}"] = "LEVEL_TEXTURES"  # or TEXTURE_NAME if that’s what you want
-                    scene[f"m_texture_path_{i}"] = "C:/GAMES/RVGL/packs/game_files/levels/toy2/"  # Or ask from user
-                    break
+            # Fix: ensure object is linked to a visible collection
+            if obj.name not in bpy.context.view_layer.objects:
+                bpy.context.collection.objects.link(obj)
 
-            if obj.name not in bpy.context.scene.collection.objects:
-                bpy.context.scene.collection.objects.link(obj)
-            else:
-                print(f"Object '{obj.name}' is already in the scene collection.")
-    
+            obj["is_model"] = True
+
             bpy.context.view_layer.objects.active = obj
-            assign_uv_tex_material(obj, base_name, model_name)
+            assign_uv_tex_material(obj, base_name=texture_base_name, model_name=model_name)
 
     if obj:  # Only proceed if an object was successfully created
         texture_animations = [animation.as_dict() for animation in model.animations]
         scene.texture_animations = str(texture_animations)
         scene.ta_max_slots = model.animation_count
-
-        # Apply material settings for both COL and UV_TEX after importing
-        obj.data.material_choice = 'COL'
-        bpy.context.view_layer.objects.active = obj
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.select_all(action='SELECT')
-        bpy.ops.object.assign_materials_impexp()
-        bpy.ops.object.mode_set(mode='OBJECT')
-
-        obj.data.material_choice = 'UV_TEX'
-        bpy.context.view_layer.objects.active = obj
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.select_all(action='SELECT')
-        bpy.ops.object.assign_materials_impexp()
-        bpy.ops.object.mode_set(mode='OBJECT')
     
     return obj
 
@@ -239,32 +216,36 @@ def assign_uv_tex_material(obj, base_name=None, model_name=None):
                 elif source_mode == "LEVEL_TEXTURES":
                     base_name_for_texture = os.path.basename(texture_path.rstrip("/\\")).lower()
 
-                # DEBUG OUTPUT HERE
-                print(f"[DEBUG] assign_uv_tex_material matched model slot {i}")
-                print(f"[DEBUG] model_name = {model_name}")
-                print(f"[DEBUG] source_mode = {source_mode}")
-                print(f"[DEBUG] texture_path = {texture_path}")
-                print(f"[DEBUG] base_name_for_texture = {base_name_for_texture}")
-                break
-
     for face in bm.faces:
-        tex_num = face[texnum_layer]
+        # Determine material_key depending on mode
+        material_key = None
 
         if source_mode == 'TEXTURE_NAME':
             material_key = f"{base_name_for_texture}.bmp"
+
         elif source_mode == 'LEVEL_TEXTURES':
+            if not texnum_layer or face[texnum_layer] < 0:
+                print(f"[DEBUG] Skipping face — LEVEL_TEXTURES mode but tex_num is invalid: {face[texnum_layer]}")
+                continue
+            tex_num = face[texnum_layer]
             material_key = int_to_texture(tex_num, name=base_name_for_texture)
+
         else:
+            # VERTEX_COLOR — skip assigning material entirely
             continue
 
-        # DEBUG MATERIAL NAME FOR EACH FACE
-        print(f"[DEBUG] Trying to assign material: {material_key} for face with tex_num {tex_num}")
+        if material_key is None:
+            continue
+
+        print(f"[DEBUG] Trying to assign material: {material_key}")
 
         if material_key in bmp_materials:
             material = bmp_materials[material_key]
             if material.name not in obj.data.materials:
                 obj.data.materials.append(material)
             face.material_index = obj.data.materials.find(material.name)
+        else:
+            print(f"[WARN] Material not found for key: {material_key}")
 
     bm.to_mesh(obj.data)
     bm.free()

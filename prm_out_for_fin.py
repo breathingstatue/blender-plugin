@@ -1,10 +1,9 @@
 """
 Name:    prm_out_for_fin
-Purpose: Exports Probe mesh files (.prm)
+Purpose: Exports Probe mesh files (.prm) for Instances (.fin)
 
 Description:
-Meshes used for instance meshes.
-
+Meshes used for instanced objects.
 """
 
 if "bpy" in locals():
@@ -30,12 +29,6 @@ def export_file(filepath, scene):
     obj = bpy.context.view_layer.objects.active
     print("Exporting PRM for {}...".format(obj.name))
     meshes = []
-
-    # Ensure we're in object mode before any operations
-    bpy.ops.object.mode_set(mode='OBJECT')
-
-    # Get all mesh objects in the scene
-    mesh_objects = [obj for obj in scene.objects if obj.type == 'MESH']
 
     # Checks if other LoDs are present
     if "|q" in obj.data.name:
@@ -162,9 +155,9 @@ def export_mesh(me, obj, scene, filepath, world=None):
                        bm.faces.layers.float.new("EnvAlpha"))
     va_layer = (bm.loops.layers.color.get("Alpha") or
                 bm.loops.layers.color.new("Alpha"))
-    texnum_layer = bm.faces.layers.int.get("Texture Number")
-    type_layer = (bm.faces.layers.int.get("Type") or
-                  bm.faces.layers.int.new("Type"))
+    texnum_layer = (bm.faces.layers.int.get("Texture Number") or
+                    bm.faces.layers.int.new("Texture Number"))
+    type_layer = bm.faces.layers.int.get("Type")
 
     # Creates an empty PRM or Mesh structure
     if world is None:

@@ -1,6 +1,6 @@
 """
 Name:    prm_in_for_w
-Purpose: Imports Probe mesh files (.prm)
+Purpose: Imports Probe mesh files (.prm) for World files (.w)
 
 Description:
 Meshes used for tracks.
@@ -18,7 +18,8 @@ from . import rvstruct
 from . import img_in
 from . import w_in
 from .rvstruct import PRM
-from .common import to_blender_coord, to_blender_axis, FACE_QUAD, reverse_quad, FACE_ENV, dprint
+from .common import int_to_texture, get_world_texture_path, to_blender_coord, to_blender_axis, FACE_QUAD
+from .common import reverse_quad, FACE_ENV, dprint
 
 # Reload imports if 'bpy' is already in locals
 if "bpy" in locals():
@@ -40,7 +41,7 @@ def import_w_mesh(prm, filename, filepath, scene, world, envlist=None):
     return me
 
 def add_rvmesh_to_bmesh(prm, bm, me, filepath, scene, envlist=None):
-    from .common import get_track_texture_path
+    from .common import get_world_texture_path
     
     uv_layer = bm.loops.layers.uv.new("UVMap")
     vc_layer = bm.loops.layers.color.new("Col")
@@ -69,11 +70,10 @@ def add_rvmesh_to_bmesh(prm, bm, me, filepath, scene, envlist=None):
             face = bm.faces.new(verts)
             created_faces.append(face)
         except ValueError as e:
-            dprint(f"Could not create face: {e}")
             continue
 
         if poly.texture >= 0:
-            texture_path = get_track_texture_path(filepath, poly.texture, scene)
+            texture_path = get_world_texture_path(filepath, poly.texture, scene)
             if texture_path and os.path.isfile(texture_path):
                 material_name = os.path.basename(texture_path)
                 material = bpy.data.materials.get(material_name)
@@ -150,22 +150,30 @@ def assign_uv_tex_material(obj):
     uv_layer = bm.loops.layers.uv.verify()
     texnum_layer = bm.faces.layers.int.get("Texture Number") or bm.faces.layers.int.new("Texture Number")
 
-    # Fetch .bmp materials
-    bmp_materials = get_bmp_materials()
+    filepath = obj.get("source_path", "")
+    if not filepath:
+        print(f"[WARN] Object {obj.name} is missing 'source_path'. Cannot resolve textures.")
+        return
 
-    # Assign materials based on texture number
     for face in bm.faces:
         tex_num = face[texnum_layer]
-        material_key = f"texture{tex_num}.bmp"  # Construct the key as you expect it to appear
-        if material_key in bmp_materials:
-            material = bmp_materials[material_key]
-            face.material_index = obj.data.materials.find(material.name)
+        if tex_num == -1:
+            continue
+
+        texture_path = get_world_texture_path(filepath, tex_num, bpy.context.scene)
+        if texture_path and os.path.isfile(texture_path):
+            material_name = os.path.basename(texture_path)
+            mat = bpy.data.materials.get(material_name)
+            if mat and mat.name not in obj.data.materials:
+                obj.data.materials.append(mat)
+            if mat:
+                face.material_index = obj.data.materials.find(mat.name)
 
     if obj.mode != 'EDIT':
         bm.to_mesh(obj.data)
         bm.free()
 
-    obj.data.update()  # Ensure the mesh updates in the viewport
+    obj.data.update()
                 
 def get_bmp_materials():
     bmp_materials = {}
@@ -175,7 +183,6 @@ def get_bmp_materials():
                 if node.type == 'TEX_IMAGE' and node.image and node.image.filepath.lower().endswith('.bmp'):
                     bmp_materials[node.image.name] = mat
     return bmp_materials
-
 
 def apply_env_data(mesh_data, world, polygons, envlist, obj_name):
     """

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Name:    layers
 Purpose: Provides functions for accessing and modifying layer values.
 
@@ -13,7 +13,7 @@ behavior.
 from hmac import new
 import bpy
 import bmesh
-from .common import NCP_PROP_MASK, FACE_PROP_MASK, objects_to_bmesh, get_edit_bmesh, msg_box, COLORS, MATERIALS
+from .common import TEX_PAGES_MAX, NCP_PROP_MASK, FACE_PROP_MASK, objects_to_bmesh, get_edit_bmesh, msg_box, COLORS, MATERIALS
 
 def get_average_vcol0(verts, layer):
     """ Gets the average vertex color of loops all given VERTS """
@@ -58,31 +58,46 @@ def get_alpha_items():
 
 def get_face_texture(self):
     obj = bpy.context.object
-    bm = bmesh.from_edit_mesh(obj.data) if obj.mode == 'EDIT' else bmesh.new()
+    if obj.mode != 'EDIT':
+        return -3  # No face selected
 
-    layer = (bm.faces.layers.int.get("Texture Number") or
-             bm.faces.layers.int.new("Texture Number"))
+    bm = bmesh.from_edit_mesh(obj.data)
+    layer = bm.faces.layers.int.get("Texture Number")
+    just_created = False
+    if not layer:
+        layer = bm.faces.layers.int.new("Texture Number")
+        just_created = True
 
     selected_faces = [face for face in bm.faces if face.select]
-    textures_differ = any(
-        [face[layer] != selected_faces[0][layer] for face in selected_faces]
-    )
-    if len(selected_faces) == 0:
-        return -3
-    elif textures_differ:
-        return -2
-    else:
-        return selected_faces[0][layer]
+    if not selected_faces:
+        return -3  # No face selected
+
+    if just_created:
+        return -1  # Layer was created just now, so user hasn’t assigned anything
+
+    first_value = selected_faces[0][layer]
+    if any(face[layer] != first_value for face in selected_faces):
+        return -2  # Multiple values
+
+    return first_value
 
 def set_face_texture(self, value):
     obj = bpy.context.object
-    bm = bmesh.from_edit_mesh(obj.data) if obj.mode == 'EDIT' else bmesh.new()
-    layer = (bm.faces.layers.int.get("Texture Number") or
-             bm.faces.layers.int.new("Texture Number"))
+    if obj.mode != 'EDIT':
+        return
+
+    bm = bmesh.from_edit_mesh(obj.data)
+    layer = bm.faces.layers.int.get("Texture Number") or bm.faces.layers.int.new("Texture Number")
+
+    if value == -1:
+        return  # NONE, do nothing
+
     for face in bm.faces:
         if face.select:
             face[layer] = value
 
+    bmesh.update_edit_mesh(obj.data, destructive=False)
+            
 def get_face_env(self):
     obj = bpy.context.edit_object
     bm = bmesh.from_edit_mesh(obj.data)
@@ -585,12 +600,10 @@ def select_ncp_material(self, context):
     edit_object = bpy.context.edit_object
 
     if edit_object is None or edit_object.type != 'MESH' or not edit_object.mode == 'EDIT':
-        print("Error: No active mesh in Edit Mode.")
         return
 
     bm = get_edit_bmesh(edit_object)
     if bm is None or not hasattr(bm, 'faces'):
-        print("Error: Failed to initialize bmesh or bmesh has no faces.")
         return
 
     material_layer = bm.faces.layers.int.get("Material")

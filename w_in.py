@@ -49,8 +49,9 @@ def import_file(filepath, scene):
         bpy.context.scene.collection.objects.link(main_w)
 
     for rvmesh in meshes:
-        me = import_w_mesh(rvmesh, os.path.basename(filepath),filepath, scene, world, envlist=None)
+        me = import_w_mesh(rvmesh, os.path.basename(filepath), filepath, scene, world, envlist=None)
         ob = bpy.data.objects.new(os.path.basename(filepath), me)
+        ob["source_path"] = filepath  # Store the .w path for material lookup
         bpy.context.collection.objects.link(ob)
         bpy.context.view_layer.objects.active = ob
 
@@ -207,7 +208,7 @@ def fast_batch_assign_material_choice(mesh_objects, material_choice):
     # Enter edit mode, select all faces, and apply material assignment
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.mesh.select_all(action='SELECT')
-    bpy.ops.object.assign_materials_auto()
+    bpy.ops.object.assign_materials_impexp()
 
     # Return to object mode after processing
     bpy.ops.object.mode_set(mode='OBJECT')
