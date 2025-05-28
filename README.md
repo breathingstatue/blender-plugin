@@ -7,7 +7,7 @@ place 'io_revolt' in Blender/"version"/scripts/addons/
 -Theman with the help of AI and a bunch of friends in the RV I/O community.
 
 
-20.25.50
+20.25.51
 Objects import / export / duplicate (.fob)
 Car Auto Shader
 fixed some functions (e.g. 'Rename Textures' and 'Save Textures to Disk')

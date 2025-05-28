@@ -144,22 +144,6 @@ OBJECT_SUBTYPE_VALUES = {
         2: list(range(201)),
         3: list(range(1, 201))
     },
-    27: {  # Object Thrower
-        0: list(range(256)),
-        1: [  # Object names
-            "BARREL", "BEACHBALL", "PLANET", "PLANE", "COPTER", "DRAGON", "WATER", "TROLLEY", "BOAT", "SPEEDUP",
-            "RADAR", "BALLOON", "HORSE", "TRAIN", "STROBE", "FOOTBALL", "SPARKGEN", "SPACEMAN", "SHOCKWAVE",
-            "FIREWORK", "PUTTYBOMB", "WATERBOMB", "ELECTROPULSE", "OILSLICK", "OILSLICK_DROPPER", "CHROMEBALL",
-            "CLONE", "TURBO", "ELECTROZAPPER", "SPRING", "PICKUP", "DISSOLVEMODEL", "FLAP", "LASER", "SPLASH",
-            "BOMBGLOW", "WEEBEL", "PROBELOGO", "CLOUDS", "NAMEWHEEL", "SPRINKLER", "SPRINKLER_HOSE",
-            "OBJECT_THROWER", "BASKETBALL", "TRACKSCREEN", "CLOCK", "CARBOX", "STREAM", "CUP", "3DSOUND", "STAR",
-            "FOX", "TUMBLEWEED", "SMALLSCREEN", "LANTERN", "SKYBOX", "SLIDER", "BOTTLE", "BUCKET", "CONE", "CAN",
-            "LILO", "GLOBAL", "RAIN", "LIGHTNING", "SHIPLIGHT", "PACKET", "ABC", "WATERBOX", "RIPPLE", "FLAG",
-            "DOLPHIN", "GARDEN_FOG", "FOGBOX", "CHOPPER", "DISCO", "CUSTOM_ANIMATION"
-        ],
-        2: list(range(-1, 101)),
-        3: ["No", "Yes"]
-    },
     33: {  # Laser
         0: list(range(1, 11)),
         1: list(range(1, 11)),
@@ -173,7 +157,7 @@ OBJECT_SUBTYPE_VALUES = {
     },
     42: {  # Object Thrower
         0: list(range(256)),
-        1: [  # Object list (copied from 27[1])
+        1: [
             "BARREL", "BEACHBALL", "PLANET", "PLANE", "COPTER", "DRAGON", "WATER", "TROLLEY", "BOAT", "SPEEDUP",
             "RADAR", "BALLOON", "HORSE", "TRAIN", "STROBE", "FOOTBALL", "SPARKGEN", "SPACEMAN", "SHOCKWAVE",
             "FIREWORK", "PUTTYBOMB", "WATERBOMB", "ELECTROPULSE", "OILSLICK", "OILSLICK_DROPPER", "CHROMEBALL",
