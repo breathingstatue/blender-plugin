@@ -111,6 +111,19 @@ class RVIO_PT_RevoltObjectPanel(bpy.types.Panel):
             tri_col.operator("object.duplicate_trigger")
             tri_col.operator("object.copy_trigger", text="Copy Trigger Values")
             tri_col.operator("object.paste_trigger", text="Paste Trigger Values")
+            
+        # Visibox properties
+        if obj.get("is_visibox"):
+            visibox_box = layout.box()
+            visibox_box.label(text="Visibox Properties")
+            visibox_col = visibox_box.column(align=True)
+
+            typ = obj.get("visibox_type", "1")
+            id_ = obj.get("visibox_id", 0)
+
+            type_name = "Camera" if typ == '1' else "Cubes" if typ == '2' else "Unknown"
+            visibox_col.label(text=f"Type: {type_name} ({typ})")
+            visibox_col.label(text=f"ID: {id_}")
 
         # Mirror properties
         mirror_box = layout.box()

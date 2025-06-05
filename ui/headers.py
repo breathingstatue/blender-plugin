@@ -11,6 +11,8 @@ class RVIO_PT_RevoltIOToolPanel(bpy.types.Panel):
 
     def draw(self, context):
 
+        self.layout.label(text="IMPORT / EXPORT:")
+
         row = self.layout.row(align=True)
         row.operator("import_scene.revolt", text="Import", icon="IMPORT")
         row.operator("wm.select_default_texture", text="Export", icon="EXPORT")
@@ -23,18 +25,24 @@ class RVIO_PT_RevoltIOToolPanel(bpy.types.Panel):
         box.operator("headers.spring_message_box", text="Copy Spring Params")
         box.operator("headers.pin_message_box", text="Copy Pin Params")
         box.operator("headers.copy_aerial_params", text="Copy Aerial Params")
-
+        
         box = self.layout.box()
         box.label(text="Texture Tools:")
         box.operator("helpers.textures_save")
+        
+        self.layout.label(text="HELPERS:")
         
         box = self.layout.box()
         box.label(text="Rename Textures")
         box.operator("helpers.texture_rename")
         
         box = self.layout.box()
-        box.label(text="Rename Selected Objects:")
+        box.label(text="Rename Selected:")
         box.operator("helpers.rename_selected_objects")
+        
+        box = self.layout.box()
+        box.label(text="Find Special Object:")
+        box.operator("object.find_special_file", icon="VIEWZOOM")
         
         box = self.layout.box()
         box.label(text="Select by Data:")
