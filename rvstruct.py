@@ -1806,3 +1806,66 @@ class Object:
     
 def clean_float(f):
     return 0.0 if abs(f) < 1e-6 else round(f, 6)
+
+class Visiboxes:
+    """
+    Reads and stores .vis file containing visiboxes (Camera or Cubes)
+    """
+    def __init__(self, file=None):
+        self.visiboxes_count = 0
+        self.visiboxes = []  # sequence of Visibox instances
+
+        if file:
+            self.read(file)
+
+    def read(self, file):
+        self.visiboxes_count = struct.unpack("<i", file.read(4))[0]
+        for i in range(self.visiboxes_count):
+            self.visiboxes.append(Visibox(file, self))
+
+    def write(self, file):
+        self.visiboxes.sort(key=lambda vb: vb.id)
+        file.write(struct.pack("<i", len(self.visiboxes)))
+        for vb in self.visiboxes:
+            vb.write(file)
+
+    def append(self, type, id, coords):
+        new_visibox = Visibox()
+        new_visibox.type = type
+        new_visibox.id = id
+        new_visibox.coords = Vector(data=coords)
+        self.visiboxes.append(new_visibox)
+        self.visiboxes_count += 1
+
+class Visibox:
+    """
+    Single visibox structure, 28 bytes: 4 metadata, 6 floats (coords)
+    """
+    def __init__(self, file=None, parent=None):
+        self.type = 1  # 1 = Camera, 2 = Cubes
+        self.id = 0
+        self.coords = None  # Vector of 6 floats (bounding box corner pairs)
+        self.parent = parent
+
+        if file:
+            self.read(file)
+
+    def __repr__(self):
+        return f"Visibox {self.id} (type {self.type})"
+
+    def read(self, file):
+        type_byte, id_byte, _padding = struct.unpack("<BBH", file.read(4))
+        self.type = type_byte
+        self.id = id_byte
+        self.coords = struct.unpack("<6f", file.read(24))
+
+    def write(self, file):
+        file.write(struct.pack("<BBH", self.type, self.id, 0))
+        file.write(struct.pack("<6f", *self.coords))
+
+    def as_dict(self):
+        return {
+            "type": self.type,
+            "id": self.id,
+            "coords": self.coords,
+        }

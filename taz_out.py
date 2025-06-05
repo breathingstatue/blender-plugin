@@ -9,6 +9,7 @@ Zone files contain numbered boxes to identify tracks space.
 
 import os
 import bpy
+import struct
 import math
 import mathutils
 from . import common
@@ -41,6 +42,8 @@ def export_file(filepath, scene):
     
     # Export all zones to the TAZ file
     with open(filepath, "wb") as file:
+        file.write(struct.pack("<l", len(zones.zones)))  # 4-byte count
+        file.write(b'\x00\x00\x00\x00')                  # 4-byte padding
         zones.write(file)
 
 def transforms_to_revolt(location, rotation_euler=(0,0,0), scale=(1,1,1)):

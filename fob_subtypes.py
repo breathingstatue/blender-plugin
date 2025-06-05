@@ -79,7 +79,6 @@ OBJECT_SUBTYPE_DESCRIPTIONS = {
     9: ["Width", "LoSpeed", "HiSpeed", "Time"],
     14: ["Type", "Sequence Num", "Sequence Count"],
     16: ["Type", "Av. Speed", "Var. Speed", "Frequency"],
-    27: ["id", "Object", "Speed", "ReUse"],
     33: ["Width", "Rand", "Object"],
     40: ["id"],
     41: ["id"],
@@ -92,11 +91,9 @@ OBJECT_SUBTYPE_DESCRIPTIONS = {
     51: ["X range", "Y range", "Z range"],
     52: ["Model"],
     53: ["Garyness"],
-    54: [],  # Lantern – no subtypes
     55: ["Level"],
     56: ["id"],
     57: ["Stop"],
-    59: [],  # Cone – no subtypes
     76: ["Type", "Start offset", "Hide in Time Trial", "Trigger ID"]
 }
 

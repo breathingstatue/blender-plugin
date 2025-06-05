@@ -7,26 +7,14 @@ Some functions that are called by operators
 (e.g. the light panel, helpers, etc.).
 """
 
-import os
 import bpy
 import bmesh
 import mathutils
-import re
-from math import pi
-from mathutils import Matrix
-import time
 from . import common
 from .common import create_material, COL_HULL, int_to_texture, texture_to_int, TRIGGER_TYPES, LOW_FLAG_OPTIONS, HIGH_FLAG_OPTIONS
+from .fob_subtypes import OBJECT_TYPE_NAMES
 import importlib
-from. rvstruct import Instances
 
-from bpy.props import (
-    FloatProperty,
-    IntProperty,
-    StringProperty,
-)
-
-# Reloading the 'common' module if it's already in locals
 if "common" in locals():
     importlib.reload(common)
 
@@ -163,3 +151,15 @@ def set_high_flag(self, value):
     
 def map_strength_to_threshold(strength: int) -> float:
     return round(0.90 - (strength - 1) * 0.05, 2)
+
+def trigger_type_items(self, context):
+    return [(str(k), v, "") for k, v in TRIGGER_TYPES.items()]
+
+def fob_type_items(self, context):
+    return [(str(k), v, "") for k, v in OBJECT_TYPE_NAMES.items()]
+
+def visibox_type_items(self, context):
+    return [
+        ('1', "Camera", "Camera visibility box"),
+        ('2', "Cubes", "Cubes visibility box")
+    ]

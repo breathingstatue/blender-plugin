@@ -1,4 +1,13 @@
-﻿import os
+﻿"""
+Name:    parameters_in
+Purpose: Import cars directly via parameters.txt.
+
+Description:
+Imports all car parts from files described in parameters.txt.
+
+"""
+
+import os
 import bpy
 import bmesh
 import importlib

@@ -9,6 +9,7 @@ Triggers contain trigger type, flag low and flag high.
 
 import os
 import bpy
+import struct
 import math
 import mathutils
 from . import common
@@ -44,6 +45,7 @@ def export_file(filepath, scene):
     
     # Export all triggers to the TRI file
     with open(filepath, "wb") as file:
+        file.write(struct.pack("<l", len(triggers.triggers)))  # 4-byte count
         triggers.write(file)
 
 def transforms_to_revolt(location, rotation_euler=(0,0,0), scale=(1,1,1)):

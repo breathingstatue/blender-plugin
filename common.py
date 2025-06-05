@@ -256,16 +256,16 @@ Supported File Formats
 FORMAT_UNK = -1
 FORMAT_BMP = 0
 FORMAT_CAR = 1
-FORMAT_TA_CSV = 2
-FORMAT_FIN = 3
-FORMAT_FOB = 4
-FORMAT_HUL = 5
-FORMAT_LIT = 6
-FORMAT_NCP = 7
-FORMAT_PRM = 8
-FORMAT_RIM = 9
-FORMAT_RTU = 10
-FORMAT_TAZ = 11
+FORMAT_FIN = 2
+FORMAT_FOB = 3
+FORMAT_HUL = 4
+FORMAT_LIT = 5
+FORMAT_NCP = 6
+FORMAT_PRM = 7
+FORMAT_RIM = 8
+FORMAT_TAZ = 9
+FORMAT_FAN = 10
+FORMAT_PAN = 11
 FORMAT_TRI = 12
 FORMAT_VIS = 13
 FORMAT_W = 14
@@ -274,7 +274,6 @@ FORMAT_M = 15
 FORMATS = {
 	FORMAT_BMP: "Bitmap (.bm*)",
 	FORMAT_CAR: "Car Parameters (.txt)",
-	FORMAT_TA_CSV: "Texture Animation Sheet (.ta.csv)",
 	FORMAT_FIN: "Instances (.fin)",
 	FORMAT_FOB: "Objects (.fob)",
 	FORMAT_HUL: "Hull (.hul)",
@@ -282,20 +281,15 @@ FORMATS = {
 	FORMAT_NCP: "Collision (.ncp)",
 	FORMAT_PRM: "Mesh (.prm)",
 	FORMAT_RIM: "Mirrors (.rim)",
-	FORMAT_RTU: "Track Editor (.rtu)",
 	FORMAT_TAZ: "Track Zones (.taz)",
+	FORMAT_FAN: "AI Nodes (.fan)",
+	FORMAT_PAN: "Position Nodes (.pan)",
 	FORMAT_TRI: "Triggers (.tri)",
 	FORMAT_VIS: "Visiboxes (.vis)",
 	FORMAT_W:   "World (.w)",
 	FORMAT_M:   "Model (.m)"
 }
 
-
-"""
-Texture Animation Header.
-"""
-
-TA_CSV_HEADER = "Slot,Frame,Texture,Delay,U0,V0,U1,V1,U2,V2,U3,V3"
 
 """
 Conversion functions for Re-Volt structures.
@@ -319,18 +313,14 @@ def to_revolt_camber(camber_in_radians):
 def to_blender_coord(vec):
 	return (vec[0] * SCALE, vec[2] * SCALE, -vec[1] * SCALE)
 
-
 def to_blender_scale(num):
 	return num * SCALE
-
 
 def to_revolt_coord(vec):
 	return (vec[0] / SCALE, -vec[2] / SCALE, vec[1] / SCALE)
 
-
 def to_revolt_axis(vec):
 	return (vec[0], -vec[2], vec[1])
-
 
 def to_revolt_scale(num):
 	return num / SCALE
@@ -350,12 +340,10 @@ def to_or_matrix(matrix):
 		(matrix[0][1], -matrix[2][1],  matrix[1][1])
 	]
 
-
 def rvbbox_from_bm(bm):
 	""" The bbox of Blender objects has all edge coordinates. RV just stores the
 	mins and max for each axis. """
 	return rvbbox_from_verts(bm.verts)
-
 
 def rvbbox_from_verts(verts):
 	xlo = min(v.co[0] for v in verts) / SCALE
@@ -366,10 +354,8 @@ def rvbbox_from_verts(verts):
 	zhi = max(v.co[1] for v in verts) / SCALE
 	return(xlo, xhi, ylo, yhi, zlo, zhi)
 
-
 def get_distance(v1, v2):
 	return sqrt((v1[0] - v2[0])**2 + (v1[1] - v2[1])**2 + (v1[2] - v2[2])**2)
-
 
 def center_from_rvbbox(rvbbox):
 	return (
@@ -378,14 +364,12 @@ def center_from_rvbbox(rvbbox):
 		(rvbbox[4] + rvbbox[5]) / 2,
 	)
 
-
 def radius_from_bmesh(bm, center):
 	""" Gets the radius measured from the furthest vertex."""
 	radius = max(
 		[get_distance(center, to_revolt_coord(v.co)) for v in bm.verts]
 	)
 	return radius
-
 
 def reverse_quad(quad, tri=False):
 	if tri:
@@ -787,45 +771,51 @@ def get_model_texture_path(filepath, tex_index, scene, model_name):
     return None
 
 def get_format(fstr):
-	"""
-	Gets the format by the ending and returns an int
-	"""
-	fstr = fstr.lower()  # support uppercase letters
-	if os.sep in fstr:
-		fstr = fstr.split(os.sep)[-1]
-	try:
-		fname, ext = fstr.split(".", 1)
-	except:
-		fname, ext = ("", "")
+    """
+    Gets the format by the ending and returns an int
+    """
+    fstr = fstr.lower()  # support uppercase letters
+    if os.sep in fstr:
+        fstr = fstr.split(os.sep)[-1]
+    try:
+        fname, ext = fstr.split(".", 1)
+    except:
+        fname, ext = ("", "")
 
-	if ext.startswith("bm"):
-		return FORMAT_BMP
-	elif ext == "txt":
-		return FORMAT_CAR
-	elif ext == "ta.csv":
-		return FORMAT_TA_CSV
-	elif ext == "fin":
-		return FORMAT_FIN
-	elif ext == "fob":
-		return FORMAT_FOB
-	elif ext == "hul":
-		return FORMAT_HUL
-	elif ext in ["ncp"]:
-		return FORMAT_NCP
-	elif ext in ["prm"]:
-		return FORMAT_PRM
-	elif ext == "rim":
-		return FORMAT_RIM
-	elif ext == "w":
-		return FORMAT_W
-	elif ext == "m":
-		return FORMAT_M
-	elif ext == "taz":
-		return FORMAT_TAZ
-	elif ext == "tri":
-		return FORMAT_TRI
-	else:
-		return FORMAT_UNK
+    if ext.startswith("bm"):
+        return FORMAT_BMP
+    elif ext == "txt":
+        return FORMAT_CAR
+    elif ext == "fin":
+        return FORMAT_FIN
+    elif ext == "fob":
+        return FORMAT_FOB
+    elif ext == "hul":
+        return FORMAT_HUL
+    elif ext == "lit":
+        return FORMAT_LIT
+    elif ext == "ncp":
+        return FORMAT_NCP
+    elif ext == "prm":
+        return FORMAT_PRM
+    elif ext == "rim":
+        return FORMAT_RIM
+    elif ext == "taz":
+        return FORMAT_TAZ
+    elif ext == "fan":
+        return FORMAT_FAN
+    elif ext == "pan":
+        return FORMAT_PAN
+    elif ext == "tri":
+        return FORMAT_TRI
+    elif ext == "vis":
+        return FORMAT_VIS
+    elif ext == "w":
+        return FORMAT_W
+    elif ext == "m":
+        return FORMAT_M
+    else:
+        return FORMAT_UNK
 	
 def get_model_materials(self, context):
 	return [(mat.name, mat.name, "") for mat in bpy.data.materials if mat.name.lower().endswith('.bmp')]

@@ -10,16 +10,15 @@ Mirror planes are used to determine reflective surfaces.
 import os
 import bpy
 import bmesh
+from . import common
+from . import rvstruct
+from .rvstruct import RIM, MirrorPlane
+from .common import dprint, queue_error, to_blender_coord
 
 if "common" in locals():
     import imp
     imp.reload(common)
     imp.reload(rvstruct)
-
-from . import common
-from . import rvstruct
-from .rvstruct import RIM, MirrorPlane
-from .common import dprint, queue_error, to_blender_coord
 
 def import_file(filepath, scene):
     with open(filepath, "rb") as f:

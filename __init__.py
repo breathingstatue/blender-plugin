@@ -54,8 +54,6 @@ from . import (
     rvstruct,
     taz_in,
     taz_out,
-    ta_csv_in,
-    ta_csv_out,
     tri_in,
     tri_out,
     texanim,
@@ -90,10 +88,11 @@ from .operators import SetVertexAlpha, SetFaceTextureNumber, MFileExtension, Tex
 from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, MaterialAssignment, MaterialAssignmentAuto, MaterialAssignmentImportExport
 from .operators import TextureAssigner, SetInstanceProperty, RemoveInstanceProperty, LaunchRV, TexturesSave, TexturesRename, ClearExtraAssignments
 from .operators import CopyAerialParams, AxleMessageBox, ConfirmLoadOriginalAxle, CopyAndRemoveAxles, SpringMessageBox, ConfirmLoadOriginalSpring
-from .operators import CopyAndRemoveSprings, PinMessageBox, ConfirmLoadOriginalPin, CopyAndRemovePins, CopyWheelParams
+from .operators import CopyAndRemoveSprings, PinMessageBox, ConfirmLoadOriginalPin, CopyAndRemovePins, CopyWheelParams, CreateVisibox
 from .operators import ButtonZoneHide, AddTrackZone, ReverseTrackZone, ButtonTriggerHide, CreateTrigger, MarkAsModel, CreateFobObject
 from .operators import DuplicateFobObject, DuplicateTrigger, CopyTrigger, PasteTrigger, SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere
 from .operators import ButtonCopyUvToFrame, ButtonCopyFrameToUv, PreviewNextFrame, PreviewPrevFrame, TexAnimTransform, TexAnimGrid, CarAutoShader
+from .operators import ToggleVisiboxVisibility, ToggleFOBVisibility, FindSpecialFile
 from .operators import menu_func_import, menu_func_export
 from .texanim import update_ta_max_frames, update_ta_current_slot, update_ta_current_frame, update_ta_current_frame_uv
 from .texanim import update_ta_current_frame_delay, update_ta_current_frame_tex, update_ta_max_slots
@@ -112,7 +111,7 @@ from .ui.migpanel import RVIO_PT_RevoltMIGPanel
 bl_info = {
 "name": "Re-Volt",
 "author": "Marvin Thiel & Theman",
-"version": (20, 25, 51),
+"version": (20, 25, 53),
 "blender": (4, 3, 2),
 "location": "File > Import-Export",
 "description": "Import and export Re-Volt file formats.",
@@ -895,6 +894,12 @@ def register():
     )
     
     bpy.types.Scene.copied_trigger_properties = bpy.props.PointerProperty(type=bpy.types.PropertyGroup)
+
+    bpy.types.Object.is_fob_object = bpy.props.BoolProperty(
+        name="Is FOB Object",
+        description="Marks this object as a FOB object",
+        default=False
+    )
     
     bpy.types.Object.fob_type = bpy.props.IntProperty(name="Object ID")
     bpy.types.Object.fob_subtype_1 = bpy.props.IntProperty(name="Subtype 1")
@@ -946,6 +951,48 @@ def register():
         
     bpy.types.Scene.prompt_required = bpy.props.BoolProperty(default=False)
     
+    bpy.types.Object.is_visibox = bpy.props.BoolProperty(
+        name="Is Visibox",
+        description="Marks this object as a Visibox",
+        default=False
+    )
+    
+    bpy.types.Object.visibox_type = EnumProperty(
+        name="Type",
+        description="Type of the visibox",
+        items=[
+            ('1', "Camera", "Camera visibility box"),
+            ('2', "Cubes", "Cubes visibility box")
+        ],
+        default='1'
+    )
+
+    bpy.types.Object.visibox_id = IntProperty(
+        name="ID",
+        description="ID of the visibox (-128 to 127)",
+        default=0,
+        min=-128,
+        max=127
+    )
+    
+    bpy.types.Scene.visibox_create_type = bpy.props.EnumProperty(
+        name="Visibox Type",
+        description="Type of visibox to create",
+        items=[
+            ('1', "Camera", "Camera visibility box"),
+            ('2', "Cubes", "Cubes visibility box")
+        ],
+        default='1'
+    )
+
+    bpy.types.Scene.visibox_create_id = bpy.props.IntProperty(
+        name="Visibox ID",
+        description="ID of visibox to create",
+        min=-128,
+        max=127,
+        default=0
+    )
+
     #Register Operators
     bpy.utils.register_class(DialogOperator)
     bpy.utils.register_class(ImportRV)
@@ -969,6 +1016,7 @@ def register():
     bpy.utils.register_class(MaterialAssignmentImportExport)
     bpy.utils.register_class(TextureAssigner)
     bpy.utils.register_class(CopyWheelParams)
+    bpy.utils.register_class(CreateVisibox)
     bpy.utils.register_class(ExportExtension)
     bpy.utils.register_class(AxleMessageBox)
     bpy.utils.register_class(ConfirmLoadOriginalAxle)
@@ -993,6 +1041,9 @@ def register():
     bpy.utils.register_class(TexAnimTransform)
     bpy.utils.register_class(TexAnimGrid)
     bpy.utils.register_class(CarAutoShader)
+    bpy.utils.register_class(ToggleVisiboxVisibility)
+    bpy.utils.register_class(ToggleFOBVisibility)
+    bpy.utils.register_class(FindSpecialFile)
     bpy.utils.register_class(ButtonZoneHide)
     bpy.utils.register_class(AddTrackZone)
     bpy.utils.register_class(ReverseTrackZone)
@@ -1063,6 +1114,9 @@ def unregister():
     bpy.utils.unregister_class(ReverseTrackZone)
     bpy.utils.unregister_class(AddTrackZone)
     bpy.utils.unregister_class(ButtonZoneHide)
+    bpy.utils.unregister_class(FindSpecialFile)
+    bpy.utils.unregister_class(ToggleFOBVisibility)
+    bpy.utils.unregister_class(ToggleVisiboxVisibility)
     bpy.utils.unregister_class(CarAutoShader)
     bpy.utils.unregister_class(TexAnimGrid)
     bpy.utils.unregister_class(TexAnimTransform)
@@ -1087,6 +1141,7 @@ def unregister():
     bpy.utils.unregister_class(ConfirmLoadOriginalAxle)
     bpy.utils.unregister_class(AxleMessageBox)
     bpy.utils.unregister_class(ExportExtension)
+    bpy.utils.unregister_class(CreateVisibox)
     bpy.utils.unregister_class(CopyWheelParams)
     bpy.utils.unregister_class(TextureAssigner)
     bpy.utils.unregister_class(MaterialAssignmentImportExport)
@@ -1110,6 +1165,12 @@ def unregister():
     bpy.utils.unregister_class(ImportRV)
     bpy.utils.unregister_class(DialogOperator)
     
+    del bpy.types.Scene.visibox_create_id
+    del bpy.types.Scene.visibox_create_type
+    del bpy.types.Object.visibox_id
+    del bpy.types.Object.visibox_type
+    del bpy.types.Object.is_visibox
+    
     del bpy.types.Scene.prompt_required
     
     for i in range(MAX_MODEL_SLOTS):
@@ -1128,6 +1189,7 @@ def unregister():
     del bpy.types.Object.fob_subtype_2
     del bpy.types.Object.fob_subtype_1
     del bpy.types.Object.fob_type
+    del bpy.types.Object.is_fob_object
     del bpy.types.Scene.copied_trigger_properties
     del bpy.types.Object.low_flag_slider
     del bpy.types.Object.flag_high

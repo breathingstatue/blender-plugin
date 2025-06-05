@@ -19,9 +19,6 @@ if "common" in locals():
     importlib.reload(common)
     importlib.reload(rvstruct)
 
-# Add specific imports from common as needed
-# Example: from .common import specific_function, SpecificClass
-
 def export_file(filepath, scene):
 
     objs = [obj for obj in scene.objects if obj.is_mirror_plane]

@@ -6,8 +6,13 @@ place 'io_revolt' in Blender/"version"/scripts/addons/
 
 -Theman with the help of AI and a bunch of friends in the RV I/O community.
 
+20.25.53
+Added Visiboxes (.vis) import / export / creation
+Removed ta_csv (.csv files for texture animations)
+Added / Modified some elements in the UI
+Finalized tri_out and taz_out (the beginning of the file was missing out 4-8bytes)
 
-20.25.51
+20.25.50
 Objects import / export / duplicate (.fob)
 Car Auto Shader
 fixed some functions (e.g. 'Rename Textures' and 'Save Textures to Disk')

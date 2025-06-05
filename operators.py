@@ -26,11 +26,11 @@ from .texanim import *
 from .tools import generate_chull
 from .rvstruct import *
 from . import carinfo
-from .common import MAX_MODEL_SLOTS, get_format, FORMAT_PRM, FORMAT_FIN, FORMAT_NCP, FORMAT_HUL, FORMAT_W, FORMAT_M, FORMAT_RIM, FORMAT_TA_CSV
-from .common import FORMAT_TAZ, FORMAT_TRI, FORMAT_UNK, MATERIALS, COLORS, FORMAT_FOB, get_model_materials
-from .common import get_errors, msg_box, FORMATS, to_revolt_scale, FORMAT_CAR, TEX_PAGES_MAX, int_to_texture, to_revolt_coord
-from .common import clean_model_base_name, set_level_texture_base_from_filepath, create_directional_fob_mesh, generate_fob_name
-from .common import create_directional_fob_mesh_ui
+from .common import MAX_MODEL_SLOTS, get_format, FORMAT_PRM, FORMAT_FIN, FORMAT_NCP, FORMAT_HUL, FORMAT_W, FORMAT_M, FORMAT_RIM
+from .common import FORMAT_TAZ, FORMAT_TRI, FORMAT_UNK, MATERIALS, COLORS, FORMAT_FOB, FORMAT_FAN, FORMAT_PAN, FORMAT_LIT, FORMAT_VIS
+from .common import get_model_materials, get_errors, msg_box, FORMATS, to_revolt_scale, FORMAT_CAR, TEX_PAGES_MAX, int_to_texture
+from .common import to_revolt_coord, clean_model_base_name, set_level_texture_base_from_filepath, create_directional_fob_mesh
+from .common import generate_fob_name, create_directional_fob_mesh_ui
 from .layers import set_face_env, create_or_assign_env_material
 from .parameters_out_redux import append_aerial_info, append_axle_info, append_back_left_wheel, append_back_right_wheel
 from .parameters_out_redux import append_front_left_wheel, append_front_right_wheel, append_pin_info, append_spring_info
@@ -38,6 +38,7 @@ from .parameters_out_redux import compare_and_adjust_axle_lengths, remove_import
 from .parameters_out_redux import remove_imported_springs, compare_and_adjust_pin_lengths, remove_imported_pins
 from .taz_in import create_zone
 from .texanim import copy_frame_to_uv, copy_uv_to_frame
+from .tools import trigger_type_items, fob_type_items, visibox_type_items
 from .tri_in import create_trigger
 
 from bpy.props import (
@@ -54,16 +55,21 @@ from bpy.props import (
 def update_file_extension(operator_instance):
     # Mapping from format type to extension
     ext_mapping = {
-        'PRM': '.prm',
+        'CAR': '.txt',
         'FIN': '.fin',
-        'NCP': '.ncp',
-        'HUL': '.hul',
         'FOB': '.fob',
-        'W': '.w',
-        'M': '.m',
+        'HUL': '.hul',
+        'LIT': '.lit',
+        'NCP': '.ncp',
+        'PRM': '.prm',
         'RIM': '.rim',
         'TAZ': '.taz',
-        'TRI': '.tri'
+        'FAN': '.fan',
+        'PAN': '.pan',
+        'TRI': '.tri',
+        'VIS': '.vis',
+        'W': '.w',
+        'M': '.m'
     }
     ext = ext_mapping.get(operator_instance.format_type, "")
     operator_instance.filename_ext = ext
@@ -94,7 +100,6 @@ IMPORT AND EXPORT -------------------------------------------------------------
 """
 
 class ImportRV(bpy.types.Operator):
-    """ Import Operator for all file types """
     bl_idname = "import_scene.revolt"
     bl_label = "Import Re-Volt Files"
     bl_description = "Import Re-Volt game files"
@@ -113,27 +118,18 @@ class ImportRV(bpy.types.Operator):
         print("Importing {}".format(self.filepath))
 
         try:
-            #Handle different formats
             if frmt == FORMAT_UNK:
                 self.report({'ERROR'}, "Unsupported format.")
                 return {'CANCELLED'}
-
-            elif frmt == FORMAT_PRM:
-                from . import prm_in
-                prm_in.import_file(self.filepath, context.scene)
 
             elif frmt == FORMAT_CAR:
                 from . import parameters_in
                 parameters_in.import_file(self.filepath, context.scene)
 
-            elif frmt == FORMAT_NCP:
-                from . import ncp_in
-                ncp_in.import_file(self.filepath, scene)
-
             elif frmt == FORMAT_FIN:
                 from . import fin_in
                 fin_in.import_file(self.filepath, context.scene)
-                
+
             elif frmt == FORMAT_FOB:
                 from . import fob_in
                 fob_in.import_file(self.filepath, scene)
@@ -142,22 +138,51 @@ class ImportRV(bpy.types.Operator):
                 from . import hul_in
                 hul_in.import_file(self.filepath, scene)
 
-            elif frmt == FORMAT_TA_CSV:
-                from . import ta_csv_in
-                ta_csv_in.import_file(self.filepath, scene)
+            elif frmt == FORMAT_LIT:
+                from . import lit_in
+                lit_in.import_file(self.filepath, scene)
+
+            elif frmt == FORMAT_NCP:
+                from . import ncp_in
+                ncp_in.import_file(self.filepath, scene)
+
+            elif frmt == FORMAT_PRM:
+                from . import prm_in
+                prm_in.import_file(self.filepath, context.scene)
+
+            elif frmt == FORMAT_RIM:
+                from . import rim_in
+                rim_in.import_file(self.filepath, scene)
+
+            elif frmt == FORMAT_TAZ:
+                from . import taz_in
+                taz_in.import_file(self.filepath, scene)
+
+            elif frmt == FORMAT_FAN:
+                from . import fan_in
+                fan_in.import_file(self.filepath, scene)
+
+            elif frmt == FORMAT_PAN:
+                from . import pan_in
+                pan_in.import_file(self.filepath, scene)
+
+            elif frmt == FORMAT_TRI:
+                from . import tri_in
+                tri_in.import_file(self.filepath, scene)
+
+            elif frmt == FORMAT_VIS:
+                from . import vis_in
+                vis_in.import_file(self.filepath, scene)
 
             elif frmt == FORMAT_W:
                 from . import w_in
                 w_in.import_file(self.filepath, context.scene)
-                
+
             elif frmt == FORMAT_M:
                 from . import m_in
 
-                # Save filepath and extract model name
                 context.scene.pending_import_filepath = self.filepath
                 model_name = os.path.splitext(os.path.basename(self.filepath))[0].lower()
-
-                # Assign slot 0 (or dynamically find one later)
                 context.scene.m_model_name_0 = model_name
 
                 bpy.ops.import_scene.set_texture_source(
@@ -168,23 +193,10 @@ class ImportRV(bpy.types.Operator):
 
                 return {'FINISHED'}
 
-            elif frmt == FORMAT_RIM:
-                from . import rim_in
-                rim_in.import_file(self.filepath, scene)
-        
-            elif frmt == FORMAT_TAZ:
-                from . import taz_in
-                taz_in.import_file(self.filepath, scene)
-                
-            elif frmt == FORMAT_TRI:
-                from . import tri_in
-                tri_in.import_file(self.filepath, scene)
-        
             else:
                 self.report({'ERROR'}, "Format not yet supported: {}".format(FORMATS.get(frmt, "Unknown Format")))
                 return {'CANCELLED'}
 
-            # Use the following line if your import functions might change visible aspects of the UI
             for area in context.screen.areas:
                 if area.type in ['VIEW_3D', 'PROPERTIES']:
                     area.tag_redraw()
@@ -196,7 +208,6 @@ class ImportRV(bpy.types.Operator):
             return {'CANCELLED'}
         finally:
             context.window.cursor_set("DEFAULT")
-
             return {"FINISHED"}
 
     def draw(self, context):
@@ -227,18 +238,22 @@ class ExportRV(bpy.types.Operator):
         name="Format",
         description="Choose the file format to export",
         items=[
-            ('PRM', "PRM (.prm)", "Export as PRM file"),
-            ('FIN', "FIN (.fin)", "Export as FIN file"),
-            ('NCP', "NCP (.ncp)", "Export as NCP file"),
-            ('HUL', "HUL (.hul)", "Export as HUL file"),
-            ('FOB', "FOB (.fob)", "Export as FOB file"),
-            ('W', "W (.w)", "Export as W file"),
-            ('M', "M (.m)", "Export as M file"),
-            ('RIM', "RIM (.rim)", "Export as RIM file"),
-            ('TAZ', "TAZ (.taz)", "Export as TAZ file"),
-            ('TRI', "TRI (.tri)", "Export as TRI file"),
+            ('FIN', "FIN (.fin)", "Instance file"),
+            ('FOB', "FOB (.fob)", "FOB object file"),
+            ('HUL', "HUL (.hul)", "Hull file"),
+            ('LIT', "LIT (.lit)", "Light file"),
+            ('NCP', "NCP (.ncp)", "Collision file"),
+            ('PRM', "PRM (.prm)", "Mesh file"),
+            ('RIM', "RIM (.rim)", "Mirror file"),
+            ('TAZ', "TAZ (.taz)", "Track zone file"),
+            ('FAN', "FAN (.fan)", "AI Nodes file"),
+            ('PAN', "PAN (.pan)", "Position Nodes file"),
+            ('TRI', "TRI (.tri)", "Trigger file"),
+            ('VIS', "VIS (.vis)", "Visibox file"),
+            ('W', "W (.w)", "World file"),
+            ('M', "M (.m)", "Model file"),
         ],
-        update=None  # Removing the update function
+        update=None
     )
 
     def execute(self, context):
@@ -249,9 +264,10 @@ class ExportRV(bpy.types.Operator):
 
         # Force the format_type to match the actual file extension
         ext_map = {
-            ".prm": "PRM", ".fin": "FIN", ".ncp": "NCP", ".hul": "HUL",
-            ".w": "W", ".m": "M", ".rim": "RIM", ".taz": "TAZ", ".tri": "TRI",
-            ".fob": "FOB"
+            ".fin": "FIN", ".fob": "FOB", ".hul": "HUL", ".lit": "LIT",
+            ".ncp": "NCP", ".prm": "PRM", ".rim": "RIM", ".taz": "TAZ",
+            ".fan": "FAN", ".pan": "PAN", ".tri": "TRI", ".vis": "VIS",
+            ".w": "W", ".m": "M"
         }
         ext = os.path.splitext(self.filepath)[1].lower()
         if ext in ext_map:
@@ -365,16 +381,20 @@ def exec_export(filepath, format_type, context):
     bpy.context.window.cursor_set("WAIT")
 
     format_map = {
-        'PRM': '.prm',
         'FIN': '.fin',
-        'NCP': '.ncp',
-        'HUL': '.hul',
         'FOB': '.fob',
-        'W': '.w',
-        'M': '.m',
+        'HUL': '.hul',
+        'LIT': '.lit',
+        'NCP': '.ncp',
+        'PRM': '.prm',
         'RIM': '.rim',
         'TAZ': '.taz',
-        'TRI': '.tri'
+        'FAN': '.fan',
+        'PAN': '.pan',
+        'TRI': '.tri',
+        'VIS': '.vis',
+        'W': '.w',
+        'M': '.m'
     }
 
     _, file_ext = os.path.splitext(filepath)
@@ -391,69 +411,90 @@ def exec_export(filepath, format_type, context):
 
     print(f"Determined export format: {frmt}")
 
-    if frmt == 'M':
-        from . import m_out
+    try:
+        if frmt == 'FIN':
+            from . import fin_out
+            fin_out.export_file(filepath, context.scene)
 
-        if context.scene.get("skip_texture_prompt_once", False):
-            del context.scene["skip_texture_prompt_once"]
-            m_out.export_file(filepath, context.scene)
-            return {'FINISHED'}
+        elif frmt == 'FOB':
+            from . import fob_out
+            fob_out.export_file(filepath, context.scene)
 
-        print("Checking textures before exporting .m file...")
-        export_folder = os.path.dirname(filepath)
-        missing = check_missing_textures(export_folder)
+        elif frmt == 'HUL':
+            from . import hul_out
+            hul_out.export_file(filepath, context.scene)
 
-        if missing:
-            print(f"[WARNING] {len(missing)} texture(s) not found in export folder, but continuing anyway.")
-            print("[INFO] RVGL will find textures from its own folders")
+        elif frmt == 'LIT':
+            from . import lit_out
+            lit_out.export_file(filepath, context.scene)
 
-        model_name = os.path.splitext(os.path.basename(filepath))[0].lower()
-        context.scene.last_exported_filepath = filepath
-        context.scene["skip_texture_prompt_once"] = True
-        bpy.ops.wm.prompt_texture_prefix_model('INVOKE_DEFAULT', model_name=model_name)
-        return {'CANCELLED'}
+        elif frmt == 'NCP':
+            from . import ncp_out
+            ncp_out.export_file(filepath, context.scene)
 
-    elif frmt == 'PRM':
-        from . import prm_out
-        prm_out.export_file(filepath, context.scene)
+        elif frmt == 'PRM':
+            from . import prm_out
+            prm_out.export_file(filepath, context.scene)
 
-    elif frmt == 'FIN':
-        from . import fin_out
-        fin_out.export_file(filepath, context.scene)
+        elif frmt == 'RIM':
+            from . import rim_out
+            rim_out.export_file(filepath, context.scene)
 
-    elif frmt == 'NCP':
-        from . import ncp_out
-        ncp_out.export_file(filepath, context.scene)
+        elif frmt == 'TAZ':
+            from . import taz_out
+            taz_out.export_file(filepath, context.scene)
 
-    elif frmt == 'FOB':
-        from . import fob_out
-        fob_out.export_file(filepath, context.scene)
+        elif frmt == 'FAN':
+            from . import fan_out
+            fan_out.export_file(filepath, context.scene)
 
-    elif frmt == 'HUL':
-        from . import hul_out
-        hul_out.export_file(filepath, context.scene)
+        elif frmt == 'PAN':
+            from . import pan_out
+            pan_out.export_file(filepath, context.scene)
 
-    elif frmt == 'W':
-        from . import w_out
-        w_out.export_file(filepath, context.scene)
+        elif frmt == 'TRI':
+            from . import tri_out
+            tri_out.export_file(filepath, context.scene)
 
-    elif frmt == 'RIM':
-        from . import rim_out
-        rim_out.export_file(filepath, context.scene)
+        elif frmt == 'VIS':
+            from . import vis_out
+            vis_out.export_file(filepath, context.scene)
 
-    elif frmt == 'TAZ':
-        from . import taz_out
-        taz_out.export_file(filepath, context.scene)
+        elif frmt == 'W':
+            from . import w_out
+            w_out.export_file(filepath, context.scene)
 
-    elif frmt == 'TRI':
-        from . import tri_out
-        tri_out.export_file(filepath, context.scene)
+        elif frmt == 'M':
+            from . import m_out
 
-    bpy.context.preferences.edit.use_global_undo = True
-    bpy.context.window.cursor_set("DEFAULT")
+            if context.scene.get("skip_texture_prompt_once", False):
+                del context.scene["skip_texture_prompt_once"]
+                m_out.export_file(filepath, context.scene)
+                return {'FINISHED'}
 
-    end_time = time.time() - start_time
-    print(f"Export to {filepath} done in {end_time:.3f} seconds.")
+            print("Checking textures before exporting .m file...")
+            export_folder = os.path.dirname(filepath)
+            missing = check_missing_textures(export_folder)
+
+            if missing:
+                print(f"[WARNING] {len(missing)} texture(s) not found in export folder, but continuing anyway.")
+                print("[INFO] RVGL will find textures from its own folders")
+
+            model_name = os.path.splitext(os.path.basename(filepath))[0].lower()
+            context.scene.last_exported_filepath = filepath
+            context.scene["skip_texture_prompt_once"] = True
+            bpy.ops.wm.prompt_texture_prefix_model('INVOKE_DEFAULT', model_name=model_name)
+            return {'CANCELLED'}
+
+        else:
+            print(f"[ERROR] Export format '{frmt}' is not handled.")
+            return {'CANCELLED'}
+
+    finally:
+        bpy.context.preferences.edit.use_global_undo = True
+        bpy.context.window.cursor_set("DEFAULT")
+        end_time = time.time() - start_time
+        print(f"Export to {filepath} done in {end_time:.3f} seconds.")
 
     return {'FINISHED'}
     
@@ -1480,24 +1521,6 @@ class RemoveInstanceProperty(bpy.types.Operator):
 MAKEITGOOD SECTOR & HULL SPHERE -------------------------------------------------------
 """
 
-class ButtonZoneHide(bpy.types.Operator):
-    bl_idname = "scene.zone_hide"
-    bl_label = "Show / Hide Track Zones"
-    bl_description = "Shows or hides all track zones"
-    
-    def execute(self, context):
-        track_zone_collection = bpy.data.collections.get('TRACK_ZONES')
-
-        # Check if the TRACK_ZONES collection exists
-        if track_zone_collection:
-            for obj in track_zone_collection.objects:
-                # Check if the object has the custom property and toggle visibility
-                if "is_track_zone" in obj:
-                    # In Blender 2.8 and later, visibility is controlled by 'hide_viewport'
-                    obj.hide_viewport = not obj.hide_viewport
-
-        return {"FINISHED"}
-
 class AddTrackZone(bpy.types.Operator):
     bl_idname = "scene.add_track_zone"
     bl_label = "Track Zone"
@@ -1580,22 +1603,6 @@ class ReverseTrackZone(bpy.types.Operator):
                 # Ensure the new name isn't already taken by another object
                 if not bpy.data.objects.get(base_name):
                     obj.name = base_name
-                    
-class ButtonTriggerHide(bpy.types.Operator):
-    bl_idname = "scene.trigger_hide"
-    bl_label = "Show / Hide Triggers"
-    bl_description = "Shows or hides all triggers"
-
-    def execute(self, context):
-        triggers_collection = bpy.data.collections.get('TRIGGERS')
-
-        # Check if the TRIGGERS collection exists
-        if triggers_collection:
-            for obj in triggers_collection.objects:
-                # Toggle visibility for each trigger object
-                obj.hide_viewport = not obj.hide_viewport
-
-        return {"FINISHED"}
     
 class CreateTrigger(bpy.types.Operator):
     bl_idname = "mesh.create_trigger"
@@ -1793,6 +1800,109 @@ class DuplicateFobObject(bpy.types.Operator):
             context.collection.objects.link(new_obj)
 
         return {'FINISHED'}
+
+class CreateVisibox(bpy.types.Operator):
+    bl_idname = "object.create_visibox"
+    bl_label = "Create Visibox"
+    bl_description = "Creates a new Visibox cube without faces"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        scene = context.scene
+
+        collection = bpy.data.collections.get("VISIBOXES")
+        if not collection:
+            collection = bpy.data.collections.new("VISIBOXES")
+            scene.collection.children.link(collection)
+
+        mesh = bpy.data.meshes.new("VisiboxMesh")
+        obj = bpy.data.objects.new(self.generate_name(), mesh)
+
+        bm = bmesh.new()
+        bmesh.ops.create_cube(bm, size=1.0)
+        bmesh.ops.delete(bm, geom=bm.faces[:], context='FACES_ONLY')
+        bm.to_mesh(mesh)
+        bm.free()
+
+        obj.location = scene.cursor.location
+        obj.display_type = 'WIRE'
+        obj.show_in_front = True
+
+        # Assign core properties
+        obj["is_visibox"] = True
+        obj["visibox_type"] = scene.visibox_create_type
+        obj["visibox_id"] = scene.visibox_create_id
+
+        # If using defined properties
+        obj.visibox_type = scene.visibox_create_type
+        obj.visibox_id = scene.visibox_create_id
+
+        collection.objects.link(obj)
+        context.view_layer.objects.active = obj
+        obj.select_set(True)
+
+        return {'FINISHED'}
+
+    def generate_name(self):
+        index = 1
+        while f"Visibox_{index:02d}" in bpy.data.objects:
+            index += 1
+        return f"Visibox_{index:02d}"
+    
+class ButtonZoneHide(bpy.types.Operator):
+    bl_idname = "scene.zone_hide"
+    bl_label = "Show / Hide Track Zones"
+    bl_description = "Temporarily shows or hides all track zones in viewport"
+
+    def execute(self, context):
+        track_zone_collection = bpy.data.collections.get('TRACK_ZONES')
+        if track_zone_collection:
+            any_visible = any(not obj.hide_get() for obj in track_zone_collection.objects if obj.get("is_track_zone"))
+            for obj in track_zone_collection.objects:
+                if obj.get("is_track_zone"):
+                    obj.hide_set(any_visible)
+        return {"FINISHED"}
+
+class ButtonTriggerHide(bpy.types.Operator):
+    bl_idname = "scene.trigger_hide"
+    bl_label = "Show / Hide Triggers"
+    bl_description = "Temporarily shows or hides all triggers in viewport"
+
+    def execute(self, context):
+        trigger_collection = bpy.data.collections.get('TRIGGERS')
+        if trigger_collection:
+            any_visible = any(not obj.hide_get() for obj in trigger_collection.objects)
+            for obj in trigger_collection.objects:
+                obj.hide_set(any_visible)
+        return {"FINISHED"}
+
+class ToggleFOBVisibility(bpy.types.Operator):
+    """Temporarily toggle visibility for all FOB Objects (eye icon)"""
+    bl_idname = "object.toggle_fob_visibility"
+    bl_label = "Hide / Show FOB Objects"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        objs = [obj for obj in context.scene.objects if obj.get("is_fob_object")]
+        any_visible = any(not obj.hide_get() for obj in objs)
+        for obj in objs:
+            obj.hide_set(any_visible)
+        self.report({'INFO'}, f"{'Hid' if any_visible else 'Showed'} all FOB Objects")
+        return {'FINISHED'}
+
+class ToggleVisiboxVisibility(bpy.types.Operator):
+    """Temporarily toggle visibility for all Visiboxes (eye icon)"""
+    bl_idname = "object.toggle_visibox_visibility"
+    bl_label = "Hide / Show Visiboxes"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        objs = [obj for obj in context.scene.objects if obj.get("is_visibox")]
+        any_visible = any(not obj.hide_get() for obj in objs)
+        for obj in objs:
+            obj.hide_set(any_visible)
+        self.report({'INFO'}, f"{'Hid' if any_visible else 'Showed'} all Visiboxes")
+        return {'FINISHED'}
     
 class ButtonHullSphere(bpy.types.Operator):
     bl_idname = "scene.add_hull_sphere"
@@ -1821,6 +1931,110 @@ class ButtonHullSphere(bpy.types.Operator):
         ob.select_set(True)
         context.view_layer.objects.active = ob
         return {'FINISHED'}
+
+class FindSpecialFile(bpy.types.Operator):
+    bl_idname = "object.find_special_file"
+    bl_label = "Find Special Object"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    category: EnumProperty(
+        name="Category",
+        items=[
+            ('TRIGGER', "Trigger", ""),
+            ('FOB', "FOB Object", ""),
+            ('TRACK_ZONE', "Track Zone", ""),
+            ('VISIBOX', "Visibox", ""),
+        ],
+        update=lambda self, context: self._update_subtype_items(context)
+    )
+
+    trigger_type: EnumProperty(name="Trigger Type", items=trigger_type_items)
+    fob_type: EnumProperty(name="FOB Object Type", items=fob_type_items)
+    visibox_type: EnumProperty(name="Visibox Type", items=visibox_type_items)
+
+    object_id: IntProperty(
+        name="ID",
+        description="Track Zone or Visibox ID",
+        default=-1
+    )
+
+    select_all_matches: BoolProperty(
+        name="Select All Matches",
+        description="Select all matching objects instead of just one",
+        default=False
+    )
+
+    def _update_subtype_items(self, context):
+        pass  # UI updates are handled in draw
+
+    def draw(self, context):
+        layout = self.layout
+        layout.prop(self, "category")
+
+        if self.category == 'TRIGGER':
+            layout.prop(self, "trigger_type")
+        elif self.category == 'FOB':
+            layout.prop(self, "fob_type")
+        elif self.category == 'VISIBOX':
+            layout.prop(self, "visibox_type")
+
+        if self.category in {'VISIBOX', 'TRACK_ZONE'}:
+            layout.prop(self, "object_id")
+
+        layout.prop(self, "select_all_matches")
+
+    def execute(self, context):
+        found_any = False
+        bpy.ops.object.select_all(action='DESELECT')
+
+        for obj in context.scene.objects:
+            if self.category == 'TRIGGER' and obj.get("is_trigger"):
+                if int(obj.get("trigger_type_enum", -1)) != int(self.trigger_type):
+                    continue
+                self.select_object(obj, context)
+                found_any = True
+                if not self.select_all_matches:
+                    break
+
+            elif self.category == 'FOB' and obj.get("is_fob_object"):
+                if int(obj.get("fob_type", -1)) != int(self.fob_type):
+                    continue
+                self.select_object(obj, context)
+                found_any = True
+                if not self.select_all_matches:
+                    break
+
+            elif self.category == 'TRACK_ZONE' and obj.get("is_track_zone"):
+                if self.object_id != -1 and int(obj.get("track_zone_id", -1)) != self.object_id:
+                    continue
+                self.select_object(obj, context)
+                found_any = True
+                if not self.select_all_matches:
+                    break
+
+            elif self.category == 'VISIBOX' and obj.get("is_visibox"):
+                if obj.get("visibox_type") != self.visibox_type:
+                    continue
+                if self.object_id != -1 and int(obj.get("visibox_id", -1)) != self.object_id:
+                    continue
+                self.select_object(obj, context)
+                found_any = True
+                if not self.select_all_matches:
+                    break
+
+        if found_any:
+            return {'FINISHED'}
+        else:
+            self.report({'WARNING'}, "No matching object found.")
+            return {'CANCELLED'}
+
+    def select_object(self, obj, context):
+        obj.select_set(True)
+        context.view_layer.objects.active = obj
+        return True
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
     
 """
 MATERIALS & TEXTURES ---------------------------------------------------------
@@ -4470,8 +4684,13 @@ class CarAutoShader(bpy.types.Operator):
         return {'FINISHED'}
 
 def menu_func_import(self, context):
-    self.layout.operator(ImportRV.bl_idname, text="Re-Volt (.prm, .w, .ncp, .fob, .fin, .rim., .hul, .taz, .tri, .m, parameters.txt)")
+    self.layout.operator(
+        ImportRV.bl_idname,
+        text="Re-Volt (.fin, .fob, .hul, .lit, .ncp, .parameters.txt, .prm, .rim, .taz, .fan, .pan, .tri, .vis, .w, .m)"
+    )
 
 def menu_func_export(self, context):
-    # Use the SelectDefaultTexture operator to start the export process
-    self.layout.operator(ExportExtension.bl_idname, text="Re-Volt (.prm, .w, .ncp, .fob, .fin, .rim, .hul, .taz, .tri, .m)")
+    self.layout.operator(
+        ExportExtension.bl_idname,
+        text="Re-Volt (.fin, .fob, .hul, .lit, .ncp, .prm, .rim, .taz, .fan, .pan, .tri, .vis, .w, .m)"
+    )
