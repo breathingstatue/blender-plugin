@@ -110,7 +110,7 @@ def export_mesh(me, obj, scene, filepath, model):
     env_alpha_layer = bm.faces.layers.float.get("EnvAlpha") or bm.faces.layers.float.new("EnvAlpha")
     va_layer = bm.loops.layers.color.get("Alpha") or bm.loops.layers.color.new("Alpha")
     texnum_layer = bm.faces.layers.int.get("Texture Number") or bm.faces.layers.int.new("Texture Number")
-    type_layer = bm.faces.layers.int.get("Type")
+    type_layer = bm.faces.layers.int.get("Type") or bm.faces.layers.int.new("Type")
 
     model.polygon_count += len(bm.faces)
     model.vertex_count += len(bm.verts)

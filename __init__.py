@@ -111,8 +111,8 @@ from .ui.migpanel import RVIO_PT_RevoltMIGPanel
 bl_info = {
 "name": "Re-Volt",
 "author": "Marvin Thiel & Theman",
-"version": (20, 25, 53),
-"blender": (4, 3, 2),
+"version": (20, 25, 55),
+"blender": (4, 4, 2),
 "location": "File > Import-Export",
 "description": "Import and export Re-Volt file formats.",
 "wiki_url": "https://www.breathingstatue.com/blenderplugin.html",

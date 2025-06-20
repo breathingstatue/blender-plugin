@@ -157,7 +157,8 @@ def export_mesh(me, obj, scene, filepath, world=None):
                 bm.loops.layers.color.new("Alpha"))
     texnum_layer = (bm.faces.layers.int.get("Texture Number") or
                     bm.faces.layers.int.new("Texture Number"))
-    type_layer = bm.faces.layers.int.get("Type")
+    type_layer = (bm.faces.layers.int.get("Type") or
+                    bm.faces.layers.int.new("Type"))
 
     # Creates an empty PRM or Mesh structure
     if world is None:

@@ -95,10 +95,11 @@ def import_hull(filepath, scene):
 def create_sphere(scene, center, radius, filename):
     # Convert center and radius to Blender scale
     center = to_blender_coord(center)
+    print("Imported radius (raw):", radius)
     radius = to_blender_scale(radius)
 
     mname = "RVSphere"
-    me = bpy.data.meshes.new(mname) if mname not in bpy.data.meshes else bpy.data.meshes[mname]
+    me = bpy.data.meshes.new(f"{mname}_{radius:.3f}")
     bm = bmesh.new()
 
     # Create the sphere using Blender's radius
@@ -106,7 +107,7 @@ def create_sphere(scene, center, radius, filename):
     bm.to_mesh(me)
     bm.free()
 
-    me.materials.append(create_material(mname, COL_SPHERE, 0))
+    me.materials.append(create_material(mname, COL_SPHERE, 0.3))
     for poly in me.polygons:
         poly.use_smooth = True
 

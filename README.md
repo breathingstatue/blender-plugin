@@ -1,16 +1,20 @@
 # blender-plugin
+
 I created a modified version of Marv's Blender Plugin for Re-Volt, that works in the current Blender (4.3)
 
 INSTALLATION
-place 'io_revolt' in Blender/"version"/scripts/addons/
+place 'io\_revolt' in Blender/"version"/scripts/addons/
 
 -Theman with the help of AI and a bunch of friends in the RV I/O community.
 
-20.25.53
+20.25.55
+
+Fixed a bug in export functions
+Fixed a bug in .hul import
 Added Visiboxes (.vis) import / export / creation
-Removed ta_csv (.csv files for texture animations)
+Removed ta\_csv (.csv files for texture animations)
 Added / Modified some elements in the UI
-Finalized tri_out and taz_out (the beginning of the file was missing out 4-8bytes)
+Finalized tri\_out and taz\_out (the beginning of the file was missing out 4-8bytes)
 
 20.25.50
 Objects import / export / duplicate (.fob)
@@ -24,9 +28,9 @@ broader .m (Model) Support
 FULL CHANGELOG:
 
 20.25.35
-added NCP Material Preview 
-car parts can have any default texture, not just car.bmp 
-fixed a bug with multiple ViewLayers in Blender 
+added NCP Material Preview
+car parts can have any default texture, not just car.bmp
+fixed a bug with multiple ViewLayers in Blender
 
 20.25.2
 improved car import / parameters export
@@ -44,7 +48,7 @@ fixed bugs for NCP materials
 Streamlined Car import / parameters Export
 .m files Material Assignment
 bug fixes to Material Assignment
-bug fixes and improvements to Import & Export modules
+bug fixes and improvements to Import \& Export modules
 
 20.24.9
 Bugfixes for Car import and Material Preview
@@ -61,7 +65,7 @@ Car Import (import all skins list via parameteres.txt)
 Improved Car Shadow baking
 Texture animations for .m file
 Improved import/export modules
-Added some face properties (face_texture_animation, face_ncp_no_planar)
+Added some face properties (face\_texture\_animation, face\_ncp\_no\_planar)
 Deleted some duplicate code (Vertex Light Baking had some duplicate code)
 .m (Model) import/export
 Pins import/export
@@ -91,3 +95,4 @@ First release
 20.24.3
 Deleted props modules and removed custom property "revolt"
 Changes from the start: new panels and buttons, structural changes, operator labeling, registrations
+
