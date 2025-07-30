@@ -39,8 +39,6 @@ def import_file(filepath, scene, texture_base_name=None):
         print(f"Importing instance {idx+1}/{len(fin.instances)}: {instance.name}")
         import_instance(filepath, scene, instance, texture_base_name, mesh_cache, name_counter)
 
-    print("Assigning vertex color materials...")
-    assign_col_materials(scene)
     print("Assigning UV texture materials...")
     assign_uvtex_materials(scene)
     print("Import complete.")
@@ -105,6 +103,8 @@ def import_instance(filepath, scene, instance, texture_base_name, mesh_cache, na
 
     if instance_obj.data:
         model_color_material(instance_obj)
+        print("Assigning vertex color materials...")
+        assign_col_materials(scene)
 
     print(f"Finished importing {unique_name}")
     return instance_obj

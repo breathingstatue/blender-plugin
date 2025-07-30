@@ -2153,12 +2153,27 @@ class MaterialAssignmentAuto(bpy.types.Operator):
         material_choice = obj.data.material_choice
         material_suffix = material_map.get(material_choice, '_Col')
 
+        # ---- DEBUG START ----
+        print(f"[DEBUG] update_material_assignment() called for {obj.name}")
+        print(f"[DEBUG] material_choice = {material_choice}, resolved suffix = {material_suffix}")
+        print(f"[DEBUG] Current materials: {[m.name for m in obj.data.materials]}")
+        # ---- DEBUG END ----
+
         if material_choice == 'UV_TEX':
+            print(f"[DEBUG] → Assigning UV textures for {obj.name}")
             self.assign_uv_textures(obj, existing_textures)
+
         elif material_choice == 'NCP':
+            print(f"[DEBUG] → Assigning NCP materials for {obj.name}")
             self.assign_ncp_materials(obj)
+
         else:
+            print(f"[DEBUG] → Assigning regular materials with suffix {material_suffix} for {obj.name}")
             self.assign_regular_materials(obj, material_suffix)
+
+        # ---- DEBUG AFTER ASSIGNMENT ----
+        print(f"[DEBUG] After assignment: {[m.name for m in obj.data.materials]}")
+        print(f"[DEBUG] Active material index is {obj.active_material_index} ({obj.active_material.name if obj.active_material else 'None'})")
 
     def assign_uv_textures(self, obj, existing_textures):
         print(f"[FAST] assign_uv_textures: {obj.name}")
@@ -2396,12 +2411,27 @@ class MaterialAssignment(bpy.types.Operator):
         material_choice = obj.data.material_choice
         material_suffix = material_map.get(material_choice, '_Col')
 
+        # ---- DEBUG START ----
+        print(f"[DEBUG] update_material_assignment() called for {obj.name}")
+        print(f"[DEBUG] material_choice = {material_choice}, resolved suffix = {material_suffix}")
+        print(f"[DEBUG] Current materials: {[m.name for m in obj.data.materials]}")
+        # ---- DEBUG END ----
+
         if material_choice == 'UV_TEX':
+            print(f"[DEBUG] → Assigning UV textures for {obj.name}")
             self.assign_uv_textures(obj, existing_textures)
+
         elif material_choice == 'NCP':
+            print(f"[DEBUG] → Assigning NCP materials for {obj.name}")
             self.assign_ncp_materials(obj)
+
         else:
+            print(f"[DEBUG] → Assigning regular materials with suffix {material_suffix} for {obj.name}")
             self.assign_regular_materials(obj, material_suffix)
+
+        # ---- DEBUG AFTER ASSIGNMENT ----
+        print(f"[DEBUG] After assignment: {[m.name for m in obj.data.materials]}")
+        print(f"[DEBUG] Active material index is {obj.active_material_index} ({obj.active_material.name if obj.active_material else 'None'})")
 
     def assign_uv_textures(self, obj, existing_textures):
         # Ensure the object is the active one and in Edit Mode

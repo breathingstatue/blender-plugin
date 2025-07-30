@@ -67,7 +67,10 @@ def import_file(filepath, scene, texture_base_name=None):
             else:
                 print(f"Object '{obj.name}' is already in the scene collection.")
             bpy.context.view_layer.objects.active = obj
+            print(f"[DEBUG] Before material assignment: {obj.name} has materials {[m.name for m in obj.data.materials]}")
+            print(f"[DEBUG] material_choice is initially {obj.data.material_choice}")
             assign_uv_tex_material(obj, texture_base_name=texture_base_name)
+            print(f"[DEBUG] After assign_uv_tex_material: {obj.name} has materials {[m.name for m in obj.data.materials]}")
 
     return obj
 
@@ -150,6 +153,8 @@ def add_rvmesh_to_bmesh(prm, bm, me, filepath, scene, envlist=None):
 
         face.smooth = True
 
+    print(f"[DEBUG] Created vertex color layers: {[layer.name for layer in bm.loops.layers.color]}")
+
 def create_materials_for_attributes(me, bm, obj_name):
     materials = {}
     for attr_name in ['Col', 'Alpha', 'Env']:
@@ -182,6 +187,7 @@ def create_materials_for_attributes(me, bm, obj_name):
                 links.new(principled_bsdf.outputs['BSDF'], material_output.inputs['Surface'])
 
         materials[attr_name] = material
+        print(f"[DEBUG] Created attribute materials for {obj_name}: {list(materials.keys())}")
 
     return materials
                     
