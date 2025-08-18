@@ -42,7 +42,6 @@ from . import (
     ncp_out,
     operators,
     parameters_in,
-    parameters_out,
     parameters_out_redux,
     prm_in,
     prm_in_for_fin,
