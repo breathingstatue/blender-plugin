@@ -603,6 +603,7 @@ def register():
         items=[
             ('UV_TEX', "Texture", "Assign UV Texture"),
             ('COL', "Color", "Assign Color Material"),
+            ('TEX_VC', "Tex+VC", "Assign Texture + Vertex Colour Blend"),
             ('ALPHA', "Alpha", "Assign Vertex Alpha Material"),
             ('ENV', "EnvMap", "Assign Env / EnvAlpha Material"),
             ('RGB', "Model Color (Instance)", "Assign RGB Model Color"),

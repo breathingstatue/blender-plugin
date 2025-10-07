@@ -6,6 +6,10 @@ place 'io_revolt' in Blender/"version"/scripts/addons/
 
 -Theman with the help of AI and a bunch of friends in the RV I/O community.
 
+20.25.70
+Added Texture+Vertex Colour Layer Preview
+TEX+VC Preview adjusts to the Vertex Alpha level
+
 20.25.60
 Fixed a bug in .fin (Instance) Import
 

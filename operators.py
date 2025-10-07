@@ -2140,10 +2140,100 @@ class MaterialAssignmentAuto(bpy.types.Operator):
 
         return self.get_base_name_for_layers(obj)
 
+    def assign_tex_vc_materials(self, obj, existing_textures=None):
+        """
+        Auto-assign blended materials combining texture and vertex colour per face.
+
+        This function mirrors assign_tex_vc_materials() but accepts an existing_textures
+        cache from the auto operator.  It calls assign_uv_textures() with the cache,
+        then creates blended materials per unique texture.
+        """
+        try:
+            if existing_textures is not None:
+                self.assign_uv_textures(obj, existing_textures)
+            else:
+                self.assign_uv_textures(obj)
+        except Exception:
+            # If assigning UV textures fails, leave existing materials unchanged
+            return
+        mesh = obj.data
+        bm = bmesh.new()
+        bm.from_mesh(mesh)
+        blended_cache = {}
+        for face in bm.faces:
+            idx = face.material_index
+            if idx < 0 or idx >= len(mesh.materials):
+                continue
+            orig_mat = mesh.materials[idx]
+            base_name = orig_mat.name
+            if base_name.lower().endswith('.bmp'):
+                base_name = base_name[:-4]
+            new_name = f"{base_name}_TexVC"
+            new_mat = blended_cache.get(new_name)
+            if not new_mat:
+                new_mat = bpy.data.materials.get(new_name)
+                if not new_mat:
+                    new_mat = bpy.data.materials.new(name=new_name)
+                    new_mat.use_nodes = True
+                    nodes = new_mat.node_tree.nodes
+                    links = new_mat.node_tree.links
+                    for node in list(nodes):
+                        nodes.remove(node)
+                    tex_node = nodes.new('ShaderNodeTexImage')
+                    tex_node.image = None
+                    if getattr(orig_mat, 'use_nodes', False):
+                        for node in orig_mat.node_tree.nodes:
+                            if node.type == 'TEX_IMAGE' and getattr(node, 'image', None):
+                                tex_node.image = node.image
+                                break
+                    col_attr = nodes.new('ShaderNodeAttribute')
+                    col_attr.attribute_name = 'Col'
+                    # Alpha attribute node; separate its X channel to use as a scalar
+                    alpha_attr = nodes.new('ShaderNodeAttribute')
+                    alpha_attr.attribute_name = 'Alpha'
+                    separate = nodes.new('ShaderNodeSeparateXYZ')
+                    # Math nodes to map alpha (0–1) to mix factor:
+                    # alpha=0 → 0.01 (1%), alpha=1 → 0.20 (20%)
+                    mult_node = nodes.new('ShaderNodeMath')
+                    mult_node.operation = 'MULTIPLY'
+                    mult_node.inputs[1].default_value = 0.19
+                    add_node = nodes.new('ShaderNodeMath')
+                    add_node.operation = 'ADD'
+                    add_node.inputs[1].default_value = 0.01
+                    mix = nodes.new('ShaderNodeMixRGB')
+                    mix.blend_type = 'MIX'
+                    bsdf = nodes.new('ShaderNodeBsdfPrincipled')
+                    output = nodes.new('ShaderNodeOutputMaterial')
+                    links.new(tex_node.outputs['Color'], mix.inputs[1])
+                    links.new(col_attr.outputs['Color'], mix.inputs[2])
+                    # Connect alpha mapping: use the X (red) channel of the attribute
+                    links.new(alpha_attr.outputs['Color'], separate.inputs['Vector'])
+                    links.new(separate.outputs['X'], mult_node.inputs[0])
+                    links.new(mult_node.outputs['Value'], add_node.inputs[0])
+                    links.new(add_node.outputs['Value'], mix.inputs['Fac'])
+                    links.new(mix.outputs['Color'], bsdf.inputs['Base Color'])
+                    links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
+                blended_cache[new_name] = new_mat
+            if new_mat.name not in mesh.materials:
+                mesh.materials.append(new_mat)
+            face.material_index = mesh.materials.find(new_mat.name)
+        bm.to_mesh(mesh)
+        bm.free()
+        # Ensure vertex colour changes are committed and visible
+        mesh.update()
+        # Make one of the blended materials the active material
+        for blended in blended_cache.values():
+            if blended.name in mesh.materials:
+                idx = mesh.materials.find(blended.name)
+                if idx >= 0:
+                    obj.active_material_index = idx
+                    break
+
     def update_material_assignment(self, obj, existing_textures):
         material_map = {
             'UV_TEX': '_UVTex',
             'COL': '_Col',
+            'TEX_VC': '_TexVC',
             'ALPHA': '_Alpha',
             'ENV': '_Env',
             'RGB': '_RGBModelColor',
@@ -2162,6 +2252,14 @@ class MaterialAssignmentAuto(bpy.types.Operator):
         if material_choice == 'UV_TEX':
             print(f"[DEBUG] → Assigning UV textures for {obj.name}")
             self.assign_uv_textures(obj, existing_textures)
+
+        elif material_choice == 'TEX_VC':
+            print(f"[DEBUG] → Assigning Tex+VC materials for {obj.name}")
+            # Some classes take existing_textures, others don’t; handle both
+            try:
+                self.assign_tex_vc_materials(obj, existing_textures)
+            except TypeError:
+                self.assign_tex_vc_materials(obj)
 
         elif material_choice == 'NCP':
             print(f"[DEBUG] → Assigning NCP materials for {obj.name}")
@@ -2398,10 +2496,116 @@ class MaterialAssignment(bpy.types.Operator):
 
         return self.get_base_name_for_layers(obj)
 
+    def assign_tex_vc_materials(self, obj, existing_textures=None):
+        """
+        Assign or create blended materials combining texture and vertex colour for each face.
+
+        This routine first assigns UV textures to each face using assign_uv_textures().
+        It then iterates over all faces, determines the texture-based material assigned,
+        and builds a new material that blends the texture with the 'Col' vertex colour,
+        with the blend factor influenced by the 'Alpha' vertex colour layer:
+        factor = 0.01 + 0.19 × alpha
+        When alpha is 0 (black), the result is ~99% texture / 1% vertex colour.
+        When alpha is 1 (white), the result is 80% texture / 20% vertex colour.
+        """
+        # Assign base UV texture materials; fallback to regular assignment on failure
+        # Assign base UV texture materials; fallback to regular assignment on failure
+        try:
+            # If an existing_textures cache is supplied (as in the auto mode), use it
+            if existing_textures is not None:
+                self.assign_uv_textures(obj, existing_textures)
+            else:
+                self.assign_uv_textures(obj)
+        except Exception:
+            # If assigning UV textures fails, leave existing materials unchanged
+            return
+        mesh = obj.data
+        bm = bmesh.new()
+        bm.from_mesh(mesh)
+        # Cache for blended materials
+        blended_cache = {}
+        # Iterate faces
+        for face in bm.faces:
+            idx = face.material_index
+            if idx < 0 or idx >= len(mesh.materials):
+                continue
+            orig_mat = mesh.materials[idx]
+            base_name = orig_mat.name
+            if base_name.lower().endswith('.bmp'):
+                base_name = base_name[:-4]
+            new_name = f"{base_name}_TexVC"
+            new_mat = blended_cache.get(new_name)
+            if not new_mat:
+                new_mat = bpy.data.materials.get(new_name)
+                if not new_mat:
+                    new_mat = bpy.data.materials.new(name=new_name)
+                    new_mat.use_nodes = True
+                    nodes = new_mat.node_tree.nodes
+                    links = new_mat.node_tree.links
+                    # clear default nodes
+                    for node in list(nodes):
+                        nodes.remove(node)
+                    # copy texture from original material if available
+                    tex_node = nodes.new('ShaderNodeTexImage')
+                    tex_node.image = None
+                    if getattr(orig_mat, 'use_nodes', False):
+                        for node in orig_mat.node_tree.nodes:
+                            if node.type == 'TEX_IMAGE' and getattr(node, 'image', None):
+                                tex_node.image = node.image
+                                break
+                    # vertex colour attribute nodes
+                    col_attr = nodes.new('ShaderNodeAttribute')
+                    col_attr.attribute_name = 'Col'
+                    # Alpha attribute node; separate its X channel to use as a scalar
+                    alpha_attr = nodes.new('ShaderNodeAttribute')
+                    alpha_attr.attribute_name = 'Alpha'
+                    separate = nodes.new('ShaderNodeSeparateXYZ')
+                    # Math nodes to map alpha (0–1) to mix factor:
+                    # alpha=0 → 0.01 (1%), alpha=1 → 0.20 (20%)
+                    mult_node = nodes.new('ShaderNodeMath')
+                    mult_node.operation = 'MULTIPLY'
+                    mult_node.inputs[1].default_value = 0.19
+                    add_node = nodes.new('ShaderNodeMath')
+                    add_node.operation = 'ADD'
+                    add_node.inputs[1].default_value = 0.01
+                    # mix node
+                    mix = nodes.new('ShaderNodeMixRGB')
+                    mix.blend_type = 'MIX'
+                    # BSDF and output
+                    bsdf = nodes.new('ShaderNodeBsdfPrincipled')
+                    output = nodes.new('ShaderNodeOutputMaterial')
+                    # connect nodes
+                    links.new(tex_node.outputs['Color'], mix.inputs[1])
+                    links.new(col_attr.outputs['Color'], mix.inputs[2])
+                    # Connect alpha mapping: use the X (red) channel of the attribute
+                    links.new(alpha_attr.outputs['Color'], separate.inputs['Vector'])
+                    links.new(separate.outputs['X'], mult_node.inputs[0])
+                    links.new(mult_node.outputs['Value'], add_node.inputs[0])
+                    links.new(add_node.outputs['Value'], mix.inputs['Fac'])
+                    links.new(mix.outputs['Color'], bsdf.inputs['Base Color'])
+                    links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
+                blended_cache[new_name] = new_mat
+            # ensure new material is in mesh's material list
+            if new_mat.name not in mesh.materials:
+                mesh.materials.append(new_mat)
+            face.material_index = mesh.materials.find(new_mat.name)
+        bm.to_mesh(mesh)
+        bm.free()
+        # Ensure vertex colour changes are committed and visible
+        mesh.update()
+        # Make one of the blended materials the active material
+        for blended in blended_cache.values():
+            if blended.name in mesh.materials:
+                idx = mesh.materials.find(blended.name)
+                if idx >= 0:
+                    obj.active_material_index = idx
+                    break
+
     def update_material_assignment(self, obj, existing_textures):
         material_map = {
             'UV_TEX': '_UVTex',
             'COL': '_Col',
+            'TEX_VC': '_TexVC',
             'ALPHA': '_Alpha',
             'ENV': '_Env',
             'RGB': '_RGBModelColor',
@@ -2420,6 +2624,14 @@ class MaterialAssignment(bpy.types.Operator):
         if material_choice == 'UV_TEX':
             print(f"[DEBUG] → Assigning UV textures for {obj.name}")
             self.assign_uv_textures(obj, existing_textures)
+
+        elif material_choice == 'TEX_VC':
+            print(f"[DEBUG] → Assigning Tex+VC materials for {obj.name}")
+            # Some classes take existing_textures, others don’t; handle both
+            try:
+                self.assign_tex_vc_materials(obj, existing_textures)
+            except TypeError:
+                self.assign_tex_vc_materials(obj)
 
         elif material_choice == 'NCP':
             print(f"[DEBUG] → Assigning NCP materials for {obj.name}")
