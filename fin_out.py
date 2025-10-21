@@ -9,6 +9,7 @@ Exports Instance files.
 import os
 import re
 import bpy
+import bmesh
 from . import common, rvstruct, prm_out_for_fin
 from .rvstruct import Instances, Instance, Vector, Matrix, Color
 from .common import (
@@ -37,8 +38,7 @@ def export_file(filepath, scene):
 
     print(f"Found {len(mesh_objects)} mesh objects")
 
-    assign_material_to_meshes(mesh_objects, 'COL')
-    assign_material_to_meshes(mesh_objects, 'UV_TEX')
+    assign_textures_and_vc_by_texnum(mesh_objects, scene)
 
     exported_mesh_names = set()
     folder = os.path.dirname(filepath)
@@ -141,3 +141,148 @@ def texture_available(prefix, use_suffixing):
         if not use_suffixing and base == prefix or name == prefix or name == prefix + ".bmp":
             return True
     return False
+
+def assign_textures_and_vc_by_texnum(mesh_objects, scene):
+    """
+    For each mesh object:
+      - Read per-face 'Texture Number' (int) layer
+      - texnum >= 0  -> assign the corresponding <base><suffix>.bmp material
+      - texnum == -1 -> assign a Vertex Colour material (uses 'Col' and 'Alpha' attributes)
+    Runs fully in OBJECT mode; no operators or active object required.
+    """
+
+    # Cache BMP materials once: image.name -> material
+    def collect_bmp_materials():
+        m = {}
+        for mat in bpy.data.materials:
+            if not mat.use_nodes:
+                continue
+            for node in mat.node_tree.nodes:
+                if node.type == 'TEX_IMAGE' and node.image:
+                    img_name = os.path.basename(node.image.name).lower()
+                    if img_name.endswith('.bmp'):
+                        m[img_name] = mat
+        return m
+
+    # base: prefer FIN base, then scene level, then cleaned object name
+    def resolve_base(obj):
+        if obj.get("is_instance") and "fin_texture_base" in obj:
+            return str(obj["fin_texture_base"]).strip().lower()
+        if "level_texture_base" in scene and scene["level_texture_base"]:
+            return os.path.splitext(scene["level_texture_base"].strip().lower())[0]
+        name = obj.name.lower()
+        name = os.path.splitext(name)[0]
+        # strip trailing .001 style suffixes
+        while name and name[-1].isdigit():
+            name = name[:-1]
+        return ''.join(ch for ch in name if ch.isalnum() or ch in ('_', '-'))
+
+    # 0->'a', 1->'b', ..., 25->'z', 26->'aa', ...
+    def int_to_suffix(tex_num: int) -> str:
+        if tex_num < 0:
+            return ""
+        s = ""
+        n = tex_num
+        # ‘a’ = 0 in your pipeline
+        while True:
+            s = chr((n % 26) + 97) + s
+            n = n // 26 - 1
+            if n < 0:
+                break
+        return s
+
+    def get_or_create_vc_material(obj) -> bpy.types.Material:
+        """Per-object VC material (uses Col + Alpha)."""
+        vc_name = f"{obj.name.split('.')[0]}_Col"
+        mat = bpy.data.materials.get(vc_name)
+        if mat:
+            return mat
+        mat = bpy.data.materials.new(vc_name)
+        mat.use_nodes = True
+        nt = mat.node_tree
+        nt.nodes.clear()
+
+        attr_col = nt.nodes.new('ShaderNodeAttribute')
+        attr_col.attribute_name = 'Col'
+        attr_col.attribute_type = 'GEOMETRY'
+
+        attr_a = nt.nodes.new('ShaderNodeAttribute')
+        attr_a.attribute_name = 'Alpha'
+        attr_a.attribute_type = 'GEOMETRY'
+
+        sep = nt.nodes.new('ShaderNodeSeparateXYZ')
+
+        bsdf = nt.nodes.new('ShaderNodeBsdfPrincipled')
+        outp = nt.nodes.new('ShaderNodeOutputMaterial')
+
+        ln = nt.links
+        ln.new(attr_col.outputs['Color'], bsdf.inputs['Base Color'])
+        ln.new(attr_a.outputs['Color'], sep.inputs['Vector'])
+        ln.new(sep.outputs['X'], bsdf.inputs['Alpha'])
+        ln.new(bsdf.outputs['BSDF'], outp.inputs['Surface'])
+
+        # (Optional) make alpha visible in viewport rendering modes
+        try:
+            mat.blend_method = 'BLEND'
+            mat.shadow_method = 'CLIP'
+            mat.use_backface_culling = False
+        except Exception:
+            pass
+
+        return mat
+
+    bmp_mats = collect_bmp_materials()
+
+    for obj in mesh_objects:
+        if obj.type != 'MESH' or not obj.data:
+            continue
+
+        base = resolve_base(obj)
+        me = obj.data
+
+        bm = bmesh.new()
+        bm.from_mesh(me)
+
+        texnum_layer = bm.faces.layers.int.get("Texture Number")
+        if not texnum_layer:
+            # nothing to do if no layer
+            bm.free()
+            continue
+
+        # ensure VC material is available and in slot list
+        vc_mat = get_or_create_vc_material(obj)
+        if vc_mat.name not in me.materials:
+            me.materials.append(vc_mat)
+        vc_idx = me.materials.find(vc_mat.name)
+
+        for face in bm.faces:
+            tnum = face[texnum_layer]
+            if tnum is None:
+                tnum = -1
+
+            if tnum < 0:
+                # Vertex Colour face
+                face.material_index = vc_idx
+                continue
+
+            # Textured face -> lookup <base><suffix>.bmp
+            suffix = int_to_suffix(int(tnum))
+            img_key = f"{base}{suffix}.bmp"
+            mat = bmp_mats.get(img_key)
+
+            # Fallbacks: direct material by name (with/without .bmp)
+            if not mat:
+                mat = bpy.data.materials.get(img_key) or bpy.data.materials.get(img_key[:-4])
+
+            if not mat:
+                # If we can’t find a material, leave current material as-is
+                # (exporter will still write the correct texnum)
+                continue
+
+            if mat.name not in me.materials:
+                me.materials.append(mat)
+            face.material_index = me.materials.find(mat.name)
+
+        bm.to_mesh(me)
+        me.update()
+        bm.free()

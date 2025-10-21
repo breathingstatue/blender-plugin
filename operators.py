@@ -2498,108 +2498,132 @@ class MaterialAssignment(bpy.types.Operator):
 
     def assign_tex_vc_materials(self, obj, existing_textures=None):
         """
-        Assign or create blended materials combining texture and vertex colour for each face.
-
-        This routine first assigns UV textures to each face using assign_uv_textures().
-        It then iterates over all faces, determines the texture-based material assigned,
-        and builds a new material that blends the texture with the 'Col' vertex colour,
-        with the blend factor influenced by the 'Alpha' vertex colour layer:
-        factor = 0.01 + 0.19 × alpha
-        When alpha is 0 (black), the result is ~99% texture / 1% vertex colour.
-        When alpha is 1 (white), the result is 80% texture / 20% vertex colour.
+        Create/assign *_TexVC materials that blend the face's texture with vertex colors.
+        In multi-object Edit Mode, runs on selected faces of this object.
         """
-        # Assign base UV texture materials; fallback to regular assignment on failure
-        # Assign base UV texture materials; fallback to regular assignment on failure
+
+        # Try to ensure the base UV texture assignment first; if that call signature
+        # doesn't match in your build, the try/except keeps this operator usable.
         try:
-            # If an existing_textures cache is supplied (as in the auto mode), use it
             if existing_textures is not None:
                 self.assign_uv_textures(obj, existing_textures)
             else:
-                self.assign_uv_textures(obj)
+                self.assign_uv_textures(obj)  # OK if it raises; we just continue
         except Exception:
-            # If assigning UV textures fails, leave existing materials unchanged
-            return
+            pass
+
         mesh = obj.data
-        bm = bmesh.new()
-        bm.from_mesh(mesh)
-        # Cache for blended materials
+
+        # Cache for blended materials created during this call
         blended_cache = {}
-        # Iterate faces
-        for face in bm.faces:
-            idx = face.material_index
-            if idx < 0 or idx >= len(mesh.materials):
-                continue
-            orig_mat = mesh.materials[idx]
+
+        def ensure_texvc_from(orig_mat):
             base_name = orig_mat.name
             if base_name.lower().endswith('.bmp'):
                 base_name = base_name[:-4]
             new_name = f"{base_name}_TexVC"
-            new_mat = blended_cache.get(new_name)
-            if not new_mat:
-                new_mat = bpy.data.materials.get(new_name)
-                if not new_mat:
-                    new_mat = bpy.data.materials.new(name=new_name)
-                    new_mat.use_nodes = True
-                    nodes = new_mat.node_tree.nodes
-                    links = new_mat.node_tree.links
-                    # clear default nodes
-                    for node in list(nodes):
-                        nodes.remove(node)
-                    # copy texture from original material if available
-                    tex_node = nodes.new('ShaderNodeTexImage')
-                    tex_node.image = None
-                    if getattr(orig_mat, 'use_nodes', False):
-                        for node in orig_mat.node_tree.nodes:
-                            if node.type == 'TEX_IMAGE' and getattr(node, 'image', None):
-                                tex_node.image = node.image
-                                break
-                    # vertex colour attribute nodes
-                    col_attr = nodes.new('ShaderNodeAttribute')
-                    col_attr.attribute_name = 'Col'
-                    # Alpha attribute node; separate its X channel to use as a scalar
-                    alpha_attr = nodes.new('ShaderNodeAttribute')
-                    alpha_attr.attribute_name = 'Alpha'
-                    separate = nodes.new('ShaderNodeSeparateXYZ')
-                    # Math nodes to map alpha (0–1) to mix factor:
-                    # alpha=0 → 0.01 (1%), alpha=1 → 0.20 (20%)
-                    mult_node = nodes.new('ShaderNodeMath')
-                    mult_node.operation = 'MULTIPLY'
-                    mult_node.inputs[1].default_value = 0.19
-                    add_node = nodes.new('ShaderNodeMath')
-                    add_node.operation = 'ADD'
-                    add_node.inputs[1].default_value = 0.01
-                    # mix node
-                    mix = nodes.new('ShaderNodeMixRGB')
-                    mix.blend_type = 'MIX'
-                    # BSDF and output
-                    bsdf = nodes.new('ShaderNodeBsdfPrincipled')
-                    output = nodes.new('ShaderNodeOutputMaterial')
-                    # connect nodes
-                    links.new(tex_node.outputs['Color'], mix.inputs[1])
-                    links.new(col_attr.outputs['Color'], mix.inputs[2])
-                    # Connect alpha mapping: use the X (red) channel of the attribute
-                    links.new(alpha_attr.outputs['Color'], separate.inputs['Vector'])
-                    links.new(separate.outputs['X'], mult_node.inputs[0])
-                    links.new(mult_node.outputs['Value'], add_node.inputs[0])
-                    links.new(add_node.outputs['Value'], mix.inputs['Fac'])
-                    links.new(mix.outputs['Color'], bsdf.inputs['Base Color'])
-                    links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
+
+            new_mat = blended_cache.get(new_name) or bpy.data.materials.get(new_name)
+            if new_mat:
                 blended_cache[new_name] = new_mat
-            # ensure new material is in mesh's material list
-            if new_mat.name not in mesh.materials:
-                mesh.materials.append(new_mat)
-            face.material_index = mesh.materials.find(new_mat.name)
-        bm.to_mesh(mesh)
-        bm.free()
-        # Ensure vertex colour changes are committed and visible
-        mesh.update()
-        # Make one of the blended materials the active material
+                return new_mat
+
+            # Build a fresh node tree
+            new_mat = bpy.data.materials.new(name=new_name)
+            new_mat.use_nodes = True
+            nodes = new_mat.node_tree.nodes
+            links = new_mat.node_tree.links
+            for n in list(nodes):
+                nodes.remove(n)
+
+            tex_node = nodes.new('ShaderNodeTexImage')
+            tex_node.image = None
+            if getattr(orig_mat, 'use_nodes', False) and getattr(orig_mat, 'node_tree', None):
+                for n in orig_mat.node_tree.nodes:
+                    if n.type == 'TEX_IMAGE' and getattr(n, 'image', None):
+                        tex_node.image = n.image
+                        break
+
+            # Vertex color attributes
+            col_attr = nodes.new('ShaderNodeAttribute')
+            col_attr.attribute_name = 'Col'
+
+            alpha_attr = nodes.new('ShaderNodeAttribute')
+            alpha_attr.attribute_name = 'Alpha'
+
+            separate = nodes.new('ShaderNodeSeparateXYZ')
+
+            mult_node = nodes.new('ShaderNodeMath')
+            mult_node.operation = 'MULTIPLY'
+            mult_node.inputs[1].default_value = 0.19  # scale alpha
+
+            add_node = nodes.new('ShaderNodeMath')
+            add_node.operation = 'ADD'
+            add_node.inputs[1].default_value = 0.01   # base 1%
+
+            mix = nodes.new('ShaderNodeMixRGB')
+            mix.blend_type = 'MIX'
+
+            bsdf = nodes.new('ShaderNodeBsdfPrincipled')
+            output = nodes.new('ShaderNodeOutputMaterial')
+
+            # Wire it up
+            links.new(tex_node.outputs['Color'], mix.inputs[1])
+            links.new(col_attr.outputs['Color'], mix.inputs[2])
+
+            links.new(alpha_attr.outputs['Color'], separate.inputs['Vector'])
+            links.new(separate.outputs['X'], mult_node.inputs[0])
+            links.new(mult_node.outputs['Value'], add_node.inputs[0])
+            links.new(add_node.outputs['Value'], mix.inputs['Fac'])
+
+            links.new(mix.outputs['Color'], bsdf.inputs['Base Color'])
+            links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
+
+            blended_cache[new_name] = new_mat
+            return new_mat
+
+        # EDIT-MODE PATH (multi-object edit safe)
+        if mesh.is_editmode:
+            bm = bmesh.from_edit_mesh(mesh)
+            for face in bm.faces:
+                if not face.select:
+                    continue
+                idx = face.material_index
+                if 0 <= idx < len(mesh.materials):
+                    orig_mat = mesh.materials[idx]
+                    if orig_mat is None:
+                        continue
+                    new_mat = ensure_texvc_from(orig_mat)
+                    if new_mat.name not in mesh.materials:
+                        mesh.materials.append(new_mat)
+                    face.material_index = mesh.materials.find(new_mat.name)
+            bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
+            mesh.update()
+
+        else:
+            # OBJECT-MODE PATH (applies to all faces on this object)
+            bm = bmesh.new()
+            bm.from_mesh(mesh)
+            for face in bm.faces:
+                idx = face.material_index
+                if 0 <= idx < len(mesh.materials):
+                    orig_mat = mesh.materials[idx]
+                    if orig_mat is None:
+                        continue
+                    new_mat = ensure_texvc_from(orig_mat)
+                    if new_mat.name not in mesh.materials:
+                        mesh.materials.append(new_mat)
+                    face.material_index = mesh.materials.find(new_mat.name)
+            bm.to_mesh(mesh)
+            bm.free()
+            mesh.update()
+
+        # Set any of the blended materials as active (purely UX)
         for blended in blended_cache.values():
-            if blended.name in mesh.materials:
-                idx = mesh.materials.find(blended.name)
-                if idx >= 0:
-                    obj.active_material_index = idx
-                    break
+            idx = mesh.materials.find(blended.name)
+            if idx >= 0:
+                obj.active_material_index = idx
+                break
 
     def update_material_assignment(self, obj, existing_textures):
         material_map = {
@@ -2645,11 +2669,12 @@ class MaterialAssignment(bpy.types.Operator):
         print(f"[DEBUG] After assignment: {[m.name for m in obj.data.materials]}")
         print(f"[DEBUG] Active material index is {obj.active_material_index} ({obj.active_material.name if obj.active_material else 'None'})")
 
-    def assign_uv_textures(self, obj, existing_textures):
-        # Ensure the object is the active one and in Edit Mode
-        if not (bpy.context.view_layer.objects.active == obj and obj.mode == 'EDIT'):
-            return
+    # --- FIX 1: allow any selected mesh that's in EDIT mode (multi-object edit) ---
 
+    def assign_uv_textures(self, obj, existing_textures):
+        # Operate if this specific object is in EDIT mode (multi-object edit supported)
+        if not obj.data.is_editmode:
+            return
         bm = bmesh.from_edit_mesh(obj.data)
         if not bm:
             return
@@ -2697,53 +2722,53 @@ class MaterialAssignment(bpy.types.Operator):
             source_mode = "TEXTURE_NAME"
 
         for face in bm.faces:
-            if face.select:
-                tex_num = face[texnum_layer]
+            if not face.select:
+                continue
 
-                if source_mode == 'TEXTURE_NAME':
-                    material_name = f"{base_name_for_texture}.bmp"
-                elif source_mode == 'LEVEL_TEXTURES':
-                    if tex_num == -1:
-                        continue
-                    material_name = int_to_texture(tex_num, name=base_name_for_texture)
-                else:
+            tex_num = face[texnum_layer]
+            if source_mode == 'TEXTURE_NAME':
+                material_name = f"{base_name_for_texture}.bmp"
+            elif source_mode == 'LEVEL_TEXTURES':
+                if tex_num == -1:
                     continue
+                material_name = int_to_texture(tex_num, name=base_name_for_texture)
+            else:
+                continue
 
-                mat = self.find_material_loose(material_name)
+            mat = self.find_material_loose(material_name)
 
-                if not mat:
-                    try:
-                        slot_index = face.material_index
-                        if slot_index < len(obj.data.materials):
-                            candidate = obj.data.materials[slot_index].name
-                            mat = bpy.data.materials.get(candidate)
-                            if not mat and not candidate.endswith('.bmp'):
-                                mat = bpy.data.materials.get(f"{candidate}.bmp")
-                            elif not mat and candidate.endswith('.bmp'):
-                                mat = bpy.data.materials.get(candidate[:-4])
-                    except Exception:
-                        pass
+            # Try to infer from the current slot if missing
+            if not mat:
+                try:
+                    slot_index = face.material_index
+                    if slot_index < len(obj.data.materials):
+                        candidate = obj.data.materials[slot_index].name
+                        mat = bpy.data.materials.get(candidate) \
+                            or bpy.data.materials.get(f"{candidate}.bmp") \
+                            or (bpy.data.materials.get(candidate[:-4]) if candidate.endswith('.bmp') else None)
+                except Exception:
+                    pass
 
-                if not mat and is_car_part:
-                    fallback_name = scene.get("selected_car_texture", "car.bmp")
-                    mat = bpy.data.materials.get(fallback_name)
+            if not mat and is_car_part:
+                fallback_name = scene.get("selected_car_texture", "car.bmp")
+                mat = bpy.data.materials.get(fallback_name)
 
-                if not mat:
-                    continue
+            if not mat:
+                continue
 
-                if mat.name not in obj.data.materials:
-                    obj.data.materials.append(mat)
+            if mat.name not in obj.data.materials:
+                obj.data.materials.append(mat)
 
-                face.material_index = obj.data.materials.find(mat.name)
+            face.material_index = obj.data.materials.find(mat.name)
 
         bmesh.update_edit_mesh(obj.data)
         obj.data.update()
 
-    def assign_ncp_materials(self, obj):
-        # Ensure the object is the active one and in Edit Mode
-        if not (bpy.context.view_layer.objects.active == obj and obj.mode == 'EDIT'):
-            return
+# --- FIX 2: same idea for NCP materials ---
 
+    def assign_ncp_materials(self, obj):
+        if not obj.data.is_editmode:
+            return
         bm = bmesh.from_edit_mesh(obj.data)
         if not bm:
             return
@@ -2751,21 +2776,22 @@ class MaterialAssignment(bpy.types.Operator):
         material_layer = bm.faces.layers.int.get("Material") or bm.faces.layers.int.new("Material")
 
         for face in bm.faces:
-            if face.select:
-                material_index = face[material_layer]
-                if 0 <= material_index < len(MATERIALS):
-                    material_info = MATERIALS[material_index]
-                    material_name = material_info[1]
+            if not face.select:
+                continue
+            material_index = face[material_layer]
+            if 0 <= material_index < len(MATERIALS):
+                material_info = MATERIALS[material_index]
+                material_name = material_info[1]
 
-                    mat = self.find_material_loose(material_name)
-                    if not mat:
-                        mat = bpy.data.materials.new(name=material_name)
-                        mat.use_nodes = True
+                mat = self.find_material_loose(material_name)
+                if not mat:
+                    mat = bpy.data.materials.new(name=material_name)
+                    mat.use_nodes = True
 
-                    if mat.name not in obj.data.materials:
-                        obj.data.materials.append(mat)
+                if mat.name not in obj.data.materials:
+                    obj.data.materials.append(mat)
 
-                    face.material_index = obj.data.materials.find(mat.name)
+                face.material_index = obj.data.materials.find(mat.name)
 
         bmesh.update_edit_mesh(obj.data)
         obj.data.update()
@@ -2777,7 +2803,7 @@ class MaterialAssignment(bpy.types.Operator):
             f"{base_name}{material_suffix}",
             f"{base_name}.prm{material_suffix}",
             f"{base_name}.w{material_suffix}",
-            f"{base_name}.m{material_suffix}"
+            f"{base_name}.m{material_suffix}",
         ]
 
         material = None
@@ -2785,24 +2811,25 @@ class MaterialAssignment(bpy.types.Operator):
             material = bpy.data.materials.get(mat_name)
             if material:
                 break
-
         if not material:
             material = bpy.data.materials.get(material_suffix)
-
         if not material:
             return
 
         if material.name not in obj.data.materials:
             obj.data.materials.append(material)
 
-        # Only call bmesh if object is active and in Edit Mode
-        if bpy.context.view_layer.objects.active == obj and obj.mode == 'EDIT':
-            bm = bmesh.from_edit_mesh(obj.data)
-            material_index = obj.data.materials.find(material.name)
+        # IMPORTANT: multi-object edit mode => check mesh.is_editmode
+        if obj.data.is_editmode:
+            bm = bmesh.from_edit_mesh(obj.data)  # valid for any mesh currently in edit mode
+            idx = obj.data.materials.find(material.name)
             for face in bm.faces:
                 if face.select:
-                    face.material_index = material_index
-            bmesh.update_edit_mesh(obj.data)
+                    face.material_index = idx
+            bmesh.update_edit_mesh(obj.data, loop_triangles=False, destructive=False)
+            obj.data.update()
+        else:
+            return
 
     def find_material_loose(self, name):
         """Try to find a material with or without .bmp suffix."""
@@ -3196,7 +3223,7 @@ class SetFaceTextureNumber(bpy.types.Operator):
             else:
                 major = ord(suffix[0]) - ord('a') + 1
                 minor = ord(suffix[1]) - ord('a')
-                index = major * 26 + minor - 26
+                index = major * 26 + minor
             return index if 0 <= index <= 63 else -1
 
         for obj in context.scene.objects:

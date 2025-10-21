@@ -6,6 +6,11 @@ place 'io_revolt' in Blender/"version"/scripts/addons/
 
 -Theman with the help of AI and a bunch of friends in the RV I/O community.
 
+20.25.75
+Fixed "Set Material to Selected Faces"
+Fixed "Fix Texture Numbers and Materials" for texnum 26 (aa)
+Fixed .fin (Instance) import / export function
+
 20.25.70
 Added Texture+Vertex Colour Layer Preview
 TEX+VC Preview adjusts to the Vertex Alpha level

@@ -192,16 +192,27 @@ def export_mesh(me, obj, scene, filepath, world=None):
         if is_quad:
             poly.type |= FACE_QUAD
 
-        # Gets the texture number from the integer layer if setting enabled
-        # use_tex_num is the only way to achieve no texture
-        if scene.use_tex_num and texnum_layer:
-            poly.texture = face[texnum_layer]
-        # Falls back to texture if not enabled or texnum layer not found
-        image = get_texture_from_material(face, obj)
-        if image:
-            poly.texture = texture_to_int(image.name)
+        # --- decide texture index for this face (DO NOT overwrite a valid texnum) ---
+        # 1) Prefer explicit "Texture Number" layer when scene.use_tex_num is True
+        face_texnum = -1
+        if texnum_layer:
+            try:
+                face_texnum = int(face[texnum_layer])
+            except Exception:
+                face_texnum = -1
+
+        if scene.use_tex_num:
+            # honor the layer strictly; -1 means "no texture"
+            poly.texture = face_texnum
         else:
-            poly.texture = -1
+            # 2) Fallback: derive from material image name (only if layer isn't used)
+            image = get_texture_from_material(face, obj)
+            if image:
+                # texture_to_int should handle ".bmp" and case;
+                # if you need a base-aware mapping, swap in your own mapper here.
+                poly.texture = texture_to_int(image.name)
+            else:
+                poly.texture = -1
 
         # Sets vertex indices for the polygon
         vert_order = [2, 1, 0, 3] if not is_quad else [3, 2, 1, 0]
