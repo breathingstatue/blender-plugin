@@ -6,6 +6,9 @@ place 'io_revolt' in Blender/"version"/scripts/addons/
 
 -Theman with the help of AI and a bunch of friends in the RV I/O community.
 
+20.25.76
+.fob import now accepts -1 as a value
+
 20.25.75
 Fixed "Set Material to Selected Faces"
 Fixed "Fix Texture Numbers and Materials" for texnum 26 (aa)
