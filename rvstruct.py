@@ -1731,6 +1731,7 @@ class Objects:
         self.objects = []
 
     def read(self, file):
+        """Read an FOB object array from a binary file-like."""
         count_data = file.read(4)
         if len(count_data) < 4:
             return
@@ -1740,52 +1741,76 @@ class Objects:
             if len(chunk) < 56:
                 break
             obj = Object()
-            obj.read(chunk)
+            obj.read(chunk)  # produces signed ints in memory
             self.objects.append(obj)
 
     def write(self, file):
+        """Write the FOB object array to a binary file-like."""
         file.write(struct.pack('<I', len(self.objects)))
         for obj in self.objects:
             file.write(obj.write())
-            
+
+
 class Object:
     from .fob_subtypes import OBJECT_TYPE_NAMES, OBJECT_SUBTYPE_DESCRIPTIONS, OBJECT_SUBTYPE_VALUES
-    
+
     def __init__(self, obj_id=0, subinfos=None, position=(0.0, 0.0, 0.0), rotation=None):
+        # Store as signed 32-bit in memory to play nice with Blender IntProperty
         self.obj_id = obj_id
         self.subinfos = subinfos if subinfos else [0, 0, 0, 0]
         self.position = position
-        self.rotation = rotation  # None or 6 floats (forward + up vectors)
+        # rotation = None or 6 floats: forward(x,y,z) + up(x,y,z)
+        self.rotation = rotation
 
-    def read(self, data):
-        self.obj_id = struct.unpack_from('<I', data, 0)[0]
-        self.subinfos = list(struct.unpack_from('<4I', data, 4))
+    # ----------------------
+    # Helpers (scoped inside class)
+    # ----------------------
+    @staticmethod
+    def u32_to_i32(u: int) -> int:
+        """Convert 32-bit unsigned to signed (two's complement)."""
+        u &= 0xFFFFFFFF
+        return u if u < 0x80000000 else u - 0x100000000
+
+    @staticmethod
+    def i32_to_u32(i: int) -> int:
+        """Convert 32-bit signed to unsigned representation."""
+        return i & 0xFFFFFFFF
+
+    @staticmethod
+    def clean_float(f: float) -> float:
+        """Avoid denormals / tiny drift and keep file stable."""
+        return 0.0 if abs(f) < 1e-6 else round(f, 6)
+
+    # ----------------------
+    # Binary IO
+    # ----------------------
+    def read(self, data: bytes):
+        """Parse a 56-byte FOB object record from bytes."""
+        # Read unsigned from disk, convert to signed for in-memory use
+        self.obj_id = self.u32_to_i32(struct.unpack_from('<I', data, 0)[0])
+        self.subinfos = [self.u32_to_i32(v) for v in struct.unpack_from('<4I', data, 4)]
         self.position = struct.unpack_from('<3f', data, 20)
 
-        rot_data = data[32:56]
-        rot_floats = struct.unpack('<6f', rot_data)
-
+        rot_floats = struct.unpack_from('<6f', data, 32)
         identity = (0.0, 0.0, 1.0, 0.0, 0.0, 1.0)
+        self.rotation = None if all(abs(a - b) < 1e-6 for a, b in zip(rot_floats, identity)) else rot_floats
 
-        if all(abs(a - b) < 1e-6 for a, b in zip(rot_floats, identity)):
-            self.rotation = None
-        else:
-            self.rotation = rot_floats
-
-    def write(self):
-        buffer = bytearray()
-        buffer.extend(struct.pack('<I', self.obj_id))            # 4 bytes
-        buffer.extend(struct.pack('<4I', *self.subinfos))        # 16 bytes
-        buffer.extend(struct.pack('<3f', *self.position))        # 12 bytes
-
+    def write(self) -> bytes:
+        """Serialize to a 56-byte FOB object record."""
+        buf = bytearray()
+        buf.extend(struct.pack('<I', self.i32_to_u32(self.obj_id)))
+        buf.extend(struct.pack('<4I', *(self.i32_to_u32(v) for v in self.subinfos)))
+        buf.extend(struct.pack('<3f', *self.position))
         if self.rotation:
-            buffer.extend(struct.pack('<6f', *(clean_float(f) for f in self.rotation)))     # 24 bytes
+            buf.extend(struct.pack('<6f', *(self.clean_float(f) for f in self.rotation)))
         else:
-            buffer.extend(struct.pack('<6f', 0.0, 0.0, 1.0, 0.0, 0.0, 1.0))
+            buf.extend(struct.pack('<6f', 0.0, 0.0, 1.0, 0.0, 0.0, 1.0))
+        assert len(buf) == 56, f"Expected 56 bytes, got {len(buf)}"
+        return bytes(buf)
 
-        assert len(buffer) == 56, f"Expected 56 bytes, got {len(buffer)}"
-        return bytes(buffer)
-
+    # ----------------------
+    # UI helpers
+    # ----------------------
     def get_type_name(self):
         from .fob_subtypes import OBJECT_TYPE_NAMES
         return OBJECT_TYPE_NAMES.get(self.obj_id, f"Unknown({self.obj_id})")
@@ -1800,12 +1825,11 @@ class Object:
 
     def get_subtype_label(self, index):
         values = self.get_subtype_values(index)
-        if values and isinstance(values, list) and self.subinfos[index] < len(values):
-            return values[self.subinfos[index]]
-        return str(self.subinfos[index])
-    
-def clean_float(f):
-    return 0.0 if abs(f) < 1e-6 else round(f, 6)
+        val = self.subinfos[index]
+        # guard against negatives and out-of-range
+        if values and isinstance(values, list) and 0 <= val < len(values):
+            return values[val]
+        return str(val)
 
 class Visiboxes:
     """
