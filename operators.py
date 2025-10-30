@@ -2196,10 +2196,10 @@ class MaterialAssignmentAuto(bpy.types.Operator):
                     # alpha=0 → 0.01 (1%), alpha=1 → 0.20 (20%)
                     mult_node = nodes.new('ShaderNodeMath')
                     mult_node.operation = 'MULTIPLY'
-                    mult_node.inputs[1].default_value = 0.19
+                    mult_node.inputs[1].default_value = 0.22
                     add_node = nodes.new('ShaderNodeMath')
                     add_node.operation = 'ADD'
-                    add_node.inputs[1].default_value = 0.01
+                    add_node.inputs[1].default_value  = 0.03
                     mix = nodes.new('ShaderNodeMixRGB')
                     mix.blend_type = 'MIX'
                     bsdf = nodes.new('ShaderNodeBsdfPrincipled')
@@ -2229,6 +2229,124 @@ class MaterialAssignmentAuto(bpy.types.Operator):
                     obj.active_material_index = idx
                     break
 
+    def _is_tex_vc_mat(self, mat):
+        return bool(mat and isinstance(mat.name, str) and mat.name.endswith("_TexVC"))
+
+    def _remove_unreferenced_tex_vc_slots(self, obj):
+        mesh = obj.data
+        # build referenced slot set
+        import bmesh
+        bm = bmesh.new()
+        bm.from_mesh(mesh)
+        referenced = set(f.material_index for f in bm.faces)
+        bm.free()
+        # remove *_TexVC slots that aren't referenced (back-to-front so indices stay valid)
+        for idx in range(len(mesh.materials) - 1, -1, -1):
+            mat = mesh.materials[idx]
+            if idx not in referenced and self._is_tex_vc_mat(mat):
+                mesh.materials.pop(index=idx)
+
+    def _set_active_texture_material(self, obj):
+        """Pick a sane pure-texture active material (not *_TexVC, not *_Col, etc.)."""
+        mesh = obj.data
+        # 1) Prefer the material used by the active polygon (if any), if it's not TexVC
+        if len(mesh.polygons) > 0:
+            idx = mesh.polygons[0].material_index
+            if 0 <= idx < len(mesh.materials) and not self._is_tex_vc_mat(mesh.materials[idx]):
+                obj.active_material_index = idx
+                return
+        # 2) Else pick the first non-TexVC slot that looks like a texture (endswith .bmp or has a TEX_IMAGE node)
+        for i, m in enumerate(mesh.materials):
+            if not m or self._is_tex_vc_mat(m):
+                continue
+            if m.name.lower().endswith(".bmp"):
+                obj.active_material_index = i
+                return
+            if getattr(m, "use_nodes", False):
+                if any(n.type == 'TEX_IMAGE' for n in m.node_tree.nodes):
+                    obj.active_material_index = i
+                    return
+        # 3) Fallback: first non-TexVC material
+        for i, m in enumerate(mesh.materials):
+            if not self._is_tex_vc_mat(m):
+                obj.active_material_index = i
+                return
+
+    def _reassign_faces_off_tex_vc(self, obj):
+        """Force any *_TexVC faces to the correct texture-only material by texnum."""
+        import bmesh
+        mesh = obj.data
+        bm = bmesh.new()
+        bm.from_mesh(mesh)
+
+        texnum_layer = bm.faces.layers.int.get("Texture Number")
+        if not texnum_layer:
+            bm.free()
+            return
+
+        # Rebuild the same base-name + source_mode logic you already use
+        scene = bpy.context.scene
+        base_name = ""
+        source_mode = ""
+        matched = False
+
+        if obj.get("is_model", False):
+            for i in range(MAX_MODEL_SLOTS):
+                nm = scene.get(f"m_model_name_{i}", "")
+                if not nm:
+                    continue
+                if clean_model_base_name(nm) in clean_model_base_name(obj.name):
+                    source_mode = scene.get(f"m_texture_mode_{i}", "VERTEX_COLOR")
+                    p = scene.get(f"m_texture_path_{i}", "")
+                    if source_mode == "TEXTURE_NAME":
+                        base_name = os.path.splitext(os.path.basename(p))[0].lower()
+                    elif source_mode == "LEVEL_TEXTURES":
+                        base_name = os.path.basename(p.rstrip("/\\")).lower()
+                    matched = True
+                    break
+
+        is_car_part = any(prefix in obj.name.lower() for prefix in self.car_parts_prefixes)
+        if not matched and not is_car_part:
+            if obj.get("is_instance") and "fin_texture_base" in obj:
+                base_name = obj["fin_texture_base"]
+            elif "level_texture_base" in scene:
+                base_name = os.path.splitext(scene["level_texture_base"].strip().lower())[0]
+            else:
+                base_name = clean_model_base_name(obj.name)
+            source_mode = "LEVEL_TEXTURES"
+        if not matched and is_car_part:
+            fallback_name = scene.get("selected_car_texture", "car.bmp")
+            base_name = clean_model_base_name(fallback_name)
+            source_mode = "TEXTURE_NAME"
+
+        for face in bm.faces:
+            # only touch faces that currently use *_TexVC
+            cur = mesh.materials[face.material_index] if 0 <= face.material_index < len(mesh.materials) else None
+            if not self._is_tex_vc_mat(cur):
+                continue
+
+            tex_num = face[texnum_layer]
+            if source_mode == "TEXTURE_NAME":
+                mat_name = f"{base_name}.bmp"
+            elif source_mode == "LEVEL_TEXTURES" and tex_num >= 0:
+                mat_name = int_to_texture(tex_num, name=base_name)
+            else:
+                continue
+
+            mat = self.find_material_loose(mat_name)
+            if not mat:
+                # If it doesn't exist yet, UV assignment (step 1) should have added it;
+                # if not, skip defensively.
+                continue
+            if mat.name not in mesh.materials:
+                mesh.materials.append(mat)
+
+            face.material_index = mesh.materials.find(mat.name)
+
+        bm.to_mesh(mesh)
+        bm.free()
+        mesh.update()
+
     def update_material_assignment(self, obj, existing_textures):
         material_map = {
             'UV_TEX': '_UVTex',
@@ -2251,7 +2369,17 @@ class MaterialAssignmentAuto(bpy.types.Operator):
 
         if material_choice == 'UV_TEX':
             print(f"[DEBUG] → Assigning UV textures for {obj.name}")
+            # 1) Make sure pure texture materials exist and are assigned where possible
             self.assign_uv_textures(obj, existing_textures)
+            # 2) Move any *_TexVC faces back to texture-only
+            self._reassign_faces_off_tex_vc(obj)
+            # 3) Drop unused *_TexVC slots so they don't linger
+            self._remove_unreferenced_tex_vc_slots(obj)
+            # 4) Make a pure-texture slot the *active* one so the header shows the right thing
+            self._set_active_texture_material(obj)
+            # Optional: nudge depsgraph/viewport
+            obj.data.update()
+            obj.update_tag(refresh={'DATA'})
 
         elif material_choice == 'TEX_VC':
             print(f"[DEBUG] → Assigning Tex+VC materials for {obj.name}")
@@ -2555,11 +2683,11 @@ class MaterialAssignment(bpy.types.Operator):
 
             mult_node = nodes.new('ShaderNodeMath')
             mult_node.operation = 'MULTIPLY'
-            mult_node.inputs[1].default_value = 0.19  # scale alpha
+            mult_node.inputs[1].default_value = 0.22  # scale alpha
 
             add_node = nodes.new('ShaderNodeMath')
             add_node.operation = 'ADD'
-            add_node.inputs[1].default_value = 0.01   # base 1%
+            add_node.inputs[1].default_value = 0.03   # base 3%
 
             mix = nodes.new('ShaderNodeMixRGB')
             mix.blend_type = 'MIX'
@@ -2649,13 +2777,10 @@ class MaterialAssignment(bpy.types.Operator):
             print(f"[DEBUG] → Assigning UV textures for {obj.name}")
             self.assign_uv_textures(obj, existing_textures)
 
-        elif material_choice == 'TEX_VC':
-            print(f"[DEBUG] → Assigning Tex+VC materials for {obj.name}")
-            # Some classes take existing_textures, others don’t; handle both
-            try:
-                self.assign_tex_vc_materials(obj, existing_textures)
-            except TypeError:
-                self.assign_tex_vc_materials(obj)
+        # Block TEX+VC for this operator (Selected)
+        elif material_choice == 'TEX_VC':   # ← was active_material_choice
+            self.report({'INFO'}, "TEX+VC can only be assigned via Set to All.")
+            return {'CANCELLED'}
 
         elif material_choice == 'NCP':
             print(f"[DEBUG] → Assigning NCP materials for {obj.name}")

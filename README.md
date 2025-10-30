@@ -6,8 +6,13 @@ place 'io_revolt' in Blender/"version"/scripts/addons/
 
 -Theman with the help of AI and a bunch of friends in the RV I/O community.
 
+20.25.77
+Blender won't crash anymore when using (I)Inset
+You can switch back to Texture from TEX+VC
+
 20.25.76
 .fob import now accepts -1 as a value
+Changed the link to the manual
 
 20.25.75
 Fixed "Set Material to Selected Faces"
