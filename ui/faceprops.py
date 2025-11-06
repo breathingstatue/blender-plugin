@@ -114,16 +114,35 @@ class RVIO_PT_RevoltFacePropertiesPanel(bpy.types.Panel):
 
             if not has_selection or tex_num == -3:
                 box.label(text="(No Face Selected)")
+
             elif tex_num == -2:
                 box.label(text="(Multiple Textures Selected)")
-            elif isinstance(tex_num, int) and 0 <= tex_num < TEX_PAGES_MAX:
-                # Only show the operator if the page index is a single valid number
-                box.operator("mesh.set_face_texture_dropdown", text="Change Texture Page")
+
             else:
-                # Getter reported something unexpected — keep UI stable
-                row = box.row()
-                row.enabled = False
-                row.label(text="(Texture layer missing/unset)")
+                # We have a selection; always allow using the dropdown operator.
+                if tex_num == -1:
+                    # Layer missing/unset – operator will create it
+                    row = box.row()
+                    row.label(text="(Texture layer missing/unset)")
+                    box.operator(
+                        "mesh.set_face_texture_dropdown",
+                        text="Create Layer / Set Texture Page",
+                    )
+
+                elif isinstance(tex_num, int) and 0 <= tex_num < TEX_PAGES_MAX:
+                    # Single valid texture page
+                    row = box.row()
+                    row.label(text=f"Current: Page {tex_num + 1}")
+                    box.operator(
+                        "mesh.set_face_texture_dropdown",
+                        text="Change Texture Page",
+                    )
+
+                else:
+                    # Fallback – should not normally happen with current getter
+                    row = box.row()
+                    row.enabled = False
+                    row.label(text=f"(Unexpected texture value: {tex_num})")
 
         else:
             box = layout.box()
