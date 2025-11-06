@@ -6,6 +6,12 @@ place 'io_revolt' in Blender/"version"/scripts/addons/
 
 -Theman with the help of AI and a bunch of friends in the RV I/O community.
 
+20.25.79
+Fixed UI - Texture Number
+
+20.25.78
+Minor fix to the Export window
+
 20.25.77
 Blender won't crash anymore when using (I)Inset
 You can switch back to Texture from TEX+VC
