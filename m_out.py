@@ -200,23 +200,58 @@ def set_material_to_col(mesh_objects):
         print("No mesh objects selected for material assignment.")
         return
 
+    scene = bpy.context.scene
+    if not hasattr(scene, "material_choice"):
+        print("[WARN] Scene has no 'material_choice' property; cannot assign COL materials.")
+        return
+
+    # Set global choice
+    scene.material_choice = 'COL'
+
+    # Select all target meshes
+    bpy.ops.object.select_all(action='DESELECT')
     for obj in mesh_objects:
-        obj.data.material_choice = 'COL'
-        bpy.context.view_layer.objects.active = obj
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.select_all(action='SELECT')
-        bpy.ops.object.assign_materials_impexp()
+        obj.select_set(True)
+
+    # Ensure a valid active object
+    bpy.context.view_layer.objects.active = mesh_objects[0]
+
+    # Ensure OBJECT mode
+    if bpy.context.object and bpy.context.object.mode != 'OBJECT':
         bpy.ops.object.mode_set(mode='OBJECT')
+
+    # Let the operator handle edit mode + face selection internally
+    bpy.ops.object.assign_materials_impexp()
+
+    print("Assigned COL materials to all mesh objects.")
+
 
 def set_material_to_texture(mesh_objects):
     if not mesh_objects:
         print("No mesh objects selected for material assignment.")
         return
 
+    scene = bpy.context.scene
+    if not hasattr(scene, "material_choice"):
+        print("[WARN] Scene has no 'material_choice' property; cannot assign UV_TEX materials.")
+        return
+
+    # Set global choice
+    scene.material_choice = 'UV_TEX'
+
+    # Select all target meshes
+    bpy.ops.object.select_all(action='DESELECT')
     for obj in mesh_objects:
-        obj.data.material_choice = 'UV_TEX'
-        bpy.context.view_layer.objects.active = obj
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.select_all(action='SELECT')
-        bpy.ops.object.assign_materials_impexp()
+        obj.select_set(True)
+
+    # Ensure a valid active object
+    bpy.context.view_layer.objects.active = mesh_objects[0]
+
+    # Ensure OBJECT mode
+    if bpy.context.object and bpy.context.object.mode != 'OBJECT':
         bpy.ops.object.mode_set(mode='OBJECT')
+
+    # Let the operator handle edit mode + face selection internally
+    bpy.ops.object.assign_materials_impexp()
+
+    print("Assigned UV_TEX materials to all mesh objects.")

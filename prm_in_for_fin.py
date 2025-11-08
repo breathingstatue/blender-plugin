@@ -67,8 +67,13 @@ def import_file(filepath, scene, texture_base_name=None):
             else:
                 print(f"Object '{obj.name}' is already in the scene collection.")
             bpy.context.view_layer.objects.active = obj
+
             print(f"[DEBUG] Before material assignment: {obj.name} has materials {[m.name for m in obj.data.materials]}")
-            print(f"[DEBUG] material_choice is initially {obj.data.material_choice}")
+
+            # scene-level material choice (optional debug)
+            scene_choice = getattr(scene, "material_choice", None)
+            print(f"[DEBUG] Scene.material_choice is {scene_choice!r}")
+
             assign_uv_tex_material(obj, texture_base_name=texture_base_name)
             print(f"[DEBUG] After assign_uv_tex_material: {obj.name} has materials {[m.name for m in obj.data.materials]}")
 

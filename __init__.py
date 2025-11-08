@@ -71,6 +71,7 @@ from .ui import (
     settings,
     texanim,
     vertex,
+    viewlayer_panel,
 )
 
 from .common import DialogOperator, TEX_ANIM_MAX, MAX_MODEL_SLOTS
@@ -84,7 +85,7 @@ from .layers import update_fin_env, update_rgb, update_no_envmapping, update_env
 from .operators import CopyAndRemoveAxles, ImportRV, ExportRV, ExportExtension, RVIO_OT_ReadCarParameters, RVIO_OT_SelectRevoltDirectory, ButtonReExport
 from .operators import VertexAndAlphaLayer, VertexColorRemove, SetVertexColor, BakeShadow, BakeVertex, BatchBakeVertexToEnv, BakeVertexToRGBModelColor
 from .operators import SetVertexAlpha, SetFaceTextureNumber, MFileExtension, TexturePrefixPrompt, SetFaceTextureDropdown, SetLevelTexturePrefix
-from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, MaterialAssignment, MaterialAssignmentAuto, MaterialAssignmentImportExport
+from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, MaterialAssignmentAuto, MaterialAssignment, MaterialAssignmentImportExport
 from .operators import TextureAssigner, SetInstanceProperty, RemoveInstanceProperty, LaunchRV, TexturesSave, TexturesRename, ClearExtraAssignments
 from .operators import CopyAerialParams, AxleMessageBox, ConfirmLoadOriginalAxle, CopyAndRemoveAxles, SpringMessageBox, ConfirmLoadOriginalSpring
 from .operators import CopyAndRemoveSprings, PinMessageBox, ConfirmLoadOriginalPin, CopyAndRemovePins, CopyWheelParams, CreateVisibox
@@ -106,11 +107,12 @@ from .ui.objectpanel import RVIO_PT_RevoltObjectPanel
 from .ui.settings import RVIO_PT_RevoltSettingsPanel, update_actual_split_size, get_actual_split_size
 from .ui.vertex import RVIO_PT_VertexPanel
 from .ui.migpanel import RVIO_PT_RevoltMIGPanel
+from .ui.viewlayer_panel import RVIO_PT_RevoltViewLayerPanel
 
 bl_info = {
 "name": "Re-Volt",
 "author": "Marvin Thiel & Theman",
-"version": (20, 25, 79),
+"version": (20, 25, 81),
 "blender": (4, 5, 1),
 "location": "File > Import-Export",
 "description": "Import and export Re-Volt file formats.",
@@ -598,13 +600,13 @@ def register():
         max=63
     )
     
-    bpy.types.Mesh.material_choice = bpy.props.EnumProperty(
+    bpy.types.Scene.material_choice = bpy.props.EnumProperty(
         name="Layer",
         items=[
+            ('TEX_VC', "Tex+VC+Alpha", "Assign Texture + Vertex Colour + Alpha"),
             ('UV_TEX', "Texture", "Assign UV Texture"),
-            ('COL', "Color", "Assign Color Material"),
-            ('TEX_VC', "Tex+VC", "Assign Texture + Vertex Colour Blend"),
-            ('ALPHA', "Alpha", "Assign Vertex Alpha Material"),
+            ('COL', "Vertex Color", "Assign Color Material"),
+            ('ALPHA', "Vertex Alpha", "Assign Vertex Alpha Material"),
             ('ENV', "EnvMap", "Assign Env / EnvAlpha Material"),
             ('RGB', "Model Color (Instance)", "Assign RGB Model Color"),
             ('NCP', "NCP Material (Preview)", "Assign NCP Preview")
@@ -765,7 +767,7 @@ def register():
         name="Alpha Percentage",
         description="Choose an alpha percentage for the vertex color layer",
         items=get_alpha_items(),
-        default='0'
+        default='100'
     )
     
     bpy.types.Scene.car_shader_color = bpy.props.FloatVectorProperty(
@@ -1011,8 +1013,8 @@ def register():
     bpy.utils.register_class(TexturesSave)
     bpy.utils.register_class(TexturesRename)
     bpy.utils.register_class(ClearExtraAssignments)
-    bpy.utils.register_class(MaterialAssignment)
     bpy.utils.register_class(MaterialAssignmentAuto)
+    bpy.utils.register_class(MaterialAssignment)
     bpy.utils.register_class(MaterialAssignmentImportExport)
     bpy.utils.register_class(TextureAssigner)
     bpy.utils.register_class(CopyWheelParams)
@@ -1074,6 +1076,7 @@ def register():
     bpy.utils.register_class(RVIO_PT_RevoltInstancesPanel)
     bpy.utils.register_class(RVIO_PT_RevoltLightPanel)
     bpy.utils.register_class(RVIO_PT_RevoltObjectPanel)
+    bpy.utils.register_class(RVIO_PT_RevoltViewLayerPanel)
     
     # UI and Handlers Registration
     bpy.app.handlers.depsgraph_update_pre.append(edit_object_change_handler)
@@ -1084,6 +1087,7 @@ def unregister():
     bpy.app.handlers.depsgraph_update_pre.remove(edit_object_change_handler)
      
     # Unregister UI
+    bpy.utils.unregister_class(RVIO_PT_RevoltViewLayerPanel)
     bpy.utils.unregister_class(RVIO_PT_RevoltObjectPanel)
     bpy.utils.unregister_class(RVIO_PT_RevoltLightPanel)
     bpy.utils.unregister_class(RVIO_PT_RevoltInstancesPanel)
@@ -1145,8 +1149,8 @@ def unregister():
     bpy.utils.unregister_class(CopyWheelParams)
     bpy.utils.unregister_class(TextureAssigner)
     bpy.utils.unregister_class(MaterialAssignmentImportExport)
-    bpy.utils.unregister_class(MaterialAssignmentAuto)
     bpy.utils.unregister_class(MaterialAssignment)
+    bpy.utils.unregister_class(MaterialAssignmentAuto)
     bpy.utils.unregister_class(ClearExtraAssignments)
     bpy.utils.unregister_class(TexturesRename)
     bpy.utils.unregister_class(TexturesSave)
@@ -1235,7 +1239,7 @@ def unregister():
     del bpy.types.Mesh.face_mirror
     del bpy.types.Mesh.face_translucent
     del bpy.types.Mesh.face_double_sided
-    del bpy.types.Mesh.material_choice
+    del bpy.types.Scene.material_choice
     del bpy.types.Mesh.face_texture
     del bpy.types.Mesh.face_material
     del bpy.types.Mesh.select_material

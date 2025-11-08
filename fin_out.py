@@ -109,16 +109,34 @@ def export_file(filepath, scene):
     print(f"Export complete: {len(fin.instances)} instances exported to {filepath}")
 
 def assign_material_to_meshes(mesh_objects, material_type):
+    """Assign materials to given meshes using the global Scene material_choice."""
     if not mesh_objects:
         return
+
+    scene = bpy.context.scene
+
+    # Make sure the Scene has the property
+    if not hasattr(scene, "material_choice"):
+        print("[WARN] Scene has no 'material_choice' property; cannot assign materials.")
+        return
+
+    # Set the global choice (e.g. 'UV_TEX', 'COL', etc.)
+    scene.material_choice = material_type
+
+    # Select target meshes
     bpy.ops.object.select_all(action='DESELECT')
     for obj in mesh_objects:
         obj.select_set(True)
-        obj.data.material_choice = material_type
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.select_all(action='SELECT')
+
+    # Ensure a valid active object
+    bpy.context.view_layer.objects.active = mesh_objects[0]
+
+    # Ensure we are in OBJECT mode before running the operator
+    if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+    # The operator will now read scene.material_choice internally
     bpy.ops.object.assign_materials_impexp()
-    bpy.ops.object.mode_set(mode='OBJECT')
 
 def get_base_name_for_layers(obj):
     if obj.get("is_instance") and "fin_texture_base" in obj:

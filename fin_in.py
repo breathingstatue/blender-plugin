@@ -230,20 +230,33 @@ def get_base_name_for_layers(obj):
 
 def assign_col_materials(scene):
     mesh_objects = [obj for obj in scene.objects if obj.type == 'MESH' and obj.data]
+    if not mesh_objects:
+        return
+
+    # Only operate on objects that haven't been tagged yet
+    targets = [obj for obj in mesh_objects if "material_assigned_col" not in obj]
+    if not targets:
+        return
+
     bpy.ops.object.select_all(action='DESELECT')
 
-    for obj in mesh_objects:
-        if "material_assigned_col" not in obj:
-            obj.select_set(True)
-            bpy.context.view_layer.objects.active = obj  # <- make active!
-            obj.data.material_choice = 'COL'
+    # Set the global material choice on the Scene (you registered this)
+    scene.material_choice = 'COL'
 
+    # Select all target meshes and pick a reasonable active one
+    for obj in targets:
+        obj.select_set(True)
+    bpy.context.view_layer.objects.active = targets[0]
+
+    # Ensure we're in OBJECT mode before running the operator
     if bpy.context.object and bpy.context.object.mode != 'OBJECT':
         bpy.ops.object.mode_set(mode='OBJECT')
 
+    # This will now read scene.material_choice (once you've updated that operator)
     bpy.ops.object.assign_materials_impexp()
 
-    for obj in mesh_objects:
+    # Mark as done so we don't try to reassign next time
+    for obj in targets:
         obj["material_assigned_col"] = True
 
 def assign_uvtex_materials(scene):

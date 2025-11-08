@@ -183,34 +183,43 @@ def create_cube(scene, sptype, center, radius, filename):
 def fast_batch_assign_materials(scene):
     """Assign materials to all imported mesh objects using batch processing."""
     mesh_objects = [obj for obj in scene.objects if obj.type == 'MESH']
+    if not mesh_objects:
+        print("No mesh objects found for fast batch assignment.")
+        return
 
-    # Assign Vertex Color materials (COL)
-    fast_batch_assign_material_choice(mesh_objects, 'COL')
+    # Assign Vertex Color materials (COL) first
+    fast_batch_assign_material_choice(scene, mesh_objects, 'COL')
 
-    # Assign UV Texture materials (UV_TEX)
-    fast_batch_assign_material_choice(mesh_objects, 'UV_TEX')
+    # Then assign UV Texture materials (UV_TEX)
+    fast_batch_assign_material_choice(scene, mesh_objects, 'UV_TEX')
 
-def fast_batch_assign_material_choice(mesh_objects, material_choice):
+
+def fast_batch_assign_material_choice(scene, mesh_objects, material_choice):
     """Batch process material assignment for all objects in the scene."""
     if not mesh_objects:
         print("No mesh objects selected for material assignment.")
         return
 
-    # Set all objects to the desired material choice
-    for obj in mesh_objects:
-        obj.data.material_choice = material_choice
+    # Set the global Scene-level material choice
+    if hasattr(scene, "material_choice"):
+        scene.material_choice = material_choice
+    else:
+        print("[WARN] Scene has no 'material_choice' property; skipping batch assignment.")
+        return
 
-    # Switch to edit mode for all objects at once
+    # Deselect everything, then select our meshes
     bpy.ops.object.select_all(action='DESELECT')
     for obj in mesh_objects:
         obj.select_set(True)
 
-    # Enter edit mode, select all faces, and apply material assignment
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.select_all(action='SELECT')
-    bpy.ops.object.assign_materials_impexp()
+    # Make sure there is a valid active object
+    bpy.context.view_layer.objects.active = mesh_objects[0]
 
-    # Return to object mode after processing
-    bpy.ops.object.mode_set(mode='OBJECT')
+    # Ensure we're in OBJECT mode before running the operator
+    if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+    # This operator should now read scene.material_choice internally
+    bpy.ops.object.assign_materials_impexp()
 
     print(f"Assigned {material_choice} materials to all mesh objects.")

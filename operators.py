@@ -138,10 +138,6 @@ class ImportRV(bpy.types.Operator):
                 from . import hul_in
                 hul_in.import_file(self.filepath, scene)
 
-            elif frmt == FORMAT_LIT:
-                from . import lit_in
-                lit_in.import_file(self.filepath, scene)
-
             elif frmt == FORMAT_NCP:
                 from . import ncp_in
                 ncp_in.import_file(self.filepath, scene)
@@ -238,56 +234,83 @@ class ExportRV(bpy.types.Operator):
         name="Format",
         description="Choose the file format to export",
         items=[
-            ('FIN', "FIN (.fin)", "Instance file"),
-            ('FOB', "FOB (.fob)", "FOB object file"),
-            ('HUL', "HUL (.hul)", "Hull file"),
-            ('LIT', "LIT (.lit)", "Light file"),
-            ('NCP', "NCP (.ncp)", "Collision file"),
-            ('PRM', "PRM (.prm)", "Mesh file"),
-            ('RIM', "RIM (.rim)", "Mirror file"),
-            ('TAZ', "TAZ (.taz)", "Track zone file"),
-            ('FAN', "FAN (.fan)", "AI Nodes file"),
-            ('PAN', "PAN (.pan)", "Position Nodes file"),
-            ('TRI', "TRI (.tri)", "Trigger file"),
-            ('VIS', "VIS (.vis)", "Visibox file"),
-            ('W', "W (.w)", "World file"),
-            ('M', "M (.m)", "Model file"),
+            ('NONE', "Select filetype…", "Pick a Re-Volt file type"),
+            ('FIN',  "FIN (.fin)", "Instance file"),
+            ('FOB',  "FOB (.fob)", "FOB object file"),
+            ('HUL',  "HUL (.hul)", "Hull file"),
+            ('NCP',  "NCP (.ncp)", "Collision file"),
+            ('PRM',  "PRM (.prm)", "Mesh file"),
+            ('RIM',  "RIM (.rim)", "Mirror file"),
+            ('TAZ',  "TAZ (.taz)", "Track zone file"),
+            ('FAN',  "FAN (.fan)", "AI Nodes file"),
+            ('PAN',  "PAN (.pan)", "Position Nodes file"),
+            ('TRI',  "TRI (.tri)", "Trigger file"),
+            ('VIS',  "VIS (.vis)", "Visibox file"),
+            ('W',    "W (.w)",     "World file"),
+            ('M',    "M (.m)",     "Model file"),
         ],
+        default='NONE',
         update=None
     )
 
     def execute(self, context):
+        # Fallback for filepath if user somehow runs execute without fileselect
         if not self.filepath:
             self.filepath = context.scene.get("last_exported_filepath", "")
-        if not self.format_type:
-            self.format_type = context.scene.get("last_exported_format", "")
 
-        # Force the format_type to match the actual file extension
+        # Maps extension -> format code
         ext_map = {
-            ".fin": "FIN", ".fob": "FOB", ".hul": "HUL", ".lit": "LIT",
+            ".fin": "FIN", ".fob": "FOB", ".hul": "HUL",
             ".ncp": "NCP", ".prm": "PRM", ".rim": "RIM", ".taz": "TAZ",
             ".fan": "FAN", ".pan": "PAN", ".tri": "TRI", ".vis": "VIS",
             ".w": "W", ".m": "M"
         }
-        ext = os.path.splitext(self.filepath)[1].lower()
+        format_to_ext = {v: k for k, v in ext_map.items()}
+
+        base, ext = os.path.splitext(self.filepath)
+        ext = ext.lower()
+
+        # --- Determine actual format ---
         if ext in ext_map:
+            # If user typed an explicit extension, infer format_type from it
             self.format_type = ext_map[ext]
+        elif self.format_type != 'NONE':
+            # If no extension but dropdown selected, append it
+            add_ext = format_to_ext.get(self.format_type)
+            if add_ext:
+                self.filepath = base + add_ext
+                ext = add_ext
+        else:
+            # Neither dropdown selection nor extension typed → invalid
+            self.report({'ERROR'}, "Please select a file type or include the extension in the filename.")
+            return {'CANCELLED'}
 
         print(f"Exporting to filepath: {self.filepath}, format: {self.format_type}")
 
-        if not self.filepath:
-            print("Error: Filepath is not set.")
-            return {'CANCELLED'}
-
-        # Save for future reuse
-        context.scene.last_exported_filepath = self.filepath
-        context.scene.last_exported_format = self.format_type
+        # Save for reuse
+        context.scene["last_exported_filepath"] = self.filepath
+        context.scene["last_exported_format"] = self.format_type
 
         result = exec_export(self.filepath, self.format_type, context)
         return result
 
     def invoke(self, context, event):
-        # Open the file browser to select the export path
+        # Restore last used format if available
+        last_fmt = context.scene.get("last_exported_format")
+        valid_formats = {
+            "FIN", "FOB", "HUL", "NCP", "PRM", "RIM",
+            "TAZ", "FAN", "PAN", "TRI", "VIS", "W", "M"
+        }
+        if last_fmt in valid_formats:
+            self.format_type = last_fmt
+        else:
+            self.format_type = 'NONE'
+
+        # Restore last path suggestion
+        last_path = context.scene.get("last_exported_filepath")
+        if last_path:
+            self.filepath = last_path
+
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
@@ -2058,38 +2081,53 @@ class MaterialAssignmentAuto(bpy.types.Operator):
         mesh_objects = [obj for obj in bpy.data.objects if obj.type == 'MESH']
         print(f"[DEBUG] Found {len(mesh_objects)} mesh objects")
 
-        original_active_object = context.view_layer.objects.active
-        if not (original_active_object and original_active_object.type == 'MESH'):
-            print("[ERROR] No valid active mesh object")
-            self.report({'WARNING'}, "No active mesh object with material choice found.")
+        if not mesh_objects:
+            self.report({'WARNING'}, "No mesh objects found in the scene.")
             return {'CANCELLED'}
 
-        active_material_choice = original_active_object.data.material_choice
-        print(f"[DEBUG] Active material choice: {active_material_choice}")
+        scene = context.scene
+        original_active_object = context.view_layer.objects.active
+
+        # --- NEW: drive choice from scene, not from mesh ---
+        material_choice = getattr(scene, "material_choice", None)
+        if not material_choice:
+            material_choice = 'UV_TEX'
+        print(f"[DEBUG] Global / scene material choice: {material_choice}")
+
+        # Texture-based modes still need a level texture base
+        if material_choice in {"UV_TEX", "TEX_VC", "ENV", "ALPHA"}:
+            if not scene.get("level_texture_base", "").strip():
+                print("[ERROR] level_texture_base not set")
+                bpy.ops.scene.prompt_texture_base('INVOKE_DEFAULT')
+                return {'CANCELLED'}
 
         existing_textures = self.get_existing_textures()
         print(f"[DEBUG] Found {len(existing_textures)} existing textures")
 
+        # Optional: if meshes *do* have a material_choice, keep them in sync
         for obj in mesh_objects:
-            obj.data.material_choice = active_material_choice
+            if hasattr(obj.data, "material_choice"):
+                obj.data.material_choice = material_choice
 
-        if not context.scene.get("level_texture_base", "").strip():
-            print("[ERROR] level_texture_base not set")
-            bpy.ops.scene.prompt_texture_base('INVOKE_DEFAULT')
-            return {'CANCELLED'}
-
-        self.assign_materials_to_all(mesh_objects, existing_textures)
+        # --- pass material_choice further down ---
+        self.assign_materials_to_all(mesh_objects, existing_textures, material_choice)
 
         print("[DEBUG] Material assignment done, restoring selection")
         bpy.ops.object.select_all(action='DESELECT')
         for obj in mesh_objects:
             obj.select_set(True)
-        context.view_layer.objects.active = original_active_object
+
+        if original_active_object and original_active_object.name in bpy.data.objects:
+            context.view_layer.objects.active = original_active_object
 
         print("[DEBUG] MaterialAssignmentAuto finished successfully")
         return {'FINISHED'}
 
-    def assign_materials_to_all(self, mesh_objects, existing_textures):
+    # -------------------------------------------------------------------------
+    # High-level loop
+    # -------------------------------------------------------------------------
+
+    def assign_materials_to_all(self, mesh_objects, existing_textures, material_choice):
         print(f"[INFO] Assigning materials to {len(mesh_objects)} mesh objects (fast mode)")
         for obj in mesh_objects:
             try:
@@ -2097,11 +2135,15 @@ class MaterialAssignmentAuto(bpy.types.Operator):
                     continue
 
                 print(f"[DEBUG] Processing: {obj.name}")
-                self.update_material_assignment(obj, existing_textures)
+                self.update_material_assignment(obj, existing_textures, material_choice)
                 print(f"[DEBUG] Done: {obj.name}")
 
             except Exception as e:
                 print(f"[ERROR] Exception while processing {obj.name}: {e}")
+
+    # -------------------------------------------------------------------------
+    # Helpers to detect existing textures / base names
+    # -------------------------------------------------------------------------
 
     def get_existing_textures(self):
         textures = {}
@@ -2140,88 +2182,172 @@ class MaterialAssignmentAuto(bpy.types.Operator):
 
         return self.get_base_name_for_layers(obj)
 
+    # -------------------------------------------------------------------------
+    # TEX+VC material creation (your working version)
+    # -------------------------------------------------------------------------
+
     def assign_tex_vc_materials(self, obj, existing_textures=None):
         """
         Auto-assign blended materials combining texture and vertex colour per face.
 
-        This function mirrors assign_tex_vc_materials() but accepts an existing_textures
-        cache from the auto operator.  It calls assign_uv_textures() with the cache,
-        then creates blended materials per unique texture.
+        Behaviour:
+        - First assigns UV texture materials (so every face has a proper texture mat).
+        - Then creates per-texture blended materials named "<base>_TexVC".
+        - Each "<base>_TexVC" material:
+            * Base = texture colour (fallback = Col if no texture).
+            * Overlay = vertex color "Col" in OVERLAY mode.
+            * Fac driven by vertex color "Alpha" brightness (0..1) mapped to:
+                  brightness = 0.0 (black Alpha) → Fac = 0.02  (≈2 % VC overlay)
+                  brightness = 1.0 (white Alpha) → Fac = 1.0   (100 % VC overlay)
+            * BSDF Alpha is fixed to 1.0 (no actual transparency in viewport).
         """
+
+        import bmesh
+
+        print(f"[FAST] assign_tex_vc_materials: {obj.name}")
+
+        # 0) First make sure regular texture materials exist & are assigned
         try:
             if existing_textures is not None:
                 self.assign_uv_textures(obj, existing_textures)
             else:
                 self.assign_uv_textures(obj)
-        except Exception:
-            # If assigning UV textures fails, leave existing materials unchanged
+        except Exception as e:
+            print(f"[ERROR] assign_tex_vc_materials: UV assignment failed for {obj.name}: {e}")
             return
+
+        # 1) Clean up any stale *_TexVC slots that are now unreferenced
+        self._remove_unreferenced_tex_vc_slots(obj)
+
         mesh = obj.data
         bm = bmesh.new()
         bm.from_mesh(mesh)
         blended_cache = {}
+
         for face in bm.faces:
             idx = face.material_index
             if idx < 0 or idx >= len(mesh.materials):
                 continue
+
             orig_mat = mesh.materials[idx]
+            if not orig_mat:
+                continue
+
+            # Base name from the texture material
             base_name = orig_mat.name
             if base_name.lower().endswith('.bmp'):
                 base_name = base_name[:-4]
             new_name = f"{base_name}_TexVC"
+
             new_mat = blended_cache.get(new_name)
             if not new_mat:
+                # Reuse or create the material datablock
                 new_mat = bpy.data.materials.get(new_name)
                 if not new_mat:
                     new_mat = bpy.data.materials.new(name=new_name)
-                    new_mat.use_nodes = True
-                    nodes = new_mat.node_tree.nodes
-                    links = new_mat.node_tree.links
-                    for node in list(nodes):
-                        nodes.remove(node)
-                    tex_node = nodes.new('ShaderNodeTexImage')
-                    tex_node.image = None
-                    if getattr(orig_mat, 'use_nodes', False):
-                        for node in orig_mat.node_tree.nodes:
-                            if node.type == 'TEX_IMAGE' and getattr(node, 'image', None):
-                                tex_node.image = node.image
-                                break
-                    col_attr = nodes.new('ShaderNodeAttribute')
-                    col_attr.attribute_name = 'Col'
-                    # Alpha attribute node; separate its X channel to use as a scalar
-                    alpha_attr = nodes.new('ShaderNodeAttribute')
-                    alpha_attr.attribute_name = 'Alpha'
-                    separate = nodes.new('ShaderNodeSeparateXYZ')
-                    # Math nodes to map alpha (0–1) to mix factor:
-                    # alpha=0 → 0.01 (1%), alpha=1 → 0.20 (20%)
-                    mult_node = nodes.new('ShaderNodeMath')
-                    mult_node.operation = 'MULTIPLY'
-                    mult_node.inputs[1].default_value = 0.22
-                    add_node = nodes.new('ShaderNodeMath')
-                    add_node.operation = 'ADD'
-                    add_node.inputs[1].default_value  = 0.03
-                    mix = nodes.new('ShaderNodeMixRGB')
-                    mix.blend_type = 'MIX'
-                    bsdf = nodes.new('ShaderNodeBsdfPrincipled')
-                    output = nodes.new('ShaderNodeOutputMaterial')
+
+                new_mat.use_nodes = True
+                nodes = new_mat.node_tree.nodes
+                links = new_mat.node_tree.links
+
+                # Clear any old node setup so we know exactly what we have
+                for node in list(nodes):
+                    nodes.remove(node)
+
+                # Opaque in viewport – Alpha does NOT control transparency here
+                if hasattr(new_mat, "blend_method"):
+                    new_mat.blend_method = 'OPAQUE'
+                if hasattr(new_mat, "shadow_method"):
+                    new_mat.shadow_method = 'OPAQUE'
+
+                # ------------------------------------------------------------------
+                # 1) Texture node (re-using image from original texture material)
+                # ------------------------------------------------------------------
+                tex_node = nodes.new('ShaderNodeTexImage')
+                has_texture = False
+                tex_node.image = None
+
+                if getattr(orig_mat, 'use_nodes', False):
+                    for node in orig_mat.node_tree.nodes:
+                        if node.type == 'TEX_IMAGE' and getattr(node, 'image', None):
+                            tex_node.image = node.image
+                            has_texture = True
+                            break
+
+                # ------------------------------------------------------------------
+                # 2) Vertex Color: Col & Alpha
+                # ------------------------------------------------------------------
+                col_attr = nodes.new('ShaderNodeAttribute')
+                col_attr.attribute_name = 'Col'
+
+                alpha_attr = nodes.new('ShaderNodeAttribute')
+                alpha_attr.attribute_name = 'Alpha'
+
+                # Alpha RGB → brightness 0..1 (black = 0, white = 1)
+                rgb2bw = nodes.new('ShaderNodeRGBToBW')
+                links.new(alpha_attr.outputs['Color'], rgb2bw.inputs['Color'])
+
+                # ------------------------------------------------------------------
+                # 3) Fac for OVERLAY: Fac = 0.5 * brightness + 0.5
+                #   brightness = 0 → Fac = 0.50  (≈50 % VC, 50 % texture)
+                #   brightness = 1 → Fac = 1.00  (≈100 % VC, 0 % texture)
+                mul = nodes.new('ShaderNodeMath')
+                mul.operation = 'MULTIPLY'
+                mul.inputs[1].default_value = 0.5
+                links.new(rgb2bw.outputs['Val'], mul.inputs[0])
+
+                add = nodes.new('ShaderNodeMath')
+                add.operation = 'ADD'
+                add.inputs[1].default_value = 0.5
+                links.new(mul.outputs['Value'], add.inputs[0])
+
+                # ------------------------------------------------------------------
+                # 4) Mix texture + vertex color using OVERLAY
+                # ------------------------------------------------------------------
+                mix = nodes.new('ShaderNodeMixRGB')
+                mix.blend_type = 'OVERLAY'
+                mix.inputs['Fac'].default_value = 1.0  # overridden by add output
+                links.new(add.outputs['Value'], mix.inputs['Fac'])
+
+                if has_texture:
+                    # base = texture
                     links.new(tex_node.outputs['Color'], mix.inputs[1])
-                    links.new(col_attr.outputs['Color'], mix.inputs[2])
-                    # Connect alpha mapping: use the X (red) channel of the attribute
-                    links.new(alpha_attr.outputs['Color'], separate.inputs['Vector'])
-                    links.new(separate.outputs['X'], mult_node.inputs[0])
-                    links.new(mult_node.outputs['Value'], add_node.inputs[0])
-                    links.new(add_node.outputs['Value'], mix.inputs['Fac'])
-                    links.new(mix.outputs['Color'], bsdf.inputs['Base Color'])
-                    links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
+                else:
+                    # fallback when no texture: base = vertex color
+                    links.new(col_attr.outputs['Color'], mix.inputs[1])
+
+                # overlay = Col
+                links.new(col_attr.outputs['Color'], mix.inputs[2])
+
+                # ------------------------------------------------------------------
+                # 5) BSDF & Output – Alpha fixed to 1.0 (no transparency here)
+                # ------------------------------------------------------------------
+                bsdf = nodes.new('ShaderNodeBsdfPrincipled')
+                output = nodes.new('ShaderNodeOutputMaterial')
+
+                # Color from overlay mix
+                links.new(mix.outputs['Color'], bsdf.inputs['Base Color'])
+
+                # Keep material fully opaque in viewport
+                bsdf.inputs['Alpha'].default_value = 1.0
+
+                links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
+
+                # Cache for this run
                 blended_cache[new_name] = new_mat
+
+            # Ensure TexVC material is in the mesh's material slots
             if new_mat.name not in mesh.materials:
                 mesh.materials.append(new_mat)
+
+            # Assign the TexVC material slot to this face
             face.material_index = mesh.materials.find(new_mat.name)
+
         bm.to_mesh(mesh)
         bm.free()
-        # Ensure vertex colour changes are committed and visible
         mesh.update()
-        # Make one of the blended materials the active material
+
+        # Make one of the TexVC materials the active material
         for blended in blended_cache.values():
             if blended.name in mesh.materials:
                 idx = mesh.materials.find(blended.name)
@@ -2229,18 +2355,21 @@ class MaterialAssignmentAuto(bpy.types.Operator):
                     obj.active_material_index = idx
                     break
 
+    # -------------------------------------------------------------------------
+    # TexVC helpers / cleanup
+    # -------------------------------------------------------------------------
+
     def _is_tex_vc_mat(self, mat):
         return bool(mat and isinstance(mat.name, str) and mat.name.endswith("_TexVC"))
 
     def _remove_unreferenced_tex_vc_slots(self, obj):
         mesh = obj.data
-        # build referenced slot set
         import bmesh
         bm = bmesh.new()
         bm.from_mesh(mesh)
         referenced = set(f.material_index for f in bm.faces)
         bm.free()
-        # remove *_TexVC slots that aren't referenced (back-to-front so indices stay valid)
+        # Remove *_TexVC slots that aren't referenced (back-to-front so indices stay valid)
         for idx in range(len(mesh.materials) - 1, -1, -1):
             mat = mesh.materials[idx]
             if idx not in referenced and self._is_tex_vc_mat(mat):
@@ -2249,7 +2378,7 @@ class MaterialAssignmentAuto(bpy.types.Operator):
     def _set_active_texture_material(self, obj):
         """Pick a sane pure-texture active material (not *_TexVC, not *_Col, etc.)."""
         mesh = obj.data
-        # 1) Prefer the material used by the active polygon (if any), if it's not TexVC
+        # 1) Prefer the material used by the first polygon (if any), if it's not TexVC
         if len(mesh.polygons) > 0:
             idx = mesh.polygons[0].material_index
             if 0 <= idx < len(mesh.materials) and not self._is_tex_vc_mat(mesh.materials[idx]):
@@ -2320,7 +2449,7 @@ class MaterialAssignmentAuto(bpy.types.Operator):
             source_mode = "TEXTURE_NAME"
 
         for face in bm.faces:
-            # only touch faces that currently use *_TexVC
+            # Only touch faces that currently use *_TexVC
             cur = mesh.materials[face.material_index] if 0 <= face.material_index < len(mesh.materials) else None
             if not self._is_tex_vc_mat(cur):
                 continue
@@ -2347,7 +2476,11 @@ class MaterialAssignmentAuto(bpy.types.Operator):
         bm.free()
         mesh.update()
 
-    def update_material_assignment(self, obj, existing_textures):
+    # -------------------------------------------------------------------------
+    # Main dispatcher per object
+    # -------------------------------------------------------------------------
+
+    def update_material_assignment(self, obj, existing_textures, material_choice):
         material_map = {
             'UV_TEX': '_UVTex',
             'COL': '_Col',
@@ -2358,32 +2491,24 @@ class MaterialAssignmentAuto(bpy.types.Operator):
             'NCP': '_NCP'
         }
 
-        material_choice = obj.data.material_choice
+        # material_choice is now passed in from execute()
         material_suffix = material_map.get(material_choice, '_Col')
 
-        # ---- DEBUG START ----
         print(f"[DEBUG] update_material_assignment() called for {obj.name}")
         print(f"[DEBUG] material_choice = {material_choice}, resolved suffix = {material_suffix}")
         print(f"[DEBUG] Current materials: {[m.name for m in obj.data.materials]}")
-        # ---- DEBUG END ----
 
         if material_choice == 'UV_TEX':
             print(f"[DEBUG] → Assigning UV textures for {obj.name}")
-            # 1) Make sure pure texture materials exist and are assigned where possible
             self.assign_uv_textures(obj, existing_textures)
-            # 2) Move any *_TexVC faces back to texture-only
             self._reassign_faces_off_tex_vc(obj)
-            # 3) Drop unused *_TexVC slots so they don't linger
             self._remove_unreferenced_tex_vc_slots(obj)
-            # 4) Make a pure-texture slot the *active* one so the header shows the right thing
             self._set_active_texture_material(obj)
-            # Optional: nudge depsgraph/viewport
             obj.data.update()
             obj.update_tag(refresh={'DATA'})
 
         elif material_choice == 'TEX_VC':
             print(f"[DEBUG] → Assigning Tex+VC materials for {obj.name}")
-            # Some classes take existing_textures, others don’t; handle both
             try:
                 self.assign_tex_vc_materials(obj, existing_textures)
             except TypeError:
@@ -2397,9 +2522,13 @@ class MaterialAssignmentAuto(bpy.types.Operator):
             print(f"[DEBUG] → Assigning regular materials with suffix {material_suffix} for {obj.name}")
             self.assign_regular_materials(obj, material_suffix)
 
-        # ---- DEBUG AFTER ASSIGNMENT ----
         print(f"[DEBUG] After assignment: {[m.name for m in obj.data.materials]}")
-        print(f"[DEBUG] Active material index is {obj.active_material_index} ({obj.active_material.name if obj.active_material else 'None'})")
+        print(f"[DEBUG] Active material index is {obj.active_material_index} "
+              f"({obj.active_material.name if obj.active_material else 'None'})")
+
+    # -------------------------------------------------------------------------
+    # UV texture assignment (Texture Number layer)
+    # -------------------------------------------------------------------------
 
     def assign_uv_textures(self, obj, existing_textures):
         print(f"[FAST] assign_uv_textures: {obj.name}")
@@ -2416,7 +2545,6 @@ class MaterialAssignmentAuto(bpy.types.Operator):
         scene = bpy.context.scene
         base_name = ""
         source_mode = ""
-
         matched = False
         model_slot_index = -1
 
@@ -2478,11 +2606,19 @@ class MaterialAssignmentAuto(bpy.types.Operator):
         bm.free()
         obj.data.update()
 
+    # -------------------------------------------------------------------------
+    # NCP material assignment
+    # -------------------------------------------------------------------------
+
     def assign_ncp_materials(self, obj):
+        """Assign NCP preview materials based on the face 'Material' layer."""
         print(f"[FAST] assign_ncp_materials: {obj.name}")
 
+        import bmesh
+
+        mesh = obj.data
         bm = bmesh.new()
-        bm.from_mesh(obj.data)
+        bm.from_mesh(mesh)
 
         material_layer = bm.faces.layers.int.get("Material")
         if not material_layer:
@@ -2490,20 +2626,56 @@ class MaterialAssignmentAuto(bpy.types.Operator):
             bm.free()
             return
 
+        # Build a mapping: NCP material ID (int) -> MATERIALS entry
+        id_to_name = {}
+        for entry in MATERIALS:
+            try:
+                code = int(entry[0])  # "-1", "0", "1", ...
+            except Exception:
+                try:
+                    code = int(entry[-1])  # last field is also numeric ID
+                except Exception:
+                    continue
+            id_to_name[code] = entry[1]  # human-readable name, e.g. "GRASS"
+
+        used_mat_names = set()
+
         for face in bm.faces:
-            index = face[material_layer]
-            if 0 <= index < len(MATERIALS):
-                mat_name = MATERIALS[index][1]
-                mat = self.find_material_loose(mat_name) or bpy.data.materials.new(name=mat_name)
+            mat_id = face[material_layer]  # NCP material ID from the face
+            mat_name = id_to_name.get(mat_id)
+            if not mat_name:
+                continue
 
-                if mat.name not in obj.data.materials:
-                    obj.data.materials.append(mat)
+            # Reuse the material if it already exists (e.g. from import),
+            # otherwise create a simple new one.
+            mat = self.find_material_loose(mat_name)
+            if not mat:
+                mat = bpy.data.materials.new(name=mat_name)
+                mat.use_nodes = True  # keep it node-based for consistency
 
-                face.material_index = obj.data.materials.find(mat.name)
+            if mat.name not in mesh.materials:
+                mesh.materials.append(mat)
 
-        bm.to_mesh(obj.data)
+            slot_index = mesh.materials.find(mat.name)
+            if slot_index >= 0:
+                face.material_index = slot_index
+                used_mat_names.add(mat.name)
+
+        bm.to_mesh(mesh)
         bm.free()
-        obj.data.update()
+        mesh.update()
+
+        # Pick one of the NCP materials as the active material
+        for i, m in enumerate(mesh.materials):
+            if m and m.name in used_mat_names:
+                obj.active_material_index = i
+                break
+
+        print(f"[DEBUG] NCP preview assigned materials {sorted(used_mat_names)} to {obj.name}")
+
+    # -------------------------------------------------------------------------
+    # Regular suffix-based material assignment
+    # -------------------------------------------------------------------------
 
     def assign_regular_materials(self, obj, material_suffix):
         print(f"[FAST] assign_regular_materials: {obj.name}")
@@ -2529,6 +2701,11 @@ class MaterialAssignmentAuto(bpy.types.Operator):
 
         index = obj.data.materials.find(material.name)
 
+        # 🔹 NEW: make this material the active one in the UI
+        if index >= 0:
+            obj.active_material_index = index
+
+        import bmesh
         bm = bmesh.new()
         bm.from_mesh(obj.data)
 
@@ -2538,7 +2715,11 @@ class MaterialAssignmentAuto(bpy.types.Operator):
         bm.to_mesh(obj.data)
         bm.free()
         obj.data.update()
-            
+
+    # -------------------------------------------------------------------------
+    # Material lookup helper
+    # -------------------------------------------------------------------------
+
     def find_material_loose(self, name):
         """Try to find a material with or without .bmp suffix."""
         if name in bpy.data.materials:
@@ -2624,140 +2805,10 @@ class MaterialAssignment(bpy.types.Operator):
 
         return self.get_base_name_for_layers(obj)
 
-    def assign_tex_vc_materials(self, obj, existing_textures=None):
-        """
-        Create/assign *_TexVC materials that blend the face's texture with vertex colors.
-        In multi-object Edit Mode, runs on selected faces of this object.
-        """
-
-        # Try to ensure the base UV texture assignment first; if that call signature
-        # doesn't match in your build, the try/except keeps this operator usable.
-        try:
-            if existing_textures is not None:
-                self.assign_uv_textures(obj, existing_textures)
-            else:
-                self.assign_uv_textures(obj)  # OK if it raises; we just continue
-        except Exception:
-            pass
-
-        mesh = obj.data
-
-        # Cache for blended materials created during this call
-        blended_cache = {}
-
-        def ensure_texvc_from(orig_mat):
-            base_name = orig_mat.name
-            if base_name.lower().endswith('.bmp'):
-                base_name = base_name[:-4]
-            new_name = f"{base_name}_TexVC"
-
-            new_mat = blended_cache.get(new_name) or bpy.data.materials.get(new_name)
-            if new_mat:
-                blended_cache[new_name] = new_mat
-                return new_mat
-
-            # Build a fresh node tree
-            new_mat = bpy.data.materials.new(name=new_name)
-            new_mat.use_nodes = True
-            nodes = new_mat.node_tree.nodes
-            links = new_mat.node_tree.links
-            for n in list(nodes):
-                nodes.remove(n)
-
-            tex_node = nodes.new('ShaderNodeTexImage')
-            tex_node.image = None
-            if getattr(orig_mat, 'use_nodes', False) and getattr(orig_mat, 'node_tree', None):
-                for n in orig_mat.node_tree.nodes:
-                    if n.type == 'TEX_IMAGE' and getattr(n, 'image', None):
-                        tex_node.image = n.image
-                        break
-
-            # Vertex color attributes
-            col_attr = nodes.new('ShaderNodeAttribute')
-            col_attr.attribute_name = 'Col'
-
-            alpha_attr = nodes.new('ShaderNodeAttribute')
-            alpha_attr.attribute_name = 'Alpha'
-
-            separate = nodes.new('ShaderNodeSeparateXYZ')
-
-            mult_node = nodes.new('ShaderNodeMath')
-            mult_node.operation = 'MULTIPLY'
-            mult_node.inputs[1].default_value = 0.22  # scale alpha
-
-            add_node = nodes.new('ShaderNodeMath')
-            add_node.operation = 'ADD'
-            add_node.inputs[1].default_value = 0.03   # base 3%
-
-            mix = nodes.new('ShaderNodeMixRGB')
-            mix.blend_type = 'MIX'
-
-            bsdf = nodes.new('ShaderNodeBsdfPrincipled')
-            output = nodes.new('ShaderNodeOutputMaterial')
-
-            # Wire it up
-            links.new(tex_node.outputs['Color'], mix.inputs[1])
-            links.new(col_attr.outputs['Color'], mix.inputs[2])
-
-            links.new(alpha_attr.outputs['Color'], separate.inputs['Vector'])
-            links.new(separate.outputs['X'], mult_node.inputs[0])
-            links.new(mult_node.outputs['Value'], add_node.inputs[0])
-            links.new(add_node.outputs['Value'], mix.inputs['Fac'])
-
-            links.new(mix.outputs['Color'], bsdf.inputs['Base Color'])
-            links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
-
-            blended_cache[new_name] = new_mat
-            return new_mat
-
-        # EDIT-MODE PATH (multi-object edit safe)
-        if mesh.is_editmode:
-            bm = bmesh.from_edit_mesh(mesh)
-            for face in bm.faces:
-                if not face.select:
-                    continue
-                idx = face.material_index
-                if 0 <= idx < len(mesh.materials):
-                    orig_mat = mesh.materials[idx]
-                    if orig_mat is None:
-                        continue
-                    new_mat = ensure_texvc_from(orig_mat)
-                    if new_mat.name not in mesh.materials:
-                        mesh.materials.append(new_mat)
-                    face.material_index = mesh.materials.find(new_mat.name)
-            bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
-            mesh.update()
-
-        else:
-            # OBJECT-MODE PATH (applies to all faces on this object)
-            bm = bmesh.new()
-            bm.from_mesh(mesh)
-            for face in bm.faces:
-                idx = face.material_index
-                if 0 <= idx < len(mesh.materials):
-                    orig_mat = mesh.materials[idx]
-                    if orig_mat is None:
-                        continue
-                    new_mat = ensure_texvc_from(orig_mat)
-                    if new_mat.name not in mesh.materials:
-                        mesh.materials.append(new_mat)
-                    face.material_index = mesh.materials.find(new_mat.name)
-            bm.to_mesh(mesh)
-            bm.free()
-            mesh.update()
-
-        # Set any of the blended materials as active (purely UX)
-        for blended in blended_cache.values():
-            idx = mesh.materials.find(blended.name)
-            if idx >= 0:
-                obj.active_material_index = idx
-                break
-
     def update_material_assignment(self, obj, existing_textures):
         material_map = {
             'UV_TEX': '_UVTex',
             'COL': '_Col',
-            'TEX_VC': '_TexVC',
             'ALPHA': '_Alpha',
             'ENV': '_Env',
             'RGB': '_RGBModelColor',
@@ -2979,25 +3030,35 @@ class MaterialAssignmentImportExport(bpy.types.Operator):
             bpy.ops.object.mode_set(mode='OBJECT')
 
         mesh_objects = [obj for obj in bpy.data.objects if obj.type == 'MESH']
-
-        original_active_object = context.view_layer.objects.active
-        if not (original_active_object and original_active_object.type == 'MESH'):
-            self.report({'WARNING'}, "No active mesh object with material choice found.")
+        if not mesh_objects:
+            self.report({'WARNING'}, "No mesh objects found in the scene.")
             return {'CANCELLED'}
 
-        active_material_choice = original_active_object.data.material_choice
+        scene = context.scene
+
+        # --- NEW: read the Scene-level enum you registered ---
+        # You said you now have: bpy.types.Scene.material_choice = EnumProperty(...)
+        material_choice = getattr(scene, "material_choice", None)
+        if not material_choice:
+            material_choice = 'UV_TEX'  # safe default
+        print(f"[DEBUG][IMPEXP] Global material choice: {material_choice}")
 
         existing_textures = self.get_existing_textures()
+        print(f"[DEBUG][IMPEXP] Found {len(existing_textures)} existing textures")
 
-        for obj in mesh_objects:
-            obj.data.material_choice = active_material_choice
+        # Optional: remember active object to restore later
+        original_active_object = context.view_layer.objects.active
 
-        self.assign_materials_to_all(mesh_objects, existing_textures)
+        # Run the actual assignment logic, now passing the choice through
+        self.assign_materials_to_all(mesh_objects, existing_textures, material_choice)
 
+        # Restore selection & active object as before
         bpy.ops.object.select_all(action='DESELECT')
         for obj in mesh_objects:
             obj.select_set(True)
-        context.view_layer.objects.active = original_active_object
+
+        if original_active_object and original_active_object.name in bpy.data.objects:
+            context.view_layer.objects.active = original_active_object
 
         return {'FINISHED'}
 
@@ -3038,21 +3099,26 @@ class MaterialAssignmentImportExport(bpy.types.Operator):
 
         return self.get_base_name_for_layers(obj)
 
-    def assign_materials_to_all(self, mesh_objects, existing_textures):
+    # --- CHANGED SIGNATURE: pass material_choice through ---
+    def assign_materials_to_all(self, mesh_objects, existing_textures, material_choice):
         bpy.ops.object.select_all(action='DESELECT')
 
         for obj in mesh_objects:
             obj.select_set(True)
 
+        # make sure we have an active mesh for Edit Mode ops
+        bpy.context.view_layer.objects.active = mesh_objects[0]
+
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.mesh.select_all(action='SELECT')
 
         for obj in mesh_objects:
-            self.update_material_assignment(obj, existing_textures)
+            self.update_material_assignment(obj, existing_textures, material_choice)
 
         bpy.ops.object.mode_set(mode='OBJECT')
 
-    def update_material_assignment(self, obj, existing_textures):
+    # --- CHANGED SIGNATURE: material_choice comes from Scene, not obj.data ---
+    def update_material_assignment(self, obj, existing_textures, material_choice):
         material_map = {
             'UV_TEX': '_UVTex',
             'COL': '_Col',
@@ -3062,7 +3128,8 @@ class MaterialAssignmentImportExport(bpy.types.Operator):
             'NCP': '_NCP'
         }
 
-        material_choice = obj.data.material_choice
+        # previously: material_choice = obj.data.material_choice
+        # now: material_choice is given from Scene
         material_suffix = material_map.get(material_choice, '_Col')
 
         if material_choice == 'UV_TEX':
@@ -3228,7 +3295,7 @@ class MaterialAssignmentImportExport(bpy.types.Operator):
                 if face.select:
                     face.material_index = material_index
             bmesh.update_edit_mesh(obj.data)
-            
+
     def find_material_loose(self, name):
         """Try to find a material with or without .bmp suffix."""
         if name in bpy.data.materials:

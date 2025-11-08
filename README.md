@@ -6,6 +6,15 @@ place 'io_revolt' in Blender/"version"/scripts/addons/
 
 -Theman with the help of AI and a bunch of friends in the RV I/O community.
 
+20.25.81
+Bug fixes
+Re-arranged the UI further
+CAUTION: RBG Model Colour doesn't work
+
+20.25.80
+Improved Mixing of Texture and Vertec Colour
+Re-arranged the UI (Check the Properties Window TABS)
+
 20.25.79
 Fixed UI - Texture Number
 

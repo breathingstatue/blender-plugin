@@ -86,21 +86,27 @@ def import_file(filepath, scene, model_name=None):
         scene.texture_animations = str(texture_animations)
         scene.ta_max_slots = model.animation_count
 
-        # Apply material settings for both COL and UV_TEX after importing
-        obj.data.material_choice = 'COL'
+        # Make sure our imported model is the active object (for context)
         bpy.context.view_layer.objects.active = obj
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.select_all(action='SELECT')
-        bpy.ops.object.assign_materials_impexp()
-        bpy.ops.object.mode_set(mode='OBJECT')
 
-        obj.data.material_choice = 'UV_TEX'
-        bpy.context.view_layer.objects.active = obj
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.select_all(action='SELECT')
-        bpy.ops.object.assign_materials_impexp()
-        bpy.ops.object.mode_set(mode='OBJECT')
-    
+        # Ensure we're in OBJECT mode before calling the operator
+        if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        # 1) Assign COL materials using Scene-level material_choice
+        if hasattr(scene, "material_choice"):
+            scene.material_choice = 'COL'
+            bpy.ops.object.assign_materials_impexp()
+        else:
+            print("[WARN] Scene has no 'material_choice' property; COL assignment skipped.")
+
+        # 2) Assign UV_TEX materials using Scene-level material_choice
+        if hasattr(scene, "material_choice"):
+            scene.material_choice = 'UV_TEX'
+            bpy.ops.object.assign_materials_impexp()
+        else:
+            print("[WARN] Scene has no 'material_choice' property; UV_TEX assignment skipped.")
+
     return obj
 
 def import_m_mesh(model, filename, filepath, scene, model_name, envlist=None):

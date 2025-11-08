@@ -290,30 +290,37 @@ def fast_batch_assign_materials(mesh_objects, material_choice):
         print("No mesh objects selected for material assignment.")
         return
 
-    # Set all objects to the desired material choice
-    for obj in mesh_objects:
-        obj.data.material_choice = material_choice
+    scene = bpy.context.scene
 
-    # Switch to edit mode for all objects at once
+    if not hasattr(scene, "material_choice"):
+        print("[WARN] Scene has no 'material_choice' property; cannot assign materials.")
+        return
+
+    # Set the global Scene-level material choice
+    scene.material_choice = material_choice
+
+    # Deselect everything, then select our meshes
     bpy.ops.object.select_all(action='DESELECT')
     for obj in mesh_objects:
         obj.select_set(True)
-    
-    # Switch to edit mode for all selected objects
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.select_all(action='SELECT')
+
+    # Ensure a valid active object
+    bpy.context.view_layer.objects.active = mesh_objects[0]
+
+    # Make sure we’re in OBJECT mode before running the operator
+    if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+        bpy.ops.object.mode_set(mode='OBJECT')
 
     # Apply material assignment for all selected objects
     bpy.ops.object.assign_materials_impexp()
 
-    # Switch back to object mode after processing
-    bpy.ops.object.mode_set(mode='OBJECT')
-
     print(f"Assigned materials ({material_choice}) to all mesh objects.")
+
 
 def set_material_to_col(mesh_objects):
     """Legacy function for backward compatibility (Uses batch processing now)."""
     fast_batch_assign_materials(mesh_objects, 'COL')
+
 
 def set_material_to_texture(mesh_objects):
     """Legacy function for backward compatibility (Uses batch processing now)."""
