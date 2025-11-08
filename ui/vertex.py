@@ -13,6 +13,7 @@ class RVIO_PT_VertexPanel(bpy.types.Panel):
     bl_space_type = "PROPERTIES"
     bl_region_type = "WINDOW"
     bl_context = "object"
+    bl_options = {"HIDE_HEADER"}
 
     def draw(self, context):
         layout = self.layout
@@ -35,4 +36,4 @@ class RVIO_PT_VertexPanel(bpy.types.Panel):
         else:
             box = layout.box()
             col = box.column(align=True)
-            col.label(text="SWITCH TO EDIT MODE FOR VERTEX COLORS.")
+            col.label(text="VERTEX COLOUR (Switch to Edit Mode).")

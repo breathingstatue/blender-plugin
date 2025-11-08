@@ -8,7 +8,8 @@ class RVIO_PT_AnimModesPanel(bpy.types.Panel):
     bl_label = "Animation Mode"
     bl_space_type = "PROPERTIES"
     bl_region_type = "WINDOW"
-    bl_context = "object"
+    bl_context = "data"
+    bl_options = {"HIDE_HEADER"}
     
     def draw(self, context):
         pass

@@ -27,8 +27,12 @@ class RVIO_PT_RevoltIOToolPanel(bpy.types.Panel):
         box.operator("headers.copy_aerial_params", text="Copy Aerial Params")
         
         box = self.layout.box()
-        box.label(text="Texture Tools:")
+        box.label(text="Texture / Material Tools:")
         box.operator("helpers.textures_save")
+        col = box.column(align=True)
+        col.operator("mesh.set_face_texnum", text="Fix Texture Numbers and Materials")
+        col = box.column(align=True)
+        col.operator("mesh.clear_extra_assignments", text="Clear Extra Material Assignments")
         
         self.layout.label(text="HELPERS:")
         

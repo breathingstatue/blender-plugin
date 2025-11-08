@@ -19,21 +19,6 @@ class RVIO_PT_RevoltFacePropertiesPanel(bpy.types.Panel):
 
         mesh = obj.data
 
-        # ---------- Texture / Material (general) ----------
-        box = layout.box()
-        box.label(text="Texture / Material")
-        col = box.column(align=True)
-        col.prop(mesh, "material_choice")
-        row = col.row(align=True)
-        row.operator("object.assign_materials_auto", text="Set to All")
-        row.operator("object.assign_materials", text="Set to Selected")
-        col = box.column(align=True)
-        col.operator("object.assign_texture", text="Car Skin")
-        col = box.column(align=True)
-        col.operator("mesh.set_face_texnum")
-        col = box.column(align=True)
-        col.operator("mesh.clear_extra_assignments")
-
         # Precompute selection info safely (read-only)
         has_selection = False
         if obj.mode == 'EDIT':
@@ -146,4 +131,4 @@ class RVIO_PT_RevoltFacePropertiesPanel(bpy.types.Panel):
 
         else:
             box = layout.box()
-            box.label(text="SWITCH TO EDIT MODE FOR PROPERTIES.")
+            box.label(text="PROPERTIES (Switch to Edit Mode).")
