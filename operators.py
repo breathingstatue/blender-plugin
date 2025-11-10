@@ -2514,6 +2514,10 @@ class MaterialAssignmentAuto(bpy.types.Operator):
             except TypeError:
                 self.assign_tex_vc_materials(obj)
 
+        elif material_choice == 'RGB':
+            print(f"[DEBUG] → Assigning RGB Model Color materials for {obj.name}")
+            self.assign_rgb_modelcolor_materials(obj)
+
         elif material_choice == 'NCP':
             print(f"[DEBUG] → Assigning NCP materials for {obj.name}")
             self.assign_ncp_materials(obj)
@@ -2672,6 +2676,179 @@ class MaterialAssignmentAuto(bpy.types.Operator):
                 break
 
         print(f"[DEBUG] NCP preview assigned materials {sorted(used_mat_names)} to {obj.name}")
+
+    # -------------------------------------------------------------------------
+    # RGB Model Color material assignment
+    # -------------------------------------------------------------------------
+
+    def assign_rgb_modelcolor_materials(self, obj):
+        """
+        Assign a material that previews the baked RGBModelColor vertex colors.
+
+        Behaviour (similar idea to COL):
+        - First, prefer any existing material *already on the object* whose name
+          ends with _RGBModelColor / _RGBModelColour.
+        - Then, try to find a matching datablock in bpy.data.materials using both:
+            * the full object name (tins_g_row)
+            * the cleaned RV base name (tins_g_r, from clean_model_base_name)
+          with patterns like:
+            <root>_RGBModelColor
+            <root>.prm_RGBModelColor
+            <root>.w_RGBModelColor
+            <root>.m_RGBModelColor
+        - If nothing exists, create a new <root>.prm_RGBModelColor material
+          wired to the 'RGBModelColor' attribute.
+        """
+
+        import bmesh
+        import bpy
+
+        print(f"[FAST] assign_rgb_modelcolor_materials: {obj.name}")
+
+        mesh = obj.data
+
+        # Both “roots”: raw object name and cleaned RV-style base
+        raw_root = obj.name
+        base_root = clean_model_base_name(obj.name)
+
+        # Try both spellings just in case (Color / Colour)
+        suffixes = ["_RGBModelColor", "_RGBModelColour"]
+
+        mat = None
+
+        # ------------------------------------------------------------------ #
+        # 0) Prefer an existing RGBModelColor material already in the slots
+        # ------------------------------------------------------------------ #
+        for slot_mat in mesh.materials:
+            if not slot_mat:
+                continue
+            if any(slot_mat.name.endswith(suf) for suf in suffixes):
+                mat = slot_mat
+                print(f"[DEBUG] Reusing existing RGB Model Color material from slot: "
+                      f"'{slot_mat.name}' for {obj.name}")
+                break
+
+        # ------------------------------------------------------------------ #
+        # 1) If not found, search by candidate names in bpy.data.materials
+        # ------------------------------------------------------------------ #
+        if not mat:
+            candidate_names = []
+
+            # Helper: strip known extensions (.prm, .w, .m) from raw_root for one variant
+            def strip_known_ext(name):
+                for ext in (".prm", ".w", ".m"):
+                    if name.lower().endswith(ext):
+                        return name[:-len(ext)]
+                return name
+
+            raw_no_ext = strip_known_ext(raw_root)
+
+            roots = []
+            if raw_no_ext:
+                roots.append(raw_no_ext)
+            if raw_root not in roots:
+                roots.append(raw_root)
+            if base_root and base_root not in roots:
+                roots.append(base_root)
+
+            for root in roots:
+                for suf in suffixes:
+                    candidate_names.extend([
+                        f"{root}{suf}",        # tins_g_row_RGBModelColor or tins_g_r_RGBModelColor
+                        f"{root}.prm{suf}",    # tins_g_row.prm_RGBModelColor, tins_g_r.prm_RGBModelColor
+                        f"{root}.w{suf}",
+                        f"{root}.m{suf}",
+                    ])
+
+            # Generic fallbacks
+            candidate_names.extend([
+                "RGBModelColor",
+                "RGBModelColour",
+                "_RGBModelColor",
+                "_RGBModelColour",
+            ])
+
+            # Deduplicate while preserving order
+            seen = set()
+            ordered_candidates = []
+            for name in candidate_names:
+                if name not in seen:
+                    seen.add(name)
+                    ordered_candidates.append(name)
+
+            for name in ordered_candidates:
+                mat = bpy.data.materials.get(name)
+                if mat:
+                    print(f"[DEBUG] Reusing existing RGB Model Color material '{name}' for {obj.name}")
+                    break
+
+        # ------------------------------------------------------------------ #
+        # 2) If still not found, create a new one (use raw_no_ext as base)
+        # ------------------------------------------------------------------ #
+        if not mat:
+            # For new names, use the non-extended raw base so we get e.g. tins_g_row.prm_RGBModelColor
+            def strip_known_ext(name):
+                for ext in (".prm", ".w", ".m"):
+                    if name.lower().endswith(ext):
+                        return name[:-len(ext)]
+                return name
+
+            raw_no_ext = strip_known_ext(raw_root) or base_root or raw_root
+            new_name = f"{raw_no_ext}.prm_RGBModelColor"
+
+            print(f"[DEBUG] Creating new RGB Model Color material '{new_name}' for {obj.name}")
+            mat = bpy.data.materials.new(name=new_name)
+            mat.use_nodes = True
+
+            nodes = mat.node_tree.nodes
+            links = mat.node_tree.links
+
+            # Clear default nodes
+            for n in list(nodes):
+                nodes.remove(n)
+
+            # Attribute node reading the 'RGBModelColor' vcol layer
+            attr_node = nodes.new(type='ShaderNodeAttribute')
+            attr_node.attribute_name = "RGBModelColor"
+            attr_node.attribute_type = 'GEOMETRY'
+
+            # Principled BSDF + Output
+            bsdf = nodes.new(type='ShaderNodeBsdfPrincipled')
+            output = nodes.new(type='ShaderNodeOutputMaterial')
+
+            links.new(attr_node.outputs['Color'], bsdf.inputs['Base Color'])
+            bsdf.inputs['Alpha'].default_value = 1.0  # keep fully opaque
+            links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
+
+            if hasattr(mat, "blend_method"):
+                mat.blend_method = 'OPAQUE'
+            if hasattr(mat, "shadow_method"):
+                mat.shadow_method = 'OPAQUE'
+
+        # ------------------------------------------------------------------ #
+        # 3) Make sure it is in the object material slots
+        # ------------------------------------------------------------------ #
+        if mat.name not in mesh.materials:
+            mesh.materials.append(mat)
+
+        index = mesh.materials.find(mat.name)
+        if index < 0:
+            print(f"[WARN] Could not find RGB Model Color material slot for {obj.name}")
+            return
+
+        # ------------------------------------------------------------------ #
+        # 4) Assign it to all faces & make active
+        # ------------------------------------------------------------------ #
+        bm = bmesh.new()
+        bm.from_mesh(mesh)
+        for face in bm.faces:
+            face.material_index = index
+        bm.to_mesh(mesh)
+        bm.free()
+        mesh.update()
+
+        obj.active_material_index = index
+        print(f"[DEBUG] RGB Model Color material '{mat.name}' assigned to all faces on {obj.name}")
 
     # -------------------------------------------------------------------------
     # Regular suffix-based material assignment

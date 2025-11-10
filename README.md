@@ -6,6 +6,10 @@ place 'io_revolt' in Blender/"version"/scripts/addons/
 
 -Theman with the help of AI and a bunch of friends in the RV I/O community.
 
+20.25.82
+Fixed non-working RGB Model Colour
+Fixed link in plugin the description
+
 20.25.81
 Bug fixes
 Re-arranged the UI further
