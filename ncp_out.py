@@ -4,26 +4,31 @@ Purpose: Exports Re-Volt collisision files (.ncp)
 
 Description:
 Exports collision files.
-
 """
-
-
-if "bpy" in locals():
-    import imp
-    imp.reload(common)
-    imp.reload(rvstruct)
 
 import os
 import bpy
 import bmesh
+import importlib
 
 from math import ceil
 from mathutils import Color, Matrix
 from . import common
 from . import rvstruct
 
-from .common import dprint, triangulate_ngons, apply_trs, NCP_NOCOLL, queue_error, DEBUG, NCP_PROP_MASK, to_revolt_axis, to_revolt_coord
-from .common import NCP_QUAD, rvbbox_from_verts
+from .common import (
+    dprint,
+    triangulate_ngons,
+    apply_trs,
+    NCP_NOCOLL,
+    queue_error,
+    DEBUG,
+    NCP_PROP_MASK,
+    to_revolt_axis,
+    to_revolt_coord,
+    NCP_QUAD,
+    rvbbox_from_verts,
+)
 from .rvstruct import (
     BoundingBox,
     LookupGrid,
@@ -31,8 +36,13 @@ from .rvstruct import (
     NCP,
     Plane,
     Polyhedron,
-    Vector
+    Vector,
 )
+
+# Reload imports if 'bpy' is already in locals (Blender add-on reload)
+if "bpy" in locals():
+    importlib.reload(common)
+    importlib.reload(rvstruct)
 
 
 def export_file(filepath, scene):
@@ -64,7 +74,6 @@ def export_file(filepath, scene):
         return
     else:
         dprint("Suitable objects: {}".format(", ".join([o.name for o in objs])))
-
 
     ncp = NCP()
 
@@ -99,15 +108,21 @@ def export_file(filepath, scene):
     with open(filepath, "wb") as f:
         ncp.write(f)
 
+    # Free the last-used BMesh (all faces already converted to NCP)
     bm.free()
+
 
 def add_bm_to_ncp(bm, ncp, scene):
 
     # Material and type layers. The preview layer will be ignored.
-    material_layer = (bm.faces.layers.int.get("Material") or
-                      bm.faces.layers.int.new("Material"))
-    type_layer = (bm.faces.layers.int.get("NCPType") or
-                  bm.faces.layers.int.new("NCPType"))
+    material_layer = (
+        bm.faces.layers.int.get("Material") or
+        bm.faces.layers.int.new("Material")
+    )
+    type_layer = (
+        bm.faces.layers.int.get("NCPType") or
+        bm.faces.layers.int.new("NCPType")
+    )
 
     for face in bm.faces:
         poly = Polyhedron()
