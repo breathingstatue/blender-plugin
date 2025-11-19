@@ -4,22 +4,23 @@ Purpose: Imports Re-Volt collision files (.ncp)
 
 Description:
 Imports collision files.
-
 """
 
-if "bpy" in locals():
-    import imp
-    imp.reload(common)
-    imp.reload(rvstruct)
-
+import os
 import bpy
 import bmesh
+import importlib
+from mathutils import Color
 
 from . import common
 from . import rvstruct
 from .rvstruct import NCP, Vector as RVVector, Polyhedron, Plane
 from .common import *
-from mathutils import Color
+
+# Reload imports if 'bpy' is already in locals (Blender add-on reload)
+if "bpy" in locals():
+    importlib.reload(common)
+    importlib.reload(rvstruct)
 
 
 def intersect(d1, n1, d2, n2, d3, n3):
@@ -37,6 +38,7 @@ def intersect(d1, n1, d2, n2, d3, n3):
             d2 * n3.cross(n1) +
             d3 * n1.cross(n2)
             ) / det
+
 
 def import_file(filepath, scene):
     with open(filepath, 'rb') as file:
@@ -86,7 +88,10 @@ def import_file(filepath, scene):
         new_face[material_layer] = poly.material
         new_face[type_layer] = poly.type
 
-        material_info = next((item for item in MATERIALS if item[0] == str(poly.material)), None)
+        material_info = next(
+            (item for item in MATERIALS if item[0] == str(poly.material)),
+            None
+        )
         if material_info:
             material_name = material_info[1]
         else:
@@ -106,10 +111,11 @@ def import_file(filepath, scene):
     bm.free()
 
     ob = bpy.data.objects.new(name=filename, object_data=me)
-    # Check if the object is already in the scene collection 
-    if ob.name not in bpy.context.scene.collection.objects: 
-        bpy.context.scene.collection.objects.link(ob) 
-    else: 
+    # Check if the object is already in the scene collection
+    if ob.name not in bpy.context.scene.collection.objects:
+        bpy.context.scene.collection.objects.link(ob)
+    else:
         print(f"Object '{ob.name}' is already in the scene collection.")
+
     bpy.context.view_layer.objects.active = ob
     ob.select_set(True)
