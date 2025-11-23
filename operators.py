@@ -3303,21 +3303,37 @@ class MaterialAssignmentImportExport(bpy.types.Operator):
 
     # --- CHANGED SIGNATURE: pass material_choice through ---
     def assign_materials_to_all(self, mesh_objects, existing_textures, material_choice):
-        bpy.ops.object.select_all(action='DESELECT')
+        original_mode = bpy.context.mode
+        original_active = bpy.context.view_layer.objects.active
+
+        # Ensure we start from Object mode to safely enter/exit Edit mode per object
+        if original_mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
 
         for obj in mesh_objects:
+            if obj.type != 'MESH':
+                continue
+
+            bpy.ops.object.select_all(action='DESELECT')
             obj.select_set(True)
+            bpy.context.view_layer.objects.active = obj
 
-        # make sure we have an active mesh for Edit Mode ops
-        bpy.context.view_layer.objects.active = mesh_objects[0]
+            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.select_all(action='SELECT')
 
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.select_all(action='SELECT')
-
-        for obj in mesh_objects:
             self.update_material_assignment(obj, existing_textures, material_choice)
 
-        bpy.ops.object.mode_set(mode='OBJECT')
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        # Restore the original active object and mode when possible
+        if original_active and original_active.name in bpy.data.objects:
+            bpy.context.view_layer.objects.active = original_active
+
+        if original_mode != 'OBJECT':
+            try:
+                bpy.ops.object.mode_set(mode=original_mode)
+            except Exception:
+                pass
 
     # --- CHANGED SIGNATURE: material_choice comes from Scene, not obj.data ---
     def update_material_assignment(self, obj, existing_textures, material_choice):
