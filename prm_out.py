@@ -31,47 +31,82 @@ if "bpy" in locals():
     importlib.reload(img_in)
     importlib.reload(layers)
 
+
+# Track logs to avoid spamming the console during export
+_material_texture_logs = set()
+_texture_assignment_logs = set()
+_missing_texture_logged = False
+
 def export_file(filepath, scene):
     obj = bpy.context.view_layer.objects.active
     print("Exporting PRM for {}...".format(obj.name))
     meshes = []
 
-    # Ensure we're in object mode before any operations
-    bpy.ops.object.mode_set(mode='OBJECT')
+    # Preserve user selection and mode to avoid leaving Blender in an unexpected state
+    original_mode = bpy.context.mode
+    original_active = bpy.context.view_layer.objects.active
+    original_selection = list(bpy.context.selected_objects)
 
-    # Get all mesh objects in the scene
-    mesh_objects = [obj for obj in scene.objects if obj.type == 'MESH']
-    print(f"Found {len(mesh_objects)} mesh objects in the scene.")
+    # Reset log caches for this export run
+    _material_texture_logs.clear()
+    _texture_assignment_logs.clear()
+    global _missing_texture_logged
+    _missing_texture_logged = False
 
-    # Run material assignment for both COL and UV_TEX
-    set_material_to_col(mesh_objects)
+    try:
+        # Ensure we're in object mode before any operations
+        bpy.ops.object.mode_set(mode='OBJECT')
 
-    # Force an update of the view layer
-    bpy.context.view_layer.update()
+        # Get all mesh objects in the scene
+        mesh_objects = [obj for obj in scene.objects if obj.type == 'MESH']
+        print(f"Found {len(mesh_objects)} mesh objects in the scene.")
 
-    set_material_to_texture(mesh_objects)
+        # Run material assignment for both COL and UV_TEX
+        set_material_to_col(mesh_objects)
 
-    # Checks if other LoDs are present
-    if "|q" in obj.data.name:
-        dprint("LODs present.")
-        meshes = get_all_lod(obj.data.name.split('|')[0])
-        print([m.name for m in meshes])
-    else:
-        dprint("No LOD present.")
-        meshes.append(obj.data)
+        # Force an update of the view layer
+        bpy.context.view_layer.update()
 
-    # Exports all meshes to the PRM file
-    with open(filepath, "wb") as file:
-        for me in meshes:
-            print("Exporting mesh {} of {}".format(
-                meshes.index(me), len(meshes)))
-            # Exports the mesh as a PRM object
-            prm = export_mesh(me, obj, scene, filepath)
-            # Writes the PRM object to a file
-            if prm:
-                prm.write(file)
+        set_material_to_texture(mesh_objects)
+
+        # Checks if other LoDs are present
+        if "|q" in obj.data.name:
+            dprint("LODs present.")
+            meshes = get_all_lod(obj.data.name.split('|')[0])
+            print([m.name for m in meshes])
+        else:
+            dprint("No LOD present.")
+            meshes.append(obj.data)
+
+        # Exports all meshes to the PRM file
+        with open(filepath, "wb") as file:
+            for me in meshes:
+                print("Exporting mesh {} of {}".format(
+                    meshes.index(me), len(meshes)))
+                # Exports the mesh as a PRM object
+                prm = export_mesh(me, obj, scene, filepath)
+                # Writes the PRM object to a file
+                if prm:
+                    prm.write(file)
+    finally:
+        # Restore selection and mode so the user is not left in a different context
+        bpy.ops.object.select_all(action='DESELECT')
+        for sel_obj in original_selection:
+            if sel_obj.name in bpy.context.scene.objects:
+                sel_obj.select_set(True)
+
+        if original_active and original_active.name in bpy.context.scene.objects:
+            bpy.context.view_layer.objects.active = original_active
+
+        if original_mode != bpy.context.mode:
+            try:
+                bpy.ops.object.mode_set(mode=original_mode)
+            except Exception:
+                # If returning to the original mode fails, stay in object mode silently
+                pass
 
 def get_texture_from_material(face, obj, default_texture_name=None):
+    global _material_texture_logs, _missing_texture_logged
     # Check if the object has materials
     if obj.material_slots:
         if face.material_index < len(obj.material_slots):
@@ -83,7 +118,10 @@ def get_texture_from_material(face, obj, default_texture_name=None):
                         if image:
                             # Check if the image name matches 'car' or the object's name
                             if image.name == 'car' or image.name == obj.name.split('.')[0]:
-                                print(f"Found matching image: {image.name} for material: {mat.name} on {obj.name}")
+                                log_key = (mat.name, image.name)
+                                if log_key not in _material_texture_logs:
+                                    dprint(f"Found matching image: {image.name} for material: {mat.name} on {obj.name}")
+                                    _material_texture_logs.add(log_key)
                                 # Rename the material to match the texture name without duplicating '.bmp'
                                 if not image.name.endswith('.bmp'):
                                     mat.name = f"{image.name}.bmp"
@@ -91,7 +129,10 @@ def get_texture_from_material(face, obj, default_texture_name=None):
                                     mat.name = image.name
                                 return image
                             else:
-                                print(f"Found image: {image.name} for material: {mat.name} on {obj.name}")
+                                log_key = (mat.name, image.name)
+                                if log_key not in _material_texture_logs:
+                                    dprint(f"Found image: {image.name} for material: {mat.name} on {obj.name}")
+                                    _material_texture_logs.add(log_key)
                                 # Rename the material to match the texture name without duplicating '.bmp'
                                 if not image.name.endswith('.bmp'):
                                     mat.name = f"{image.name}.bmp"
@@ -99,22 +140,34 @@ def get_texture_from_material(face, obj, default_texture_name=None):
                                     mat.name = image.name
                                 return image
                         else:
-                            print(f"No image found for material: {mat.name} on {obj.name}")
+                            log_key = (mat.name, "NO_IMAGE")
+                            if log_key not in _material_texture_logs:
+                                dprint(f"No image found for material: {mat.name} on {obj.name}")
+                                _material_texture_logs.add(log_key)
 
     # Fallback to default texture if specified
     if default_texture_name:
         default_texture = bpy.data.images.get(default_texture_name)
         if default_texture:
-            print(f"Using default texture image {default_texture_name} for {obj.name}")
+            log_key = ("DEFAULT", default_texture_name)
+            if log_key not in _material_texture_logs:
+                dprint(f"Using default texture image {default_texture_name} for {obj.name}")
+                _material_texture_logs.add(log_key)
             return default_texture
         else:
-            print(f"Default texture {default_texture_name} not found for {obj.name}")
+            log_key = ("DEFAULT_MISSING", default_texture_name)
+            if log_key not in _material_texture_logs:
+                dprint(f"Default texture {default_texture_name} not found for {obj.name}")
+                _material_texture_logs.add(log_key)
 
     # Final fallback if no image is found
-    print(f"Error: No material or texture found for {obj.name}")
+    if not _missing_texture_logged:
+        print(f"Error: No material or texture found for {obj.name}")
+        _missing_texture_logged = True
     return None
 
 def export_mesh(me, obj, scene, filepath, world=None):
+    global _missing_texture_logged
     """
     This exports an object to an rvstruct object. This is also used for .w
     meshes since they're pretty much the same as PRM. The only additions are
@@ -237,13 +290,15 @@ def export_mesh(me, obj, scene, filepath, world=None):
         # Falls back to texture if not enabled or texnum layer not found
         image = get_texture_from_material(face, obj) if world else get_texture_from_material(face, obj, scene.default_texture_name)
         if image:
-            print(f"Assigning texture: {image.name} to face")
+            if image.name not in _texture_assignment_logs:
+                dprint(f"Assigning texture: {image.name} to faces")
+                _texture_assignment_logs.add(image.name)
             poly.texture = texture_to_int(image.name)
         else:
-            print(f"No texture assigned to face")
+            if not _missing_texture_logged:
+                dprint("No texture assigned to at least one face")
+                _missing_texture_logged = True
             poly.texture = -1
-            
-        print(f"Face texture index = {poly.texture} ({image.name if image else 'NO IMAGE'})")
 
         # Sets vertex indices for the polygon
         vert_order = [2, 1, 0, 3] if not is_quad else [3, 2, 1, 0]
