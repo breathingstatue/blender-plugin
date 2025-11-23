@@ -219,7 +219,8 @@ def fast_batch_assign_material_choice(scene, mesh_objects, material_choice):
     if bpy.context.object and bpy.context.object.mode != 'OBJECT':
         bpy.ops.object.mode_set(mode='OBJECT')
 
-    # This operator should now read scene.material_choice internally
-    bpy.ops.object.assign_materials_impexp()
+    # Use the faster auto-assignment operator (object mode only) to avoid
+    # expensive edit-mode toggles that can freeze large world imports.
+    bpy.ops.object.assign_materials_auto()
 
-    print(f"Assigned {material_choice} materials to all mesh objects.")
+    print(f"Assigned {material_choice} materials to all mesh objects (auto mode).")
