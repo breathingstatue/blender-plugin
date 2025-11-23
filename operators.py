@@ -2396,12 +2396,22 @@ class MaterialAssignmentHelper:
         """Force any *_TexVC faces to the correct texture-only material by texnum."""
         import bmesh
         mesh = obj.data
-        bm = bmesh.new()
-        bm.from_mesh(mesh)
+
+        # When running from assign_materials_to_all() we're in Edit mode.
+        # Using bmesh.to_mesh() on an edit-mode mesh raises a ValueError, so
+        # work with the live edit BMesh in that case and use
+        # bmesh.update_edit_mesh() to flush changes back to the mesh.
+        is_edit_mode = obj.mode == 'EDIT'
+        if is_edit_mode:
+            bm = bmesh.from_edit_mesh(mesh)
+        else:
+            bm = bmesh.new()
+            bm.from_mesh(mesh)
 
         texnum_layer = bm.faces.layers.int.get("Texture Number")
         if not texnum_layer:
-            bm.free()
+            if not is_edit_mode:
+                bm.free()
             return
 
         # Rebuild the same base-name + source_mode logic you already use
@@ -2465,9 +2475,12 @@ class MaterialAssignmentHelper:
 
             face.material_index = mesh.materials.find(mat.name)
 
-        bm.to_mesh(mesh)
-        bm.free()
-        mesh.update()
+        if is_edit_mode:
+            bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
+        else:
+            bm.to_mesh(mesh)
+            bm.free()
+            mesh.update()
 
     # -------------------------------------------------------------------------
     # Main dispatcher per object
