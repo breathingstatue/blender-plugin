@@ -247,14 +247,13 @@ def update_fin_envcol(self, context):
 
     obj = selected_objects[0]  # Ensure only one mesh is updated at a time
 
-    bm = bmesh.from_edit_mesh(obj.data)
+    is_edit_mode = obj.mode == 'EDIT'
+    bm = bmesh.from_edit_mesh(obj.data) if is_edit_mode else bmesh.new()
+    if not is_edit_mode:
+        bm.from_mesh(obj.data)
+
     env_layer = bm.loops.layers.color.get("Env") or bm.loops.layers.color.new("Env")
     env_alpha_layer = bm.faces.layers.float.get("EnvAlpha") or bm.faces.layers.float.new("EnvAlpha")
-
-    if not env_layer or not env_alpha_layer:
-        print("Env or EnvAlpha layer not found")
-        bpy.ops.object.mode_set(mode=previous_mode)
-        return
 
     fin_envcol = self["fin_envcol"]
 
@@ -264,7 +263,12 @@ def update_fin_envcol(self, context):
                 loop[env_layer][:3] = fin_envcol[:3]
             face[env_alpha_layer] = fin_envcol[3]
 
-    bmesh.update_edit_mesh(obj.data)
+    if is_edit_mode:
+        bmesh.update_edit_mesh(obj.data)
+    else:
+        bm.to_mesh(obj.data)
+        bm.free()
+
     obj.data.update()
     
 def update_fin_env(self, context):
@@ -458,9 +462,14 @@ def set_rgb(self, value):
     print(f"fin_col set to {value}")
 
 def update_fin_col(self, context):
-    obj = context.object
-    bm = bmesh.from_edit_mesh(obj.data) if obj.mode == 'EDIT' else bmesh.new()
-    if obj.mode != 'EDIT':
+    obj = getattr(context, "object", None)
+    if not obj or obj.type != 'MESH':
+        print("No active mesh object to update fin color.")
+        return
+
+    is_edit_mode = obj.mode == 'EDIT'
+    bm = bmesh.from_edit_mesh(obj.data) if is_edit_mode else bmesh.new()
+    if not is_edit_mode:
         bm.from_mesh(obj.data)
 
     fin_col = self.get("fin_col", [0.5, 0.5, 0.5])
@@ -480,7 +489,7 @@ def update_fin_col(self, context):
             for loop in face.loops:
                 loop[rgbcol_layer][:3] = fin_col[:3]
 
-    if obj.mode == 'EDIT':
+    if is_edit_mode:
         bmesh.update_edit_mesh(obj.data)
     else:
         bm.to_mesh(obj.data)
