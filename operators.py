@@ -3387,8 +3387,15 @@ class MaterialAssignmentImportExport(bpy.types.Operator):
     def assign_uv_textures(self, obj, existing_textures):
         mesh = obj.data
 
-        bm = bmesh.new()
-        bm.from_mesh(mesh)
+        # If the mesh is currently in edit mode, use the existing edit BMesh to
+        # avoid calling to_mesh() on an edit-mode mesh (which triggers a
+        # ValueError). Otherwise, create a fresh BMesh from the object data.
+        is_edit_mode = obj.mode == 'EDIT'
+        if is_edit_mode:
+            bm = bmesh.from_edit_mesh(mesh)
+        else:
+            bm = bmesh.new()
+            bm.from_mesh(mesh)
 
         texnum_layer = bm.faces.layers.int.get("Texture Number") or bm.faces.layers.int.new("Texture Number")
         scene = bpy.context.scene
@@ -3473,9 +3480,12 @@ class MaterialAssignmentImportExport(bpy.types.Operator):
 
             face.material_index = mesh.materials.find(mat.name)
 
-        bm.to_mesh(mesh)
-        bm.free()
-        mesh.update()
+        if is_edit_mode:
+            bmesh.update_edit_mesh(mesh)
+        else:
+            bm.to_mesh(mesh)
+            bm.free()
+            mesh.update()
         if mesh.polygons:
             obj.active_material_index = mesh.polygons[0].material_index
 
