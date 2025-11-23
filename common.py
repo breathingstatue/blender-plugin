@@ -740,18 +740,18 @@ def get_format(fstr):
 def get_model_materials(self, context):
 	return [(mat.name, mat.name, "") for mat in bpy.data.materials if mat.name.lower().endswith('.bmp')]
 
-def clean_model_base_name(name):
-	"""
-	Cleans model base name:
-	- Lowercases
-	- Strips .001 / _01 suffixes
-	- Strips file extensions like .prm, .m, .w, .bmp
-	- Truncates to max 8 characters
-	"""
-	name = name.lower()
-	name = re.sub(r'[\._-]\d+$', '', name)
-	name = re.sub(r'\.(prm|m|w|bmp)$', '', name)
-	return name[:8]
+def clean_model_base_name(name, *, truncate=True):
+        """
+        Cleans model base name:
+        - Lowercases
+        - Strips .001 / _01 suffixes
+        - Strips file extensions like .prm, .m, .w, .bmp
+        - Optionally truncates to max 8 characters (default: True)
+        """
+        name = name.lower()
+        name = re.sub(r'[\._-]\d+$', '', name)
+        name = re.sub(r'\.(prm|m|w|bmp)$', '', name)
+        return name[:8] if truncate else name
 
 def texnum_to_label(index):
     if index < 26:

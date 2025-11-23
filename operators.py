@@ -2911,7 +2911,7 @@ class MaterialAssignmentAuto(bpy.types.Operator):
     def assign_regular_materials(self, obj, material_suffix):
         print(f"[FAST] assign_regular_materials: {obj.name}")
 
-        base_name = clean_model_base_name(obj.name)
+        base_name = clean_model_base_name(obj.name, truncate=False)
         potential_names = [
             f"{base_name}{material_suffix}",
             f"{base_name}.prm{material_suffix}",
@@ -3208,7 +3208,7 @@ class MaterialAssignment(bpy.types.Operator):
         obj.data.update()
 
     def assign_regular_materials(self, obj, material_suffix):
-        base_name = clean_model_base_name(obj.name)
+        base_name = clean_model_base_name(obj.name, truncate=False)
 
         potential_names = [
             f"{base_name}{material_suffix}",
@@ -3526,7 +3526,7 @@ class MaterialAssignmentImportExport(bpy.types.Operator):
         obj.data.update()
 
     def assign_regular_materials(self, obj, material_suffix):
-        base_name = clean_model_base_name(obj.name)
+        base_name = clean_model_base_name(obj.name, truncate=False)
 
         potential_names = [
             f"{base_name}{material_suffix}",
