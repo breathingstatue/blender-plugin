@@ -6,6 +6,19 @@ place 'io_revolt' in Blender/"version"/scripts/addons/
 
 -Theman with the help of AI and a bunch of friends in the RV I/O community.
 
+20.25.93
+Fixed the rest of Blender 5.0 incompabilities
+
+20.25.92
+Fixed property issue in MaterialAssignment function
+
+20.25.91
+Added Batch Bake to Baking of Vertex Colours
+Fixed Instance and Model UI
+Fixed Batch Bake of Fin Env and Model Colour
+Updated some old usages of 'imp' (old Python version)
+Fixed some RNA links to use ID props
+
 20.25.90
 Updated the plugin to work in Blendrer 5.0
 
