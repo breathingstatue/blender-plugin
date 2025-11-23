@@ -3294,6 +3294,13 @@ class MaterialAssignmentImportExport(bpy.types.Operator):
             material_choice = 'UV_TEX'  # safe default
         print(f"[DEBUG][IMPEXP] Global material choice: {material_choice}")
 
+        # Texture-based modes require a level texture base to resolve names
+        if material_choice in {"UV_TEX", "TEX_VC", "ENV", "ALPHA"}:
+            if not get_scene_value(scene, "level_texture_base", "").strip():
+                print("[ERROR][IMPEXP] level_texture_base not set; cannot assign texture-based materials")
+                bpy.ops.scene.prompt_texture_base('INVOKE_DEFAULT')
+                return {'CANCELLED'}
+
         existing_textures = self.get_existing_textures()
         print(f"[DEBUG][IMPEXP] Found {len(existing_textures)} existing textures")
 
