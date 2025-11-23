@@ -601,9 +601,10 @@ class MFileExtension(bpy.types.Operator):
         print(f"[SLOT {self.slot_index}] {self.model_name} → {self.choice}, Path: {scene[f'm_texture_path_{self.slot_index}']}")
 
         # If this was a .m or .fin import that was cancelled earlier
-        filepath = scene.get("pending_import_filepath", "")
+        filepath = getattr(scene, "pending_import_filepath", "")
         if filepath:
-            del scene["pending_import_filepath"]  # Clear it
+            # Clear pending filepath (StringProperty lives on Scene, not ID props)
+            scene.pending_import_filepath = ""
             if filepath.lower().endswith(".m"):
                 from . import m_in
                 m_in.import_file(filepath, scene, model_name=self.model_name)
