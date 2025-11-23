@@ -3351,7 +3351,6 @@ class MaterialAssignmentImportExport(bpy.types.Operator):
             self.update_material_assignment(obj, existing_textures, material_choice)
 
             bpy.ops.object.mode_set(mode='OBJECT')
-            prune_unused_material_slots(obj)
 
         # Restore the original active object and mode when possible
         if original_active and original_active.name in bpy.data.objects:
@@ -3388,12 +3387,8 @@ class MaterialAssignmentImportExport(bpy.types.Operator):
     def assign_uv_textures(self, obj, existing_textures):
         mesh = obj.data
 
-        in_edit_mode = mesh.is_editmode
-        if in_edit_mode:
-            bm = bmesh.from_edit_mesh(mesh)
-        else:
-            bm = bmesh.new()
-            bm.from_mesh(mesh)
+        bm = bmesh.new()
+        bm.from_mesh(mesh)
 
         texnum_layer = bm.faces.layers.int.get("Texture Number") or bm.faces.layers.int.new("Texture Number")
         scene = bpy.context.scene
@@ -3478,12 +3473,9 @@ class MaterialAssignmentImportExport(bpy.types.Operator):
 
             face.material_index = mesh.materials.find(mat.name)
 
-        if in_edit_mode:
-            bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
-        else:
-            bm.to_mesh(mesh)
-            bm.free()
-            mesh.update()
+        bm.to_mesh(mesh)
+        bm.free()
+        mesh.update()
         if mesh.polygons:
             obj.active_material_index = mesh.polygons[0].material_index
 
