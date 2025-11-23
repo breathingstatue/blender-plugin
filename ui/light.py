@@ -27,7 +27,7 @@ class RVIO_PT_RevoltLightPanel(bpy.types.Panel):
 
         self.warn_texture_mode(layout)
         col = layout.column(align=True)
-        col.operator("object.bake_vertex", text="Bake Light to Vertex Colours")
+        col.operator("object.bake_vertex_batch", text="Bake Light to Vertex Colors")
         col.operator("object.batch_bake_vertex_to_env", text="Batch Bake Light to .fin Env")
         col.operator("object.bake_vertex_to_rgbmodelcolor", text="Bake Light to RGB Model")
         box = layout.box()

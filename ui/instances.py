@@ -1,4 +1,4 @@
-import bpy
+﻿import bpy
 
 class RVIO_PT_RevoltInstancesPanel(bpy.types.Panel):
     bl_label = "Instances"
@@ -11,12 +11,16 @@ class RVIO_PT_RevoltInstancesPanel(bpy.types.Panel):
         layout = self.layout
         obj = context.object
 
-        # Instance properties
         box = layout.box()
         box.label(text="Instance Properties:")
         col = box.column(align=True)
+
         if obj:
-            instance_count = sum(1 for obj in context.scene.objects if obj.get("is_instance", False))
+            instance_count = sum(
+                1
+                for o in context.scene.objects
+                if getattr(o, "is_instance", False) or bool(o.get("is_instance", False))
+            )
             col.label(text=f"Instances: {instance_count}/1024")
             col.operator("instances.set_instance_property", text="Mark as Instance")
             col.operator("instances.rem_instance_property", text="Remove Instance Property")
