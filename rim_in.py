@@ -4,21 +4,22 @@ Purpose: Imports mirror plane files
 
 Description:
 Mirror planes are used to determine reflective surfaces.
-
 """
 
 import os
 import bpy
 import bmesh
+import importlib
+
 from . import common
 from . import rvstruct
 from .rvstruct import RIM, MirrorPlane
 from .common import dprint, queue_error, to_blender_coord
 
+# --- Proper modern reload ---
 if "common" in locals():
-    import imp
-    imp.reload(common)
-    imp.reload(rvstruct)
+    importlib.reload(common)
+    importlib.reload(rvstruct)
 
 def import_file(filepath, scene):
     with open(filepath, "rb") as f:
@@ -26,7 +27,6 @@ def import_file(filepath, scene):
 
     dprint("Mirror planes:", rim.num_mirror_planes)
 
-    # Extracts the base filename without path and extension
     base_filename = filepath.rsplit(os.sep, 1)[1].rsplit('.', 1)[0]
 
     if rim.num_mirror_planes == 0 or not rim.mirror_planes:
@@ -34,9 +34,8 @@ def import_file(filepath, scene):
         return
 
     for index, mirror_plane in enumerate(rim.mirror_planes):
-        # Modified to include '.rim' in the unique name
-        unique_name = f"{base_filename}_{index:03}.rim"  # Appends the index and '.rim'
-        
+        unique_name = f"{base_filename}_{index:03}.rim"
+
         me = bpy.data.meshes.new(unique_name)
         bm = bmesh.new()
 
@@ -46,16 +45,13 @@ def import_file(filepath, scene):
             bm.verts.ensure_lookup_table()
 
         bm.faces.new(verts)
-
         bm.to_mesh(me)
         bm.free()
 
-        ob = bpy.data.objects.new(unique_name, me)  # Use the unique name here
+        ob = bpy.data.objects.new(unique_name, me)
         ob["is_mirror_plane"] = True
-        
-        # Link the object to the scene
-        # Check if the object is already in the scene collection 
-        if ob.name not in bpy.context.scene.collection.objects: 
-            bpy.context.scene.collection.objects.link(ob) 
-        else: 
+
+        if ob.name not in bpy.context.scene.collection.objects:
+            bpy.context.scene.collection.objects.link(ob)
+        else:
             print(f"Object '{ob.name}' is already in the scene collection.")

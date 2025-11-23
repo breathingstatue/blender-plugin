@@ -13,7 +13,7 @@ behavior.
 from hmac import new
 import bpy
 import bmesh
-from .common import TEX_PAGES_MAX, NCP_PROP_MASK, FACE_PROP_MASK, objects_to_bmesh, get_edit_bmesh, msg_box, COLORS, MATERIALS
+from .common import TEX_PAGES_MAX, NCP_PROP_MASK, FACE_PROP_MASK, get_edit_bmesh, msg_box, COLORS, MATERIALS
 
 def _safe_bm_from_edit_mesh(obj):
     try:

@@ -6,12 +6,13 @@ Description:
 World files contain meshes, optimization data, and texture animations.
 """
 
+import importlib
+
 if "bpy" in locals():
-    import imp
-    imp.reload(common)
-    imp.reload(rvstruct)
-    imp.reload(img_in)
-    imp.reload(prm_out)
+    importlib.reload(common)
+    importlib.reload(rvstruct)
+    importlib.reload(img_in)
+    importlib.reload(prm_out)
 
 import os
 import bpy
@@ -26,6 +27,7 @@ from . import (
 )
 from .common import *
 from .prm_out import export_mesh, get_texture_from_material
+
 
 def create_split_mesh(original_mesh, face_indices, original_obj_name, created_objects):
     new_mesh = bpy.data.meshes.new(name=f"{original_obj_name}_split_mesh")

@@ -9,21 +9,28 @@ Meshes used for instanced objects.
 import os
 import bpy
 import bmesh
+import importlib
 from mathutils import Color, Vector, Matrix
+
 from . import common
 from . import rvstruct
 from . import img_in
 from . import layers
-from .common import dprint, get_all_lod, triangulate_ngons, queue_error, FACE_QUAD, FACE_PROP_MASK, texture_to_int, FACE_ENV
-from .common import to_revolt_coord, to_revolt_axis, rvbbox_from_bm, center_from_rvbbox, radius_from_bmesh
+
+from .common import (
+    dprint, get_all_lod, triangulate_ngons, queue_error,
+    FACE_QUAD, FACE_PROP_MASK, texture_to_int, FACE_ENV,
+    to_revolt_coord, to_revolt_axis, rvbbox_from_bm,
+    center_from_rvbbox, radius_from_bmesh
+)
 from .layers import *
 
+# --- Safe modern reload logic (Blender dev-mode hot reload) ---
 if "bpy" in locals():
-    import imp
-    imp.reload(common)
-    imp.reload(rvstruct)
-    imp.reload(img_in)
-    imp.reload(layers)
+    importlib.reload(common)
+    importlib.reload(rvstruct)
+    importlib.reload(img_in)
+    importlib.reload(layers)
 
 def export_file(filepath, scene):
     obj = bpy.context.view_layer.objects.active

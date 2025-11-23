@@ -92,7 +92,7 @@ from .operators import CopyAndRemoveSprings, PinMessageBox, ConfirmLoadOriginalP
 from .operators import ButtonZoneHide, AddTrackZone, ReverseTrackZone, ButtonTriggerHide, CreateTrigger, MarkAsModel, CreateFobObject
 from .operators import DuplicateFobObject, DuplicateTrigger, CopyTrigger, PasteTrigger, SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere
 from .operators import ButtonCopyUvToFrame, ButtonCopyFrameToUv, PreviewNextFrame, PreviewPrevFrame, TexAnimTransform, TexAnimGrid, CarAutoShader
-from .operators import ToggleVisiboxVisibility, ToggleFOBVisibility, FindSpecialFile
+from .operators import ToggleVisiboxVisibility, ToggleFOBVisibility, FindSpecialFile, BakeVertexBatch
 from .operators import menu_func_import, menu_func_export
 from .texanim import update_ta_max_frames, update_ta_current_slot, update_ta_current_frame, update_ta_current_frame_uv
 from .texanim import update_ta_current_frame_delay, update_ta_current_frame_tex, update_ta_max_slots
@@ -112,7 +112,7 @@ from .ui.viewlayer_panel import RVIO_PT_RevoltViewLayerPanel
 bl_info = {
 "name": "Re-Volt",
 "author": "Marvin Thiel & Theman",
-"version": (20, 25, 90),
+"version": (20, 25, 91),
 "blender": (4, 5, 1),
 "location": "File > Import-Export",
 "description": "Import and export Re-Volt file formats.",
@@ -1046,6 +1046,7 @@ def register():
     bpy.utils.register_class(ToggleVisiboxVisibility)
     bpy.utils.register_class(ToggleFOBVisibility)
     bpy.utils.register_class(FindSpecialFile)
+    bpy.utils.register_class(BakeVertexBatch)
     bpy.utils.register_class(ButtonZoneHide)
     bpy.utils.register_class(AddTrackZone)
     bpy.utils.register_class(ReverseTrackZone)
@@ -1118,6 +1119,7 @@ def unregister():
     bpy.utils.unregister_class(ReverseTrackZone)
     bpy.utils.unregister_class(AddTrackZone)
     bpy.utils.unregister_class(ButtonZoneHide)
+    bpy.utils.unregister_class(BakeVertexBatch)
     bpy.utils.unregister_class(FindSpecialFile)
     bpy.utils.unregister_class(ToggleFOBVisibility)
     bpy.utils.unregister_class(ToggleVisiboxVisibility)

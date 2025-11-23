@@ -32,7 +32,10 @@ def export_hull(filepath, scene):
     hull = Hull()
 
     # Get convex hull objects
-    chull_objs = [obj for obj in scene.objects if obj.get("is_hull_convex", False)]
+    chull_objs = [
+        obj for obj in scene.objects
+        if getattr(obj, "is_hull_convex", obj.get("is_hull_convex", False))
+    ]
     hull.chull_count = len(chull_objs)
 
     for obj in chull_objs:
@@ -105,7 +108,10 @@ def define_bounding_box(chull, bm, obj_matrix):
     
 def process_sphere_hulls(scene):
     interior = rvstruct.Interior()
-    sphere_objs = [obj for obj in scene.objects if obj.get("is_hull_sphere", False)]
+    sphere_objs = [
+        obj for obj in scene.objects
+        if getattr(obj, "is_hull_sphere", obj.get("is_hull_sphere", False))
+    ]
     interior.sphere_count = len(sphere_objs)
 
     for obj in sphere_objs:

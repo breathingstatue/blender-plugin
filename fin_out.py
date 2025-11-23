@@ -28,10 +28,16 @@ def export_file(filepath, scene):
     print("Starting export...")
     fin = rvstruct.Instances()
 
+    def _is_instance(obj):
+        return getattr(obj, "is_instance", obj.get("is_instance", False))
+
     bpy.ops.object.mode_set(mode='OBJECT')
     print("Switched to Object Mode")
 
-    mesh_objects = [obj for obj in bpy.data.objects if obj.type == 'MESH' and obj.get("is_instance", False)]
+    mesh_objects = [
+        obj for obj in bpy.data.objects
+        if obj.type == 'MESH' and _is_instance(obj)
+    ]
     if not mesh_objects:
         print("No mesh objects available for export.")
         return
@@ -64,14 +70,14 @@ def export_file(filepath, scene):
         instance = Instance()
         instance.name = instance_name + "\x00"
 
-        fin_col = obj.get("fin_col", [0.5, 0.5, 0.5])
+        fin_col = getattr(obj, "fin_col", obj.get("fin_col", [0.5, 0.5, 0.5]))
         instance.color = (
             int(fin_col[0] * 255) - 128,
             int(fin_col[1] * 255) - 128,
             int(fin_col[2] * 255) - 128,
         )
 
-        fin_envcol = obj.get("fin_envcol", [0.5, 0.5, 0.5, 1.0])
+        fin_envcol = getattr(obj, "fin_envcol", obj.get("fin_envcol", [0.5, 0.5, 0.5, 1.0]))
         instance.env_color = Color(
             color=(int(fin_envcol[0] * 255),
                    int(fin_envcol[1] * 255),
@@ -83,20 +89,23 @@ def export_file(filepath, scene):
         instance.or_matrix = Matrix()
         instance.or_matrix.data = to_or_matrix(obj.matrix_world)
 
+        def _flag(obj, name):
+            return getattr(obj, name, obj.get(name, False))
+
         instance.flag = 0
-        if obj.get("fin_env", False):
+        if _flag(obj, "fin_env"):
             instance.flag |= FIN_ENV
-        if obj.get("fin_model_rgb", False):
+        if _flag(obj, "fin_model_rgb"):
             instance.flag |= FIN_SET_MODEL_RGB
-        if obj.get("fin_hide", False):
+        if _flag(obj, "fin_hide"):
             instance.flag |= FIN_HIDE
-        if obj.get("fin_no_mirror", False):
+        if _flag(obj, "fin_no_mirror"):
             instance.flag |= FIN_NO_MIRROR
-        if obj.get("fin_no_lights", False):
+        if _flag(obj, "fin_no_lights"):
             instance.flag |= FIN_NO_LIGHTS
-        if obj.get("fin_no_cam_coll", False):
+        if _flag(obj, "fin_no_cam_coll"):
             instance.flag |= FIN_NO_CAMERA_COLLISION
-        if obj.get("fin_no_obj_coll", False):
+        if _flag(obj, "fin_no_obj_coll"):
             instance.flag |= FIN_NO_OBJECT_COLLISION
 
         fin.instances.append(instance)
@@ -184,8 +193,10 @@ def assign_textures_and_vc_by_texnum(mesh_objects, scene):
 
     # base: prefer FIN base, then scene level, then cleaned object name
     def resolve_base(obj):
-        if obj.get("is_instance") and "fin_texture_base" in obj:
-            return str(obj["fin_texture_base"]).strip().lower()
+        if getattr(obj, "is_instance", obj.get("is_instance", False)):
+            base = getattr(obj, "fin_texture_base", obj.get("fin_texture_base", ""))
+            if base:
+                return str(base).strip().lower()
         if "level_texture_base" in scene and scene["level_texture_base"]:
             return os.path.splitext(scene["level_texture_base"].strip().lower())[0]
         name = obj.name.lower()

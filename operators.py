@@ -1497,7 +1497,7 @@ INSTANCES ----------------------------------------------------------------------
 class SetInstanceProperty(bpy.types.Operator):
     bl_idname = "instances.set_instance_property"
     bl_label = "Mark as Instance"
-    bl_description = "Marks all selected objects as instances and stores texture base"
+    bl_description = "Marks selected objects as instances and stores texture base"
     
     texture_base: bpy.props.StringProperty(
         name="Texture Base",
@@ -1508,36 +1508,48 @@ class SetInstanceProperty(bpy.types.Operator):
     def execute(self, context):
         for obj in context.selected_objects:
             if obj.type == 'MESH' and obj.mode == 'OBJECT':
-                obj["is_instance"] = True
-                obj["fin_env"] = True
+
+                # ✔ Use RNA properties
+                obj.is_instance = True
+                obj.fin_env = True
+
+                # ✔ ID props can still be used for arbitrary data
                 obj["fin_texture_base"] = self.texture_base
+
                 create_or_assign_env_material(obj)
-                print(f"Marked {obj.name} as instance with fin_texture_base = {self.texture_base}")
-        self.report({'INFO'}, f"Marked {len(context.selected_objects)} objects as is_instance")
+
+        self.report({'INFO'}, f"Marked {len(context.selected_objects)} objects as instances")
         return {'FINISHED'}
 
     def invoke(self, context, event):
         return context.window_manager.invoke_props_dialog(self)
 
+
 class RemoveInstanceProperty(bpy.types.Operator):
     bl_idname = "instances.rem_instance_property"
-    bl_label = "Remove Instance property"
-    bl_description = "Removes the 'is_instance' property from all selected objects"
+    bl_label = "Remove Instance Property"
+    bl_description = "Removes the instance marking"
 
     def execute(self, context):
         removed_count = 0
 
         for obj in context.selected_objects:
-            # Check if 'is_instance' property exists and then remove it
-            if "is_instance" in obj:
-                del obj["is_instance"]
+
+            # ✔ Clear RNA property
+            if getattr(obj, "is_instance", False):
+                obj.is_instance = False
                 removed_count += 1
                 
+            # Optional: disable env
+            if hasattr(obj, "fin_env"):
+                obj.fin_env = False
+
+            # ✔ Remove helper ID property
             if "fin_texture_base" in obj:
                 del obj["fin_texture_base"]
 
         context.view_layer.update()
-        self.report({'INFO'}, f"Removed 'is_instance' property from {removed_count} objects")
+        self.report({'INFO'}, f"Removed instance flag from {removed_count} objects")
         return {'FINISHED'}
     
 """
@@ -2937,13 +2949,14 @@ class MaterialAssignment(bpy.types.Operator):
             self.report({'WARNING'}, "Active object is not a mesh")
             return {'CANCELLED'}
 
-        active_material_choice = obj.data.material_choice
+        # ✔ FIXED: Use SCENE-LEVEL property, not mesh-level
+        active_material_choice = scene.material_choice
 
         existing_textures = self.get_existing_textures()
 
         for obj in context.selected_objects:
-            if obj.type == 'MESH' and hasattr(obj.data, 'material_choice'):
-                obj.data.material_choice = active_material_choice
+            if obj.type == 'MESH':
+                # No mesh-level property anymore — assignment comes from scene
                 self.update_material_assignment(obj, existing_textures)
 
         return {'FINISHED'}
@@ -2983,6 +2996,8 @@ class MaterialAssignment(bpy.types.Operator):
         return self.get_base_name_for_layers(obj)
 
     def update_material_assignment(self, obj, existing_textures):
+        scene = bpy.context.scene
+
         material_map = {
             'UV_TEX': '_UVTex',
             'COL': '_Col',
@@ -2992,14 +3007,13 @@ class MaterialAssignment(bpy.types.Operator):
             'NCP': '_NCP'
         }
 
-        material_choice = obj.data.material_choice
+        # ✔ FIXED: read scene-level choice
+        material_choice = scene.material_choice
         material_suffix = material_map.get(material_choice, '_Col')
 
-        # ---- DEBUG START ----
         print(f"[DEBUG] update_material_assignment() called for {obj.name}")
         print(f"[DEBUG] material_choice = {material_choice}, resolved suffix = {material_suffix}")
         print(f"[DEBUG] Current materials: {[m.name for m in obj.data.materials]}")
-        # ---- DEBUG END ----
 
         if material_choice == 'UV_TEX':
             print(f"[DEBUG] → Assigning UV textures for {obj.name}")
@@ -4491,6 +4505,72 @@ class BakeVertex(bpy.types.Operator):
     def invoke(self, context, event):
         wm = context.window_manager
         return wm.invoke_props_dialog(self)
+
+class BakeVertexBatch(bpy.types.Operator):
+    """Bake lighting to vertex colors on all selected mesh objects."""
+    bl_idname = "object.bake_vertex_batch"
+    bl_label = "Bake Light to Vertex Color (Selected)"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    shadow_strength: bpy.props.FloatProperty(
+        name="Shadow Strength",
+        description="Strength of the shadows",
+        default=5.0,
+        min=0.0,
+        max=10.0
+    )
+
+    light_strength: bpy.props.FloatProperty(
+        name="Light Strength",
+        description="Strength of the light rays",
+        default=0.5,
+        min=0.0,
+        max=10.0
+    )
+
+    # NEW — dropdown with allowed options only
+    samples: bpy.props.EnumProperty(
+        name="Samples",
+        description="Number of samples for baking",
+        items=[
+            ('64',  "64",  "Fast preview"),
+            ('128', "128", "Balanced"),
+            ('256', "256", "High quality"),
+            ('512', "512", "Very high quality"),
+        ],
+        default='64',
+    )
+
+    def execute(self, context):
+        # Only mesh objects from the selection
+        mesh_objects = [o for o in context.selected_objects if o.type == 'MESH']
+        if not mesh_objects:
+            self.report({'WARNING'}, "No mesh objects selected.")
+            return {'CANCELLED'}
+
+        prev_active = context.view_layer.objects.active
+
+        # Loop all selected meshes and call the original operator on each
+        for obj in mesh_objects:
+            print(f"[BakeVertexBatch] Baking {obj.name}")
+            context.view_layer.objects.active = obj
+
+            # Call existing single-object bake operator without UI
+            bpy.ops.object.bake_vertex(
+                'EXEC_DEFAULT',
+                shadow_strength=self.shadow_strength,
+                light_strength=self.light_strength,
+                samples=int(self.samples)       # IMPORTANT: convert enum string to int
+            )
+
+        # Restore previous active object
+        context.view_layer.objects.active = prev_active
+
+        self.report({'INFO'}, f"Baked {len(mesh_objects)} mesh object(s)")
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
     
 class BatchBakeVertexToEnv(bpy.types.Operator):
     """Batch Bake lighting to vertex colors and apply changes to the _Env material."""
@@ -4514,12 +4594,17 @@ class BatchBakeVertexToEnv(bpy.types.Operator):
         max=10.0
     )
     
-    samples: bpy.props.IntProperty(
+    # CHANGED: EnumProperty with fixed options
+    samples: bpy.props.EnumProperty(
         name="Samples",
         description="Number of samples for baking",
-        default=512,
-        min=1,
-        max=5000
+        items=[
+            ('64',  "64",  "Fast preview"),
+            ('128', "128", "Balanced"),
+            ('256', "256", "High quality"),
+            ('512', "512", "Very high quality"),
+        ],
+        default='64',
     )
     
     def get_base_name_for_layers(self, obj):
@@ -4542,12 +4627,15 @@ class BatchBakeVertexToEnv(bpy.types.Operator):
         original_engine = scene.render.engine
         scene.render.engine = 'CYCLES'
         original_samples = scene.cycles.samples
-        scene.cycles.samples = self.samples
+        scene.cycles.samples = int(self.samples)  # CHANGED: cast enum string to int
 
         # Bakes all selected objects
         for obj in context.selected_objects:
-            # Skips unsupported objects
-            if not hasattr(obj.data, "vertex_colors") or not obj.get('is_instance'):
+            if (
+                obj.type != 'MESH'
+                or not hasattr(obj.data, "vertex_colors")
+                or not (getattr(obj, "is_instance", False) or obj.get("is_instance", False))
+            ):
                 continue
 
             print(f"Baking at {obj.name}...")
@@ -4601,13 +4689,30 @@ class BatchBakeVertexToEnv(bpy.types.Operator):
             bpy.ops.object.mode_set(mode='OBJECT')
 
             # Bake the ambient occlusion (AO) to the temporary vertex color layer
-            bpy.ops.object.bake(type='AO', use_clear=True, use_selected_to_active=False, margin=2, cage_extrusion=0.0, normal_space='TANGENT', target='VERTEX_COLORS')
+            bpy.ops.object.bake(
+                type='AO',
+                use_clear=True,
+                use_selected_to_active=False,
+                margin=2,
+                cage_extrusion=0.0,
+                normal_space='TANGENT',
+                target='VERTEX_COLORS'
+            )
 
             # Switch to the temporary direct lighting vertex color layer
             obj.data.vertex_colors.active = temp_direct_env_layer
 
             # Bake the direct lighting to the temporary vertex color layer
-            bpy.ops.object.bake(type='DIFFUSE', use_clear=True, use_selected_to_active=False, margin=2, cage_extrusion=0.0, normal_space='TANGENT', pass_filter={'DIRECT'}, target='VERTEX_COLORS')
+            bpy.ops.object.bake(
+                type='DIFFUSE',
+                use_clear=True,
+                use_selected_to_active=False,
+                margin=2,
+                cage_extrusion=0.0,
+                normal_space='TANGENT',
+                pass_filter={'DIRECT'},
+                target='VERTEX_COLORS'
+            )
 
             # Merge the baked AO and direct lighting with the original colors using bmesh
             bm = bmesh.new()
@@ -4623,12 +4728,12 @@ class BatchBakeVertexToEnv(bpy.types.Operator):
                     original_color = loop[env_layer_bm]
                     ao_color = loop[temp_ao_env_layer_bm]
                     direct_color = loop[temp_direct_env_layer_bm]
-                    # Blend the original color with the AO shadow and direct lighting
                     blended_color = [
-                        original_color[j] * (1 - self.shadow_strength * (1 - ao_color[j])) + self.light_strength * direct_color[j]
+                        original_color[j] * (1 - self.shadow_strength * (1 - ao_color[j])) +
+                        self.light_strength * direct_color[j]
                         for j in range(3)
                     ]
-                    loop[env_layer_bm] = blended_color + [original_color[3]]  # Preserve original alpha value
+                    loop[env_layer_bm] = blended_color + [original_color[3]]  # Preserve original alpha
 
             # Update the mesh
             bm.to_mesh(obj.data)
@@ -4648,8 +4753,7 @@ class BatchBakeVertexToEnv(bpy.types.Operator):
         return {'FINISHED'}
     
     def invoke(self, context, event):
-        wm = context.window_manager
-        return wm.invoke_props_dialog(self)
+        return context.window_manager.invoke_props_dialog(self)
 
 class BakeVertexToRGBModelColor(bpy.types.Operator):
     """Bake lighting to vertex colors and apply changes to the _RGBModelColor material."""
@@ -4673,12 +4777,17 @@ class BakeVertexToRGBModelColor(bpy.types.Operator):
         max=10.0
     )
     
-    samples: bpy.props.IntProperty(
+    # CHANGED: EnumProperty with fixed options
+    samples: bpy.props.EnumProperty(
         name="Samples",
         description="Number of samples for baking",
-        default=512,
-        min=1,
-        max=5000
+        items=[
+            ('64',  "64",  "Fast preview"),
+            ('128', "128", "Balanced"),
+            ('256', "256", "High quality"),
+            ('512', "512", "Very high quality"),
+        ],
+        default='64',
     )
     
     def get_base_name_for_layers(self, obj):
@@ -4701,12 +4810,15 @@ class BakeVertexToRGBModelColor(bpy.types.Operator):
         original_engine = scene.render.engine
         scene.render.engine = 'CYCLES'
         original_samples = scene.cycles.samples
-        scene.cycles.samples = self.samples
+        scene.cycles.samples = int(self.samples)  # CHANGED: cast enum string to int
 
         # Bakes all selected objects
         for obj in context.selected_objects:
-            # Skips unsupported objects
-            if not hasattr(obj.data, "vertex_colors") or not obj.get('is_instance'):
+            if (
+                obj.type != 'MESH'
+                or not hasattr(obj.data, "vertex_colors")
+                or not (getattr(obj, "is_instance", False) or obj.get("is_instance", False))
+            ):
                 continue
 
             print(f"Baking at {obj.name}...")
@@ -4760,13 +4872,30 @@ class BakeVertexToRGBModelColor(bpy.types.Operator):
             bpy.ops.object.mode_set(mode='OBJECT')
 
             # Bake the ambient occlusion (AO) to the temporary vertex color layer
-            bpy.ops.object.bake(type='AO', use_clear=True, use_selected_to_active=False, margin=2, cage_extrusion=0.0, normal_space='TANGENT', target='VERTEX_COLORS')
+            bpy.ops.object.bake(
+                type='AO',
+                use_clear=True,
+                use_selected_to_active=False,
+                margin=2,
+                cage_extrusion=0.0,
+                normal_space='TANGENT',
+                target='VERTEX_COLORS'
+            )
 
             # Switch to the temporary direct lighting vertex color layer
             obj.data.vertex_colors.active = temp_direct_rgb_layer
 
             # Bake the direct lighting to the temporary vertex color layer
-            bpy.ops.object.bake(type='DIFFUSE', use_clear=True, use_selected_to_active=False, margin=2, cage_extrusion=0.0, normal_space='TANGENT', pass_filter={'DIRECT'}, target='VERTEX_COLORS')
+            bpy.ops.object.bake(
+                type='DIFFUSE',
+                use_clear=True,
+                use_selected_to_active=False,
+                margin=2,
+                cage_extrusion=0.0,
+                normal_space='TANGENT',
+                pass_filter={'DIRECT'},
+                target='VERTEX_COLORS'
+            )
 
             # Merge the baked AO and direct lighting with the original colors using bmesh
             bm = bmesh.new()
@@ -4782,12 +4911,12 @@ class BakeVertexToRGBModelColor(bpy.types.Operator):
                     original_color = loop[rgb_layer_bm]
                     ao_color = loop[temp_ao_rgb_layer_bm]
                     direct_color = loop[temp_direct_rgb_layer_bm]
-                    # Blend the original color with the AO shadow and direct lighting
                     blended_color = [
-                        original_color[j] * (1 - self.shadow_strength * (1 - ao_color[j])) + self.light_strength * direct_color[j]
+                        original_color[j] * (1 - self.shadow_strength * (1 - ao_color[j])) +
+                        self.light_strength * direct_color[j]
                         for j in range(3)
                     ]
-                    loop[rgb_layer_bm] = blended_color + [1.0]  # Add alpha value for RGBModelColor
+                    loop[rgb_layer_bm] = blended_color + [1.0]
 
             # Update the mesh
             bm.to_mesh(obj.data)
@@ -4807,8 +4936,7 @@ class BakeVertexToRGBModelColor(bpy.types.Operator):
         return {'FINISHED'}
     
     def invoke(self, context, event):
-        wm = context.window_manager
-        return wm.invoke_props_dialog(self)
+        return context.window_manager.invoke_props_dialog(self)
 
 """
 TEXTURE ANIMATIONS -------------------------------------------------------
