@@ -197,8 +197,9 @@ def assign_textures_and_vc_by_texnum(mesh_objects, scene):
             base = getattr(obj, "fin_texture_base", obj.get("fin_texture_base", ""))
             if base:
                 return str(base).strip().lower()
-        if "level_texture_base" in scene and scene["level_texture_base"]:
-            return os.path.splitext(scene["level_texture_base"].strip().lower())[0]
+        level_base = common.get_scene_value(scene, "level_texture_base", "")
+        if level_base:
+            return os.path.splitext(level_base.strip().lower())[0]
         name = obj.name.lower()
         name = os.path.splitext(name)[0]
         # strip trailing .001 style suffixes

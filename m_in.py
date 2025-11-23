@@ -67,10 +67,10 @@ def import_file(filepath, scene, model_name=None):
             
             # Register model in an unused texture slot
             for i in range(MAX_MODEL_SLOTS):
-                if not scene.get(f"m_model_name_{i}", ""):
-                    scene[f"m_model_name_{i}"] = base_name
-                    scene[f"m_texture_mode_{i}"] = "LEVEL_TEXTURES"  # or TEXTURE_NAME if that’s what you want
-                    scene[f"m_texture_path_{i}"] = "C:/GAMES/RVGL/packs/game_files/levels/toy2/"  # Or ask from user
+                if not common.get_scene_value(scene, f"m_model_name_{i}", ""):
+                    common.set_scene_value(scene, f"m_model_name_{i}", base_name)
+                    common.set_scene_value(scene, f"m_texture_mode_{i}", "LEVEL_TEXTURES")  # or TEXTURE_NAME if that’s what you want
+                    common.set_scene_value(scene, f"m_texture_path_{i}", "C:/GAMES/RVGL/packs/game_files/levels/toy2/")  # Or ask from user
                     break
 
             if obj.name not in bpy.context.scene.collection.objects:
@@ -237,9 +237,9 @@ def assign_uv_tex_material(obj, base_name=None, model_name=None):
 
     if model_name:
         for i in range(MAX_MODEL_SLOTS):
-            if scene.get(f"m_model_name_{i}", "") == model_name:
-                source_mode = scene.get(f"m_texture_mode_{i}", "VERTEX_COLOR")
-                texture_path = scene.get(f"m_texture_path_{i}", "")
+            if common.get_scene_value(scene, f"m_model_name_{i}", "") == model_name:
+                source_mode = common.get_scene_value(scene, f"m_texture_mode_{i}", "VERTEX_COLOR")
+                texture_path = common.get_scene_value(scene, f"m_texture_path_{i}", "")
                 if source_mode == "TEXTURE_NAME":
                     base_name_for_texture = os.path.splitext(os.path.basename(texture_path))[0].lower()
                 elif source_mode == "LEVEL_TEXTURES":

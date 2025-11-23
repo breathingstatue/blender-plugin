@@ -101,9 +101,9 @@ def export_mesh(me, obj, scene, filepath, model, basename):
     model.vertex_count += len(bm.verts)
 
     for i in range(MAX_MODEL_SLOTS):
-        if scene.get(f"m_model_name_{i}", "").lower() == basename:
-            mode = scene.get(f"m_texture_mode_{i}", "VERTEX_COLOR")
-            path = scene.get(f"m_texture_path_{i}", "")
+        if common.get_scene_value(scene, f"m_model_name_{i}", "").lower() == basename:
+            mode = common.get_scene_value(scene, f"m_texture_mode_{i}", "VERTEX_COLOR")
+            path = common.get_scene_value(scene, f"m_texture_path_{i}", "")
             if mode == "TEXTURE_NAME" and os.path.isfile(path):
                 prefix = os.path.splitext(os.path.basename(path))[0].lower()
             elif mode == "LEVEL_TEXTURES" and os.path.isdir(path):

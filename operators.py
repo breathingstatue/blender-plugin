@@ -30,6 +30,7 @@ from .common import MAX_MODEL_SLOTS, get_format, FORMAT_PRM, FORMAT_FIN, FORMAT_
 from .common import FORMAT_TAZ, FORMAT_TRI, FORMAT_UNK, MATERIALS, COLORS, FORMAT_FOB, FORMAT_FAN, FORMAT_PAN, FORMAT_LIT, FORMAT_VIS
 from .common import get_model_materials, get_errors, msg_box, FORMATS, to_revolt_scale, FORMAT_CAR, TEX_PAGES_MAX, int_to_texture
 from .common import to_revolt_coord, clean_model_base_name, set_level_texture_base_from_filepath, create_directional_fob_mesh
+from .common import get_scene_value, set_scene_value
 from .common import generate_fob_name, create_directional_fob_mesh_ui
 from .layers import set_face_env, create_or_assign_env_material
 from .parameters_out_redux import append_aerial_info, append_axle_info, append_back_left_wheel, append_back_right_wheel
@@ -368,10 +369,10 @@ class ExportExtension(bpy.types.Operator):
         scene.default_texture_name = self.texture_name
 
         if self.use_car_texture:
-            scene["level_texture_base"] = "car"
+            set_scene_value(scene, "level_texture_base", "car")
             self.report({'INFO'}, "Using 'car' as level texture base.")
         elif self.level_texture_base.strip():
-            scene["level_texture_base"] = self.level_texture_base.strip().lower()
+            set_scene_value(scene, "level_texture_base", self.level_texture_base.strip().lower())
             self.report({'INFO'}, f"Set level texture base to '{self.level_texture_base.strip()}'")
 
         return bpy.ops.export_scene.revolt('INVOKE_DEFAULT')
@@ -579,26 +580,29 @@ class MFileExtension(bpy.types.Operator):
             return {'CANCELLED'}
 
         # Save selected model name
-        scene[f"m_model_name_{self.slot_index}"] = self.model_name
+        set_scene_value(scene, f"m_model_name_{self.slot_index}", self.model_name)
 
         # Store selected choice and path
-        scene[f"m_texture_mode_{self.slot_index}"] = self.choice
+        set_scene_value(scene, f"m_texture_mode_{self.slot_index}", self.choice)
         if self.choice == 'LEVEL_TEXTURES':
             if not os.path.isdir(self.texture_folder):
                 self.report({'ERROR'}, "Invalid folder path")
                 return {'CANCELLED'}
-            scene[f"m_texture_path_{self.slot_index}"] = self.texture_folder
+            set_scene_value(scene, f"m_texture_path_{self.slot_index}", self.texture_folder)
 
         elif self.choice == 'TEXTURE_NAME':
             if not self.texture_file.lower().endswith('.bmp') or not os.path.isfile(self.texture_file):
                 self.report({'ERROR'}, "Please select a valid .bmp file")
                 return {'CANCELLED'}
-            scene[f"m_texture_path_{self.slot_index}"] = self.texture_file
+            set_scene_value(scene, f"m_texture_path_{self.slot_index}", self.texture_file)
 
         else:  # VERTEX_COLOR
-            scene[f"m_texture_path_{self.slot_index}"] = ""  # Clear path
+            set_scene_value(scene, f"m_texture_path_{self.slot_index}", "")  # Clear path
 
-        print(f"[SLOT {self.slot_index}] {self.model_name} → {self.choice}, Path: {scene[f'm_texture_path_{self.slot_index}']}")
+        print(
+            f"[SLOT {self.slot_index}] {self.model_name} → {self.choice}, Path: "
+            f"{get_scene_value(scene, f'm_texture_path_{self.slot_index}', '')}"
+        )
 
         # If this was a .m or .fin import that was cancelled earlier
         filepath = getattr(scene, "pending_import_filepath", "")
@@ -655,10 +659,10 @@ class TexturePrefixPrompt(bpy.types.Operator):
 
         # Save texture config
         for i in range(MAX_MODEL_SLOTS):
-            if not scene.get(f"m_model_name_{i}", ""):
-                scene[f"m_model_name_{i}"] = self.model_name
-                scene[f"m_texture_mode_{i}"] = self.choice
-                scene[f"m_texture_path_{i}"] = self.texture_path_input
+            if not get_scene_value(scene, f"m_model_name_{i}", ""):
+                set_scene_value(scene, f"m_model_name_{i}", self.model_name)
+                set_scene_value(scene, f"m_texture_mode_{i}", self.choice)
+                set_scene_value(scene, f"m_texture_path_{i}", self.texture_path_input)
                 break
 
         # Handle single export without a queue
@@ -2109,8 +2113,8 @@ class MaterialAssignmentAuto(bpy.types.Operator):
 
         # Texture-based modes still need a level texture base
         if material_choice in {"UV_TEX", "TEX_VC", "ENV", "ALPHA"}:
-            if not scene.get("level_texture_base", "").strip():
-                print("[ERROR] level_texture_base not set")
+        if not get_scene_value(scene, "level_texture_base", "").strip():
+            print("[ERROR] level_texture_base not set")
                 bpy.ops.scene.prompt_texture_base('INVOKE_DEFAULT')
                 return {'CANCELLED'}
 
@@ -2180,9 +2184,9 @@ class MaterialAssignmentAuto(bpy.types.Operator):
         if obj.get("is_model", False):
             scene = bpy.context.scene
             for i in range(MAX_MODEL_SLOTS):
-                slot_name = scene.get(f"m_model_name_{i}", "")
-                tex_mode = scene.get(f"m_texture_mode_{i}", "")
-                tex_path = scene.get(f"m_texture_path_{i}", "")
+                slot_name = get_scene_value(scene, f"m_model_name_{i}", "")
+                tex_mode = get_scene_value(scene, f"m_texture_mode_{i}", "")
+                tex_path = get_scene_value(scene, f"m_texture_path_{i}", "")
                 print(f"[DEBUG] Slot {i}: m_model_name = '{slot_name}', mode = '{tex_mode}', path = '{tex_path}'")
 
                 if clean_model_base_name(slot_name) == model_name:
@@ -2434,12 +2438,12 @@ class MaterialAssignmentAuto(bpy.types.Operator):
 
         if obj.get("is_model", False):
             for i in range(MAX_MODEL_SLOTS):
-                nm = scene.get(f"m_model_name_{i}", "")
+                nm = get_scene_value(scene, f"m_model_name_{i}", "")
                 if not nm:
                     continue
                 if clean_model_base_name(nm) in clean_model_base_name(obj.name):
-                    source_mode = scene.get(f"m_texture_mode_{i}", "VERTEX_COLOR")
-                    p = scene.get(f"m_texture_path_{i}", "")
+                    source_mode = get_scene_value(scene, f"m_texture_mode_{i}", "VERTEX_COLOR")
+                    p = get_scene_value(scene, f"m_texture_path_{i}", "")
                     if source_mode == "TEXTURE_NAME":
                         base_name = os.path.splitext(os.path.basename(p))[0].lower()
                     elif source_mode == "LEVEL_TEXTURES":
@@ -2451,13 +2455,15 @@ class MaterialAssignmentAuto(bpy.types.Operator):
         if not matched and not is_car_part:
             if obj.get("is_instance") and "fin_texture_base" in obj:
                 base_name = obj["fin_texture_base"]
-            elif "level_texture_base" in scene:
-                base_name = os.path.splitext(scene["level_texture_base"].strip().lower())[0]
             else:
-                base_name = clean_model_base_name(obj.name)
+                base_prop = get_scene_value(scene, "level_texture_base", "")
+                if base_prop:
+                    base_name = os.path.splitext(base_prop.strip().lower())[0]
+                else:
+                    base_name = clean_model_base_name(obj.name)
             source_mode = "LEVEL_TEXTURES"
         if not matched and is_car_part:
-            fallback_name = scene.get("selected_car_texture", "car.bmp")
+            fallback_name = get_scene_value(scene, "selected_car_texture", "car.bmp")
             base_name = clean_model_base_name(fallback_name)
             source_mode = "TEXTURE_NAME"
 
@@ -2567,13 +2573,13 @@ class MaterialAssignmentAuto(bpy.types.Operator):
 
         if obj.get("is_model", False):
             for i in range(MAX_MODEL_SLOTS):
-                slot_model_name = scene.get(f"m_model_name_{i}", "")
+                slot_model_name = get_scene_value(scene, f"m_model_name_{i}", "")
                 if not slot_model_name:
                     continue
 
                 if clean_model_base_name(slot_model_name) in clean_model_base_name(obj.name):
-                    source_mode = scene.get(f"m_texture_mode_{i}", "VERTEX_COLOR")
-                    texture_path = scene.get(f"m_texture_path_{i}", "")
+                    source_mode = get_scene_value(scene, f"m_texture_mode_{i}", "VERTEX_COLOR")
+                    texture_path = get_scene_value(scene, f"m_texture_path_{i}", "")
                     model_slot_index = i
 
                     if source_mode == "TEXTURE_NAME":
@@ -2589,14 +2595,16 @@ class MaterialAssignmentAuto(bpy.types.Operator):
         if not matched and not is_car_part:
             if obj.get("is_instance") and "fin_texture_base" in obj:
                 base_name = obj["fin_texture_base"]
-            elif "level_texture_base" in scene:
-                base_name = os.path.splitext(scene["level_texture_base"].strip().lower())[0]
             else:
-                base_name = clean_model_base_name(obj.name)
+                base_prop = get_scene_value(scene, "level_texture_base", "")
+                if base_prop:
+                    base_name = os.path.splitext(base_prop.strip().lower())[0]
+                else:
+                    base_name = clean_model_base_name(obj.name)
             source_mode = "LEVEL_TEXTURES"
 
         if not matched and is_car_part:
-            fallback_name = scene.get("selected_car_texture", "car.bmp")
+            fallback_name = get_scene_value(scene, "selected_car_texture", "car.bmp")
             base_name = clean_model_base_name(fallback_name)
             source_mode = "TEXTURE_NAME"
 
@@ -2932,7 +2940,7 @@ class MaterialAssignment(bpy.types.Operator):
         scene = context.scene
 
         # Prompt for level_texture_base if not set
-        if "level_texture_base" not in scene or not scene["level_texture_base"].strip():
+        if not get_scene_value(scene, "level_texture_base", "").strip():
             bpy.ops.scene.prompt_texture_base('INVOKE_DEFAULT')
             return {'CANCELLED'}
 
@@ -2982,9 +2990,9 @@ class MaterialAssignment(bpy.types.Operator):
         if obj.get("is_model", False):
             scene = bpy.context.scene
             for i in range(MAX_MODEL_SLOTS):
-                slot_name = scene.get(f"m_model_name_{i}", "")
-                tex_mode = scene.get(f"m_texture_mode_{i}", "")
-                tex_path = scene.get(f"m_texture_path_{i}", "")
+                slot_name = get_scene_value(scene, f"m_model_name_{i}", "")
+                tex_mode = get_scene_value(scene, f"m_texture_mode_{i}", "")
+                tex_path = get_scene_value(scene, f"m_texture_path_{i}", "")
 
                 if clean_model_base_name(slot_name) == model_name:
                     if tex_mode == "LEVEL_TEXTURES":
@@ -3057,13 +3065,13 @@ class MaterialAssignment(bpy.types.Operator):
 
         if "is_model" in obj and obj["is_model"]:
             for i in range(MAX_MODEL_SLOTS):
-                slot_model_name = scene.get(f"m_model_name_{i}", "")
+                slot_model_name = get_scene_value(scene, f"m_model_name_{i}", "")
                 if not slot_model_name:
                     continue
 
                 if clean_model_base_name(slot_model_name) in clean_model_base_name(obj.name):
-                    source_mode = scene.get(f"m_texture_mode_{i}", "VERTEX_COLOR")
-                    texture_path = scene.get(f"m_texture_path_{i}", "")
+                    source_mode = get_scene_value(scene, f"m_texture_mode_{i}", "VERTEX_COLOR")
+                    texture_path = get_scene_value(scene, f"m_texture_path_{i}", "")
                     model_slot_index = i
 
                     if source_mode == "TEXTURE_NAME":
@@ -3078,14 +3086,16 @@ class MaterialAssignment(bpy.types.Operator):
         if not matched and not is_car_part:
             if obj.get("is_instance") and "fin_texture_base" in obj:
                 base_name_for_texture = obj["fin_texture_base"]
-            elif "level_texture_base" in scene:
-                base_name_for_texture = os.path.splitext(scene["level_texture_base"].strip().lower())[0]
             else:
-                base_name_for_texture = clean_model_base_name(obj.name)
+                base_prop = get_scene_value(scene, "level_texture_base", "")
+                if base_prop:
+                    base_name_for_texture = os.path.splitext(base_prop.strip().lower())[0]
+                else:
+                    base_name_for_texture = clean_model_base_name(obj.name)
             source_mode = "LEVEL_TEXTURES"
 
         if not matched and is_car_part:
-            fallback_name = scene.get("selected_car_texture", "car.bmp")
+            fallback_name = get_scene_value(scene, "selected_car_texture", "car.bmp")
             base_name_for_texture = clean_model_base_name(fallback_name)
             source_mode = "TEXTURE_NAME"
 
@@ -3118,7 +3128,7 @@ class MaterialAssignment(bpy.types.Operator):
                     pass
 
             if not mat and is_car_part:
-                fallback_name = scene.get("selected_car_texture", "car.bmp")
+                fallback_name = get_scene_value(scene, "selected_car_texture", "car.bmp")
                 mat = bpy.data.materials.get(fallback_name)
 
             if not mat:
@@ -3276,9 +3286,9 @@ class MaterialAssignmentImportExport(bpy.types.Operator):
         if obj.get("is_model", False):
             scene = bpy.context.scene
             for i in range(MAX_MODEL_SLOTS):
-                slot_name = scene.get(f"m_model_name_{i}", "")
-                tex_mode = scene.get(f"m_texture_mode_{i}", "")
-                tex_path = scene.get(f"m_texture_path_{i}", "")
+                slot_name = get_scene_value(scene, f"m_model_name_{i}", "")
+                tex_mode = get_scene_value(scene, f"m_texture_mode_{i}", "")
+                tex_path = get_scene_value(scene, f"m_texture_path_{i}", "")
                 print(f"[DEBUG] Slot {i}: m_model_name = '{slot_name}', mode = '{tex_mode}', path = '{tex_path}'")
 
                 if clean_model_base_name(slot_name) == model_name:
@@ -3349,13 +3359,13 @@ class MaterialAssignmentImportExport(bpy.types.Operator):
 
         if "is_model" in obj and obj["is_model"]:
             for i in range(MAX_MODEL_SLOTS):
-                slot_model_name = scene.get(f"m_model_name_{i}", "")
+                slot_model_name = get_scene_value(scene, f"m_model_name_{i}", "")
                 if not slot_model_name:
                     continue
 
                 if clean_model_base_name(slot_model_name) in clean_model_base_name(obj.name):
-                    source_mode = scene.get(f"m_texture_mode_{i}", "VERTEX_COLOR")
-                    texture_path = scene.get(f"m_texture_path_{i}", "")
+                    source_mode = get_scene_value(scene, f"m_texture_mode_{i}", "VERTEX_COLOR")
+                    texture_path = get_scene_value(scene, f"m_texture_path_{i}", "")
                     model_slot_index = i
 
                     if source_mode == "TEXTURE_NAME":
@@ -3371,14 +3381,16 @@ class MaterialAssignmentImportExport(bpy.types.Operator):
         if not matched and not is_car_part:
             if obj.get("is_instance") and "fin_texture_base" in obj:
                 base_name_for_texture = obj["fin_texture_base"]
-            elif "level_texture_base" in scene:
-                base_name_for_texture = os.path.splitext(scene["level_texture_base"].strip().lower())[0]
             else:
-                base_name_for_texture = clean_model_base_name(obj.name)
+                base_prop = get_scene_value(scene, "level_texture_base", "")
+                if base_prop:
+                    base_name_for_texture = os.path.splitext(base_prop.strip().lower())[0]
+                else:
+                    base_name_for_texture = clean_model_base_name(obj.name)
             source_mode = "LEVEL_TEXTURES"
 
         if not matched and is_car_part:
-            fallback_name = scene.get("selected_car_texture", "car.bmp")
+            fallback_name = get_scene_value(scene, "selected_car_texture", "car.bmp")
             base_name_for_texture = clean_model_base_name(fallback_name)
             source_mode = "TEXTURE_NAME"
 
@@ -3408,7 +3420,7 @@ class MaterialAssignmentImportExport(bpy.types.Operator):
                             mat = bpy.data.materials.get(candidate[:-4])
 
                 if not mat and is_car_part:
-                    fallback_name = scene.get("selected_car_texture", "car.bmp")
+                    fallback_name = get_scene_value(scene, "selected_car_texture", "car.bmp")
                     mat = bpy.data.materials.get(fallback_name)
                     if mat:
                         print(f"[INFO] Fallback texture '{fallback_name}' used for {obj.name}")
@@ -3790,7 +3802,7 @@ class SetFaceTextureDropdown(bpy.types.Operator):
             return {'FINISHED'}
 
         scene = context.scene
-        guessed_base = scene.get("level_texture_base", "")
+        guessed_base = get_scene_value(scene, "level_texture_base", "")
         material_name = int_to_texture(tex_num, name=guessed_base)
 
         # Use loose material lookup instead of direct get
@@ -3830,10 +3842,10 @@ class SetLevelTexturePrefix(bpy.types.Operator):
 
     def execute(self, context):
         if self.use_car_texture:
-            context.scene["level_texture_base"] = "car"
+            set_scene_value(context.scene, "level_texture_base", "car")
             self.report({'INFO'}, "Set level texture base to: car")
         else:
-            context.scene["level_texture_base"] = self.texture_base.strip().lower()
+            set_scene_value(context.scene, "level_texture_base", self.texture_base.strip().lower())
             self.report({'INFO'}, f"Set level texture base to: {self.texture_base}")
         return {'FINISHED'}
 
@@ -3936,10 +3948,10 @@ class MarkAsModel(bpy.types.Operator):
         if getattr(obj, "is_model", False):
             obj.is_model = False
             for i in range(MAX_MODEL_SLOTS):
-                if clean_model_base_name(scene.get(f"m_model_name_{i}", "").lower()) == base_name:
-                    scene[f"m_model_name_{i}"] = ""
-                    scene[f"m_texture_mode_{i}"] = ""
-                    scene[f"m_texture_path_{i}"] = ""
+                if clean_model_base_name(get_scene_value(scene, f"m_model_name_{i}", "").lower()) == base_name:
+                    set_scene_value(scene, f"m_model_name_{i}", "")
+                    set_scene_value(scene, f"m_texture_mode_{i}", "")
+                    set_scene_value(scene, f"m_texture_path_{i}", "")
                     self.report({'INFO'}, f"Unmarked {obj.name} and cleared texture slot {i}")
                     return {'FINISHED'}
 
@@ -3953,10 +3965,10 @@ class MarkAsModel(bpy.types.Operator):
             texture_path = os.path.splitext(cleaned_source)[0]  # remove .bmp if present
 
         for i in range(MAX_MODEL_SLOTS):
-            if not scene.get(f"m_model_name_{i}", ""):
-                scene[f"m_model_name_{i}"] = base_name
-                scene[f"m_texture_mode_{i}"] = self.texture_source
-                scene[f"m_texture_path_{i}"] = texture_path
+            if not get_scene_value(scene, f"m_model_name_{i}", ""):
+                set_scene_value(scene, f"m_model_name_{i}", base_name)
+                set_scene_value(scene, f"m_texture_mode_{i}", self.texture_source)
+                set_scene_value(scene, f"m_texture_path_{i}", texture_path)
                 self.report({'INFO'}, f"Marked {obj.name} as '{base_name}' in slot {i}")
                 return {'FINISHED'}
 
