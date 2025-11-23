@@ -118,10 +118,12 @@ class ImportRV(bpy.types.Operator):
 
         print("Importing {}".format(self.filepath))
 
+        result = {'FINISHED'}
+
         try:
             if frmt == FORMAT_UNK:
                 self.report({'ERROR'}, "Unsupported format.")
-                return {'CANCELLED'}
+                result = {'CANCELLED'}
 
             elif frmt == FORMAT_CAR:
                 from . import parameters_in
@@ -188,24 +190,26 @@ class ImportRV(bpy.types.Operator):
                     model_name=model_name
                 )
 
-                return {'FINISHED'}
+                result = {'FINISHED'}
 
             else:
                 self.report({'ERROR'}, "Format not yet supported: {}".format(FORMATS.get(frmt, "Unknown Format")))
-                return {'CANCELLED'}
+                result = {'CANCELLED'}
 
-            for area in context.screen.areas:
-                if area.type in ['VIEW_3D', 'PROPERTIES']:
-                    area.tag_redraw()
+            if result != {'CANCELLED'}:
+                for area in context.screen.areas:
+                    if area.type in ['VIEW_3D', 'PROPERTIES']:
+                        area.tag_redraw()
 
-            self.report({'INFO'}, "Import completed in {:.2f} seconds".format(time.time() - start_time))
+                self.report({'INFO'}, "Import completed in {:.2f} seconds".format(time.time() - start_time))
 
         except Exception as e:
             self.report({'ERROR'}, "Failed to import: {}".format(str(e)))
-            return {'CANCELLED'}
+            result = {'CANCELLED'}
         finally:
             context.window.cursor_set("DEFAULT")
-            return {"FINISHED"}
+
+        return result
 
     def draw(self, context):
         layout = self.layout
