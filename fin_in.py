@@ -361,8 +361,9 @@ def assign_uvtex_materials(scene):
     bmp_materials = _collect_bmp_materials()
 
     scene_level_base = ""
-    if "level_texture_base" in scene and scene["level_texture_base"]:
-        scene_level_base = os.path.splitext(scene["level_texture_base"].strip().lower())[0]
+    level_base = common.get_scene_value(scene, "level_texture_base", "")
+    if level_base:
+        scene_level_base = os.path.splitext(level_base.strip().lower())[0]
 
     for obj in mesh_objects:
         if obj.get("material_assigned_uv"):

@@ -388,7 +388,7 @@ def texture_to_int(string, prefix=""):
         return 0
 
     if not prefix:
-        prefix = bpy.context.scene.get("level_texture_base", "")
+        prefix = get_scene_value(bpy.context.scene, "level_texture_base", "")
 
     if prefix and name.startswith(prefix.lower()):
         suffix = name[len(prefix):]
@@ -634,7 +634,7 @@ def get_world_texture_path(filepath, tex_num, scene):
     suffix = int_to_texture(tex_num, "")[:-4]
 
     level_folder = os.path.dirname(filepath)
-    level_base = scene.get("level_texture_base", os.path.basename(level_folder).lower())
+    level_base = get_scene_value(scene, "level_texture_base", os.path.basename(level_folder).lower())
     texture_name = f"{level_base}{suffix}.bmp"
 
     full_path = os.path.join(level_folder, texture_name)
@@ -662,9 +662,9 @@ def get_model_texture_path(filepath, tex_index, scene, model_name):
     folder = ""
 
     for i in range(MAX_MODEL_SLOTS):
-        if scene.get(f"m_model_name_{i}", "").lower() == model_name.lower():
-            mode = scene.get(f"m_texture_mode_{i}", "VERTEX_COLOR")
-            path = scene.get(f"m_texture_path_{i}", "")
+        if get_scene_value(scene, f"m_model_name_{i}", "").lower() == model_name.lower():
+            mode = get_scene_value(scene, f"m_texture_mode_{i}", "VERTEX_COLOR")
+            path = get_scene_value(scene, f"m_texture_path_{i}", "")
 
             if mode == "LEVEL_TEXTURES":
                 base = os.path.basename(path.rstrip("/\\"))
@@ -761,9 +761,31 @@ def texnum_to_label(index):
         minor = index // 26 - 1
         return chr(97 + major) + chr(97 + minor)
 
+def get_scene_value(scene, name, default=None):
+    """Return a Scene custom property or RNA property safely.
+
+    Blender 5 tightened some custom property behaviours, so prefer attribute
+    access for declared properties while still supporting ID properties.
+    """
+
+    if hasattr(scene, name):
+        value = getattr(scene, name, default)
+        return default if value is None else value
+    return scene.get(name, default)
+
+
+def set_scene_value(scene, name, value):
+    """Set a Scene custom property or RNA property safely."""
+
+    if hasattr(scene, name):
+        setattr(scene, name, value)
+    else:
+        scene[name] = value
+
+
 def set_level_texture_base_from_filepath(scene, filepath):
     base = os.path.splitext(os.path.basename(filepath))[0].lower()
-    scene["level_texture_base"] = base
+    set_scene_value(scene, "level_texture_base", base)
     print(f"[INFO] Set level_texture_base = '{base}'")
 	
 def create_directional_fob_mesh(name="FOB_Object"):
@@ -796,7 +818,7 @@ def create_directional_fob_mesh(name="FOB_Object"):
     for e in edges:
         bm.edges.new((verts[e[0]], verts[e[1]]))
 
-    # Tip pointing forward (which becomes UP after 90° X rotation)
+    # Tip pointing forward (which becomes UP after 90Â° X rotation)
     tip = bm.verts.new(rot(Vector((0.0, 1.2, 0.0))))
     for i in (2, 3, 6, 7):
         bm.edges.new((verts[i], tip))
