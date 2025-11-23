@@ -104,8 +104,6 @@ def add_rvmesh_to_bmesh(prm, bm, me, filepath, scene, envlist=None):
 
         if poly.texture >= 0:
             texture_path, material_name = get_car_texture_path(filepath, poly.texture, scene)
-            print(f"Texture path for poly.texture {poly.texture}: {texture_path}")
-
             if texture_path and os.path.isfile(texture_path):
                 material = bpy.data.materials.get(material_name)
                 if not material:
