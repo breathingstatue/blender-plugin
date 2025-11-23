@@ -2110,65 +2110,8 @@ def prune_unused_material_slots(obj, keep_names=None):
             mesh.materials.pop(index=idx)
 
 
-class MaterialAssignmentAuto(bpy.types.Operator):
-    """Assign Materials to All Meshes Automatically"""
-    bl_idname = "object.assign_materials_auto"
-    bl_label = "Assign Materials Automatically"
-    bl_options = {'REGISTER', 'UNDO'}
-
+class MaterialAssignmentHelper:
     car_parts_prefixes = ["body", "wheel", "axle", "spring", "pin", "spinner"]
-
-    def execute(self, context):
-        print("[DEBUG] Starting MaterialAssignmentAuto")
-
-        if bpy.context.mode != 'OBJECT':
-            print("[DEBUG] Switching to OBJECT mode")
-            bpy.ops.object.mode_set(mode='OBJECT')
-
-        mesh_objects = [obj for obj in bpy.data.objects if obj.type == 'MESH']
-        print(f"[DEBUG] Found {len(mesh_objects)} mesh objects")
-
-        if not mesh_objects:
-            self.report({'WARNING'}, "No mesh objects found in the scene.")
-            return {'CANCELLED'}
-
-        scene = context.scene
-        original_active_object = context.view_layer.objects.active
-
-        # --- NEW: drive choice from scene, not from mesh ---
-        material_choice = getattr(scene, "material_choice", None)
-        if not material_choice:
-            material_choice = 'UV_TEX'
-        print(f"[DEBUG] Global / scene material choice: {material_choice}")
-
-        # Texture-based modes still need a level texture base
-        if material_choice in {"UV_TEX", "TEX_VC", "ENV", "ALPHA"}:
-            if not get_scene_value(scene, "level_texture_base", "").strip():
-                print("[ERROR] level_texture_base not set")
-                bpy.ops.scene.prompt_texture_base('INVOKE_DEFAULT')
-                return {'CANCELLED'}
-
-        existing_textures = self.get_existing_textures()
-        print(f"[DEBUG] Found {len(existing_textures)} existing textures")
-
-        # Optional: if meshes *do* have a material_choice, keep them in sync
-        for obj in mesh_objects:
-            if hasattr(obj.data, "material_choice"):
-                obj.data.material_choice = material_choice
-
-        # --- pass material_choice further down ---
-        self.assign_materials_to_all(mesh_objects, existing_textures, material_choice)
-
-        print("[DEBUG] Material assignment done, restoring selection")
-        bpy.ops.object.select_all(action='DESELECT')
-        for obj in mesh_objects:
-            obj.select_set(True)
-
-        if original_active_object and original_active_object.name in bpy.data.objects:
-            context.view_layer.objects.active = original_active_object
-
-        print("[DEBUG] MaterialAssignmentAuto finished successfully")
-        return {'FINISHED'}
 
     # -------------------------------------------------------------------------
     # High-level loop
@@ -2961,6 +2904,65 @@ class MaterialAssignmentAuto(bpy.types.Operator):
             return bpy.data.materials[f"{name}.bmp"]
         return None
 
+
+class MaterialAssignmentAuto(MaterialAssignmentHelper, bpy.types.Operator):
+    """Assign Materials to All Meshes Automatically"""
+    bl_idname = "object.assign_materials_auto"
+    bl_label = "Assign Materials Automatically"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        print("[DEBUG] Starting MaterialAssignmentAuto")
+
+        if bpy.context.mode != 'OBJECT':
+            print("[DEBUG] Switching to OBJECT mode")
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        mesh_objects = [obj for obj in bpy.data.objects if obj.type == 'MESH']
+        print(f"[DEBUG] Found {len(mesh_objects)} mesh objects")
+
+        if not mesh_objects:
+            self.report({'WARNING'}, "No mesh objects found in the scene.")
+            return {'CANCELLED'}
+
+        scene = context.scene
+        original_active_object = context.view_layer.objects.active
+
+        # --- NEW: drive choice from scene, not from mesh ---
+        material_choice = getattr(scene, "material_choice", None)
+        if not material_choice:
+            material_choice = 'UV_TEX'
+        print(f"[DEBUG] Global / scene material choice: {material_choice}")
+
+        # Texture-based modes still need a level texture base
+        if material_choice in {"UV_TEX", "TEX_VC", "ENV", "ALPHA"}:
+            if not get_scene_value(scene, "level_texture_base", "").strip():
+                print("[ERROR] level_texture_base not set")
+                bpy.ops.scene.prompt_texture_base('INVOKE_DEFAULT')
+                return {'CANCELLED'}
+
+        existing_textures = self.get_existing_textures()
+        print(f"[DEBUG] Found {len(existing_textures)} existing textures")
+
+        # Optional: if meshes *do* have a material_choice, keep them in sync
+        for obj in mesh_objects:
+            if hasattr(obj.data, "material_choice"):
+                obj.data.material_choice = material_choice
+
+        # --- pass material_choice further down ---
+        self.assign_materials_to_all(mesh_objects, existing_textures, material_choice)
+
+        print("[DEBUG] Material assignment done, restoring selection")
+        bpy.ops.object.select_all(action='DESELECT')
+        for obj in mesh_objects:
+            obj.select_set(True)
+
+        if original_active_object and original_active_object.name in bpy.data.objects:
+            context.view_layer.objects.active = original_active_object
+
+        print("[DEBUG] MaterialAssignmentAuto finished successfully")
+        return {'FINISHED'}
+
 class MaterialAssignment(bpy.types.Operator):
     """Assign Materials to Selected Meshes Based on Material Choice"""
     bl_idname = "object.assign_materials"
@@ -3388,7 +3390,7 @@ class MaterialAssignmentImportExport(bpy.types.Operator):
         if material_choice == 'UV_TEX':
             self.assign_uv_textures(obj, existing_textures)
         elif material_choice == 'TEX_VC':
-            auto_assigner = MaterialAssignmentAuto()
+            auto_assigner = MaterialAssignmentHelper()
 
             try:
                 auto_assigner.assign_tex_vc_materials(obj, existing_textures)
