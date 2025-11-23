@@ -13,7 +13,15 @@ from mathutils import Vector
 from . import common
 from . import rvstruct
 from .rvstruct import PRM
-from .common import to_blender_coord, to_blender_axis, FACE_QUAD, reverse_quad, FACE_ENV, dprint
+from .common import (
+    to_blender_coord,
+    to_blender_axis,
+    FACE_QUAD,
+    reverse_quad,
+    FACE_ENV,
+    dprint,
+    set_scene_value,
+)
 
 def import_file(filepath, scene):
     """
@@ -115,6 +123,8 @@ def add_rvmesh_to_bmesh(prm, bm, me, filepath, scene, envlist=None):
                     tex_image.image = image
                     material.node_tree.links.new(bsdf.inputs['Base Color'], tex_image.outputs['Color'])
                     print(f"Created new material: {material_name}")
+                set_scene_value(scene, "selected_car_texture", material_name)
+
                 if material_name not in me.materials:
                     me.materials.append(material)
                     print(f"Added material to mesh: {material_name}")
@@ -133,6 +143,8 @@ def add_rvmesh_to_bmesh(prm, bm, me, filepath, scene, envlist=None):
                         tex_image.image = car_texture
                         material.node_tree.links.new(bsdf.inputs['Base Color'], tex_image.outputs['Color'])
                         print(f"Created fallback material: {material_name}")
+                    set_scene_value(scene, "selected_car_texture", material_name)
+
                     if material_name not in me.materials:
                         me.materials.append(material)
                         print(f"Added fallback material to mesh: {material_name}")
