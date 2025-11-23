@@ -2588,9 +2588,11 @@ class MaterialAssignmentAuto(bpy.types.Operator):
 
         texnum_layer = bm.faces.layers.int.get("Texture Number")
         if not texnum_layer:
-            bm.free()
-            print(f"[SKIP] No 'Texture Number' layer on {obj.name}")
-            return
+            # Create the layer so we can still assign a sensible default texture
+            texnum_layer = bm.faces.layers.int.new("Texture Number")
+            for face in bm.faces:
+                face[texnum_layer] = 0
+            print(f"[INFO] Created missing 'Texture Number' layer on {obj.name} with default 0")
 
         scene = bpy.context.scene
         base_name = ""
