@@ -3043,6 +3043,7 @@ class MaterialAssignment(bpy.types.Operator):
         material_map = {
             'UV_TEX': '_UVTex',
             'COL': '_Col',
+            'TEX_VC': '_TexVC',
             'ALPHA': '_Alpha',
             'ENV': '_Env',
             'RGB': '_RGBModelColor',
@@ -3373,6 +3374,7 @@ class MaterialAssignmentImportExport(bpy.types.Operator):
         material_map = {
             'UV_TEX': '_UVTex',
             'COL': '_Col',
+            'TEX_VC': '_TexVC',
             'ALPHA': '_Alpha',
             'ENV': '_Env',
             'RGB': '_RGBModelColor',
@@ -3385,6 +3387,20 @@ class MaterialAssignmentImportExport(bpy.types.Operator):
 
         if material_choice == 'UV_TEX':
             self.assign_uv_textures(obj, existing_textures)
+        elif material_choice == 'TEX_VC':
+            auto_assigner = MaterialAssignmentAuto()
+
+            try:
+                auto_assigner.assign_tex_vc_materials(obj, existing_textures)
+            except TypeError:
+                auto_assigner.assign_tex_vc_materials(obj)
+
+            auto_assigner._reassign_faces_off_tex_vc(obj)
+            auto_assigner._remove_unreferenced_tex_vc_slots(obj)
+            auto_assigner._set_active_texture_material(obj)
+
+            obj.data.update()
+            obj.update_tag(refresh={'DATA'})
         elif material_choice == 'NCP':
             self.assign_ncp_materials(obj)
         else:
