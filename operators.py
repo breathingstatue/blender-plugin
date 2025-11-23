@@ -1,4 +1,4 @@
-﻿"""
+"""
 Name:    operators
 Purpose: Provides operators for importing and exporting and other buttons.
 
