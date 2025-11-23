@@ -2080,6 +2080,32 @@ class FindSpecialFile(bpy.types.Operator):
 MATERIALS & TEXTURES ---------------------------------------------------------
 """
 
+
+def prune_unused_material_slots(obj, keep_names=None):
+    """Remove unreferenced material slots, optionally preserving named entries.
+
+    Args:
+        obj (bpy.types.Object): Mesh object to prune.
+        keep_names (set[str] | None): Materials that must not be removed even if
+            unreferenced.
+    """
+
+    if obj.type != 'MESH':
+        return
+
+    keep_names = keep_names or set()
+    mesh = obj.data
+
+    # Determine which indices are referenced by polygons
+    referenced = {poly.material_index for poly in mesh.polygons}
+
+    # Remove from the end so indices remain valid while popping
+    for idx in range(len(mesh.materials) - 1, -1, -1):
+        mat = mesh.materials[idx]
+        if idx not in referenced and (not mat or mat.name not in keep_names):
+            mesh.materials.pop(index=idx)
+
+
 class MaterialAssignmentAuto(bpy.types.Operator):
     """Assign Materials to All Meshes Automatically"""
     bl_idname = "object.assign_materials_auto"
@@ -2113,8 +2139,8 @@ class MaterialAssignmentAuto(bpy.types.Operator):
 
         # Texture-based modes still need a level texture base
         if material_choice in {"UV_TEX", "TEX_VC", "ENV", "ALPHA"}:
-        if not get_scene_value(scene, "level_texture_base", "").strip():
-            print("[ERROR] level_texture_base not set")
+            if not get_scene_value(scene, "level_texture_base", "").strip():
+                print("[ERROR] level_texture_base not set")
                 bpy.ops.scene.prompt_texture_base('INVOKE_DEFAULT')
                 return {'CANCELLED'}
 
@@ -2153,6 +2179,7 @@ class MaterialAssignmentAuto(bpy.types.Operator):
 
                 print(f"[DEBUG] Processing: {obj.name}")
                 self.update_material_assignment(obj, existing_textures, material_choice)
+                prune_unused_material_slots(obj)
                 print(f"[DEBUG] Done: {obj.name}")
 
             except Exception as e:
@@ -3358,12 +3385,10 @@ class MaterialAssignmentImportExport(bpy.types.Operator):
             self.assign_regular_materials(obj, material_suffix)
 
     def assign_uv_textures(self, obj, existing_textures):
-        if not (bpy.context.view_layer.objects.active == obj and obj.mode == 'EDIT'):
-            return
+        mesh = obj.data
 
-        bm = bmesh.from_edit_mesh(obj.data)
-        if not bm:
-            return
+        bm = bmesh.new()
+        bm.from_mesh(mesh)
 
         texnum_layer = bm.faces.layers.int.get("Texture Number") or bm.faces.layers.int.new("Texture Number")
         scene = bpy.context.scene
@@ -3411,46 +3436,48 @@ class MaterialAssignmentImportExport(bpy.types.Operator):
             source_mode = "TEXTURE_NAME"
 
         for face in bm.faces:
-            if face.select:
-                tex_num = face[texnum_layer]
+            tex_num = face[texnum_layer]
 
-                if source_mode == 'TEXTURE_NAME':
-                    material_name = f"{base_name_for_texture}.bmp"
-                elif source_mode == 'LEVEL_TEXTURES':
-                    if tex_num == -1:
-                        continue
-                    material_name = int_to_texture(tex_num, name=base_name_for_texture)
-                else:
+            if source_mode == 'TEXTURE_NAME':
+                material_name = f"{base_name_for_texture}.bmp"
+            elif source_mode == 'LEVEL_TEXTURES':
+                if tex_num == -1:
                     continue
+                material_name = int_to_texture(tex_num, name=base_name_for_texture)
+            else:
+                continue
 
-                mat = self.find_material_loose(material_name)
+            mat = self.find_material_loose(material_name)
 
-                if not mat:
-                    slot_index = face.material_index
-                    if slot_index < len(obj.data.materials):
-                        candidate = obj.data.materials[slot_index].name
-                        mat = bpy.data.materials.get(candidate)
-                        if not mat and not candidate.endswith('.bmp'):
-                            mat = bpy.data.materials.get(f"{candidate}.bmp")
-                        elif not mat and candidate.endswith('.bmp'):
-                            mat = bpy.data.materials.get(candidate[:-4])
+            if not mat:
+                slot_index = face.material_index
+                if slot_index < len(mesh.materials):
+                    candidate = mesh.materials[slot_index].name
+                    mat = bpy.data.materials.get(candidate)
+                    if not mat and not candidate.endswith('.bmp'):
+                        mat = bpy.data.materials.get(f"{candidate}.bmp")
+                    elif not mat and candidate.endswith('.bmp'):
+                        mat = bpy.data.materials.get(candidate[:-4])
 
-                if not mat and is_car_part:
-                    fallback_name = get_scene_value(scene, "selected_car_texture", "car.bmp")
-                    mat = bpy.data.materials.get(fallback_name)
-                    if mat:
-                        print(f"[INFO] Fallback texture '{fallback_name}' used for {obj.name}")
+            if not mat and is_car_part:
+                fallback_name = get_scene_value(scene, "selected_car_texture", "car.bmp")
+                mat = bpy.data.materials.get(fallback_name)
+                if mat:
+                    print(f"[INFO] Fallback texture '{fallback_name}' used for {obj.name}")
 
-                if not mat:
-                    continue
+            if not mat:
+                continue
 
-                if mat.name not in obj.data.materials:
-                    obj.data.materials.append(mat)
+            if mat.name not in mesh.materials:
+                mesh.materials.append(mat)
 
-                face.material_index = obj.data.materials.find(mat.name)
+            face.material_index = mesh.materials.find(mat.name)
 
-        bmesh.update_edit_mesh(obj.data)
-        obj.data.update()
+        bm.to_mesh(mesh)
+        bm.free()
+        mesh.update()
+        if mesh.polygons:
+            obj.active_material_index = mesh.polygons[0].material_index
 
     def assign_ncp_materials(self, obj):
         if not (bpy.context.view_layer.objects.active == obj and obj.mode == 'EDIT'):
