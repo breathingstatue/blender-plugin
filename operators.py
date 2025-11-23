@@ -3351,7 +3351,6 @@ class MaterialAssignmentImportExport(bpy.types.Operator):
             self.update_material_assignment(obj, existing_textures, material_choice)
 
             bpy.ops.object.mode_set(mode='OBJECT')
-            prune_unused_material_slots(obj)
 
         # Restore the original active object and mode when possible
         if original_active and original_active.name in bpy.data.objects:
