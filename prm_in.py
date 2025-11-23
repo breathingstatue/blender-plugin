@@ -60,7 +60,7 @@ def import_file(filepath, scene):
             bpy.context.scene.collection.objects.link(obj)
             bpy.context.view_layer.objects.active = obj
             set_material_to_prm_col([obj])  # First assign COL
-            assign_uv_tex_material(obj, filepath)  # Then assign UV_TEX
+            assign_uv_tex_material(obj, filepath)  # Then assign TEX_VC
 
             mesh_objects = [obj for obj in scene.objects if obj.type == 'MESH']
             set_material_to_prm_texture(mesh_objects)
@@ -221,13 +221,13 @@ def assign_uv_tex_material(obj, filepath):
     obj.data.update()
 
 def set_material_to_prm_texture(mesh_objects):
-    """Sets the material to Texture (UV_TEX) for all mesh objects."""
+    """Sets the material to Texture + Vertex Colour + Alpha (TEX_VC) for all mesh objects."""
     if not mesh_objects:
         print("No mesh objects selected for material assignment.")
         return
 
     scene = bpy.context.scene
-    scene.material_choice = 'UV_TEX'  # <-- now on Scene
+    scene.material_choice = 'TEX_VC'  # <-- now on Scene
 
     # Select only the meshes we care about
     bpy.ops.object.select_all(action='DESELECT')

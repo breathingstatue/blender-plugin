@@ -57,8 +57,8 @@ def import_file(filepath, scene, texture_base_name=None):
 
     print("Assigning vertex color materials...")
     assign_col_materials(scene)
-    print("Assigning UV texture materials...")
-    assign_uvtex_materials(scene)
+    print("Assigning Tex+VC+Alpha materials...")
+    assign_texvc_materials(scene)
     print("Import complete.")
 
 # ---------------------------------------------------------------------------
@@ -411,3 +411,25 @@ def assign_uvtex_materials(scene):
         bm.free()
 
         obj["material_assigned_uv"] = True
+
+
+def assign_texvc_materials(scene):
+    """Assign Tex+VC+Alpha materials to all mesh objects after import."""
+
+    mesh_objects = [obj for obj in scene.objects if obj.type == 'MESH' and obj.data]
+    if not mesh_objects:
+        return
+
+    bpy.ops.object.select_all(action='DESELECT')
+
+    scene.material_choice = 'TEX_VC'
+
+    for obj in mesh_objects:
+        obj.select_set(True)
+
+    bpy.context.view_layer.objects.active = mesh_objects[0]
+
+    if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+    bpy.ops.object.assign_materials_impexp()

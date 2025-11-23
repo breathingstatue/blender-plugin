@@ -190,8 +190,8 @@ def fast_batch_assign_materials(scene):
     # Assign Vertex Color materials (COL) first
     fast_batch_assign_material_choice(scene, mesh_objects, 'COL')
 
-    # Then assign UV Texture materials (UV_TEX)
-    fast_batch_assign_material_choice(scene, mesh_objects, 'UV_TEX')
+    # Then assign blended Texture + Vertex Colour materials (TEX_VC)
+    fast_batch_assign_material_choice(scene, mesh_objects, 'TEX_VC')
 
 
 def fast_batch_assign_material_choice(scene, mesh_objects, material_choice):
