@@ -652,7 +652,7 @@ def register():
     
     bpy.types.Mesh.face_texture_animation = bpy.props.BoolProperty(
         name = "Animated",
-        description = "Uses texture animation for this poly (.w and .m files)",
+        description = "Uses texture animation for this poly (.w files only)",
         get=lambda self: bool(get_face_property(self, FACE_TEXANIM)),
         set=lambda self, value: set_face_property(self, value, FACE_TEXANIM)
     )
