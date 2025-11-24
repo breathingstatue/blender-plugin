@@ -1211,6 +1211,17 @@ class ConfirmLoadOriginalAxle(bpy.types.Operator):
     bl_label = "Load the original axle for comparison"
     bl_options = {'REGISTER', 'INTERNAL'}
 
+    MAX_TIMER_CHECKS = 300
+
+    def __init__(self):
+        self._timer = None
+        self._check_count = 0
+
+    def _cleanup_timer(self, context):
+        if self._timer:
+            context.window_manager.event_timer_remove(self._timer)
+            self._timer = None
+
     def execute(self, context):
         context.scene['existing_objects'] = list(bpy.data.objects.keys())
         bpy.ops.import_scene.revolt('INVOKE_DEFAULT')
@@ -1219,6 +1230,7 @@ class ConfirmLoadOriginalAxle(bpy.types.Operator):
 
     def modal(self, context, event):
         if event.type == 'TIMER':
+            self._check_count += 1
             imported_objects = set(bpy.data.objects.keys()) - set(context.scene['existing_objects'])
             if imported_objects:
                 imported_object = None
@@ -1237,13 +1249,23 @@ class ConfirmLoadOriginalAxle(bpy.types.Operator):
                 # Report a message to the user
                 self.report({'INFO'}, "Axle parameters copied to clipboard.")
 
+                self._cleanup_timer(context)
                 return {'FINISHED'}
+
+            if self._check_count >= self.MAX_TIMER_CHECKS:
+                self.report({'WARNING'}, "No imported axle detected. Import may have been cancelled.")
+                self._cleanup_timer(context)
+                return {'CANCELLED'}
 
         return {'PASS_THROUGH'}
 
     def invoke(self, context, event):
-        context.window_manager.event_timer_add(0.1, window=context.window)
+        self._check_count = 0
+        self._timer = context.window_manager.event_timer_add(0.1, window=context.window)
         return self.execute(context)
+
+    def cancel(self, context):
+        self._cleanup_timer(context)
 
 class CopyAndRemoveAxles(bpy.types.Operator):
     bl_idname = "headers.copy_and_remove_axles"
@@ -1308,6 +1330,17 @@ class ConfirmLoadOriginalSpring(bpy.types.Operator):
     bl_label = "Load the original spring for comparison"
     bl_options = {'REGISTER', 'INTERNAL'}
 
+    MAX_TIMER_CHECKS = 300
+
+    def __init__(self):
+        self._timer = None
+        self._check_count = 0
+
+    def _cleanup_timer(self, context):
+        if self._timer:
+            context.window_manager.event_timer_remove(self._timer)
+            self._timer = None
+
     def execute(self, context):
         context.scene['existing_objects'] = list(bpy.data.objects.keys())
         bpy.ops.import_scene.revolt('INVOKE_DEFAULT')
@@ -1316,6 +1349,7 @@ class ConfirmLoadOriginalSpring(bpy.types.Operator):
 
     def modal(self, context, event):
         if event.type == 'TIMER':
+            self._check_count += 1
             imported_objects = set(bpy.data.objects.keys()) - set(context.scene['existing_objects'])
             if imported_objects:
                 imported_object = None
@@ -1334,13 +1368,23 @@ class ConfirmLoadOriginalSpring(bpy.types.Operator):
                 # Report a message to the user
                 self.report({'INFO'}, "Spring parameters copied to clipboard.")
 
+                self._cleanup_timer(context)
                 return {'FINISHED'}
+
+            if self._check_count >= self.MAX_TIMER_CHECKS:
+                self.report({'WARNING'}, "No imported spring detected. Import may have been cancelled.")
+                self._cleanup_timer(context)
+                return {'CANCELLED'}
 
         return {'PASS_THROUGH'}
 
     def invoke(self, context, event):
-        context.window_manager.event_timer_add(0.1, window=context.window)
+        self._check_count = 0
+        self._timer = context.window_manager.event_timer_add(0.1, window=context.window)
         return self.execute(context)
+
+    def cancel(self, context):
+        self._cleanup_timer(context)
 
 class CopyAndRemoveSprings(bpy.types.Operator):
     bl_idname = "headers.copy_and_remove_springs"
@@ -1405,6 +1449,17 @@ class ConfirmLoadOriginalPin(bpy.types.Operator):
     bl_label = "Load the original pin for comparison"
     bl_options = {'REGISTER', 'INTERNAL'}
 
+    MAX_TIMER_CHECKS = 300
+
+    def __init__(self):
+        self._timer = None
+        self._check_count = 0
+
+    def _cleanup_timer(self, context):
+        if self._timer:
+            context.window_manager.event_timer_remove(self._timer)
+            self._timer = None
+
     def execute(self, context):
         context.scene['existing_objects'] = list(bpy.data.objects.keys())
         bpy.ops.import_scene.revolt('INVOKE_DEFAULT')
@@ -1413,6 +1468,7 @@ class ConfirmLoadOriginalPin(bpy.types.Operator):
 
     def modal(self, context, event):
         if event.type == 'TIMER':
+            self._check_count += 1
             imported_objects = set(bpy.data.objects.keys()) - set(context.scene['existing_objects'])
             if imported_objects:
                 imported_object = None
@@ -1431,13 +1487,23 @@ class ConfirmLoadOriginalPin(bpy.types.Operator):
                 # Report a message to the user
                 self.report({'INFO'}, "Pin parameters copied to clipboard.")
 
+                self._cleanup_timer(context)
                 return {'FINISHED'}
+
+            if self._check_count >= self.MAX_TIMER_CHECKS:
+                self.report({'WARNING'}, "No imported pin detected. Import may have been cancelled.")
+                self._cleanup_timer(context)
+                return {'CANCELLED'}
 
         return {'PASS_THROUGH'}
 
     def invoke(self, context, event):
-        context.window_manager.event_timer_add(0.1, window=context.window)
+        self._check_count = 0
+        self._timer = context.window_manager.event_timer_add(0.1, window=context.window)
         return self.execute(context)
+
+    def cancel(self, context):
+        self._cleanup_timer(context)
 
 class CopyAndRemovePins(bpy.types.Operator):
     bl_idname = "headers.copy_and_remove_pins"
