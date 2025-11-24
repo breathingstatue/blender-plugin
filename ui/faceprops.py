@@ -1,6 +1,6 @@
 import bpy
 import bmesh
-from ..common import int_to_texture, TEX_PAGES_MAX
+from ..common import int_to_texture, TEX_PAGES_MAX, texnum_to_label
 
 class RVIO_PT_RevoltFacePropertiesPanel(bpy.types.Panel):
     bl_label = "Face Properties"
@@ -106,7 +106,7 @@ class RVIO_PT_RevoltFacePropertiesPanel(bpy.types.Panel):
             else:
                 # We have a selection; always allow using the dropdown operator.
                 if tex_num == -1:
-                    # Layer missing/unset – operator will create it
+                    # Layer missing/unset - operator will create it
                     row = box.row()
                     row.label(text="(Texture layer missing/unset)")
                     box.operator(
@@ -115,16 +115,16 @@ class RVIO_PT_RevoltFacePropertiesPanel(bpy.types.Panel):
                     )
 
                 elif isinstance(tex_num, int) and 0 <= tex_num < TEX_PAGES_MAX:
-                    # Single valid texture page
+                    # Single valid texture page (zero-based like animations)
                     row = box.row()
-                    row.label(text=f"Current: Page {tex_num + 1}")
+                    row.label(text=f"Current: {texnum_to_label(tex_num)} ({tex_num})")
                     box.operator(
                         "mesh.set_face_texture_dropdown",
                         text="Change Texture Page",
                     )
 
                 else:
-                    # Fallback – should not normally happen with current getter
+                    # Fallback - should not normally happen with current getter
                     row = box.row()
                     row.enabled = False
                     row.label(text=f"(Unexpected texture value: {tex_num})")
