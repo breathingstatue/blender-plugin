@@ -158,11 +158,17 @@ def register():
         min=0,
         description="Current env color index for importing. Internal only"
     )
-    
+
     bpy.types.Object.is_instance = bpy.props.BoolProperty(
         name = "Is Instance",
         default = False,
         description = "Object is an instanced mesh."
+    )
+
+    bpy.types.Object.is_car_part = bpy.props.BoolProperty(
+        name="Is Car Part",
+        default=False,
+        description="Object is a car part (body, wheels, springs, etc.)",
     )
     
     bpy.types.Object.fin_env = bpy.props.BoolProperty(
@@ -1296,6 +1302,7 @@ def unregister():
     del bpy.types.Object.fin_col
     del bpy.types.Scene.envidx
     del bpy.types.Object.is_instance
+    del bpy.types.Object.is_car_part
     del bpy.types.Object.fin_no_obj_coll
     del bpy.types.Object.fin_no_cam_coll
     del bpy.types.Object.fin_no_lights

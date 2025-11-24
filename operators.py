@@ -2179,6 +2179,11 @@ def prune_unused_material_slots(obj, keep_names=None):
 class MaterialAssignmentHelper:
     car_parts_prefixes = ["body", "wheel", "axle", "spring", "pin", "spinner"]
 
+    def _is_car_part(self, obj):
+        return getattr(obj, "is_car_part", False) or any(
+            prefix in obj.name.lower() for prefix in self.car_parts_prefixes
+        )
+
     # -------------------------------------------------------------------------
     # High-level loop
     # -------------------------------------------------------------------------
@@ -2501,7 +2506,7 @@ class MaterialAssignmentHelper:
                     matched = True
                     break
 
-        is_car_part = any(prefix in obj.name.lower() for prefix in self.car_parts_prefixes)
+        is_car_part = self._is_car_part(obj)
         if not matched and not is_car_part:
             if obj.get("is_instance") and "fin_texture_base" in obj:
                 base_name = obj["fin_texture_base"]
@@ -2646,7 +2651,7 @@ class MaterialAssignmentHelper:
                     print(f"[DEBUG] Matched .m model slot {i} → name={slot_model_name}, base={base_name}")
                     break
 
-        is_car_part = any(prefix in obj.name.lower() for prefix in self.car_parts_prefixes)
+        is_car_part = self._is_car_part(obj)
         if not matched and not is_car_part:
             if obj.get("is_instance") and "fin_texture_base" in obj:
                 base_name = obj["fin_texture_base"]
@@ -3050,6 +3055,11 @@ class MaterialAssignment(bpy.types.Operator):
 
     car_parts_prefixes = ["body", "wheel", "axle", "spring", "pin", "spinner"]
 
+    def _is_car_part(self, obj):
+        return getattr(obj, "is_car_part", False) or any(
+            prefix in obj.name.lower() for prefix in self.car_parts_prefixes
+        )
+
     def execute(self, context):
         scene = context.scene
 
@@ -3197,7 +3207,7 @@ class MaterialAssignment(bpy.types.Operator):
                     matched = True
                     break
 
-        is_car_part = any(prefix in obj.name.lower() for prefix in self.car_parts_prefixes)
+        is_car_part = self._is_car_part(obj)
         if not matched and not is_car_part:
             if obj.get("is_instance") and "fin_texture_base" in obj:
                 base_name_for_texture = obj["fin_texture_base"]
@@ -3341,6 +3351,11 @@ class MaterialAssignmentImportExport(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     car_parts_prefixes = ["body", "wheel", "axle", "spring", "pin", "spinner"]
+
+    def _is_car_part(self, obj):
+        return getattr(obj, "is_car_part", False) or any(
+            prefix in obj.name.lower() for prefix in self.car_parts_prefixes
+        )
 
     def execute(self, context):
         if bpy.context.mode != 'OBJECT':
@@ -3528,7 +3543,7 @@ class MaterialAssignmentImportExport(bpy.types.Operator):
                     print(f"[DEBUG] Matched .m model slot {i} → name={slot_model_name}, base={base_name_for_texture}")
                     break
 
-        is_car_part = any(prefix in obj.name.lower() for prefix in self.car_parts_prefixes)
+        is_car_part = self._is_car_part(obj)
         if not matched and not is_car_part:
             if obj.get("is_instance") and "fin_texture_base" in obj:
                 base_name_for_texture = obj["fin_texture_base"]
