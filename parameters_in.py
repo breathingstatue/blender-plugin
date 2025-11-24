@@ -140,16 +140,20 @@ def import_car(params, filepath, scene):
 
         return None
 
-    def import_or_placeholder(path, name, obj_location):
+    def import_or_placeholder(path, name, obj_location, mark_as_car_part=False):
+        obj = None
         if path:
             obj = prm_in.import_file(path, bpy.context.scene)
             if obj is None:
                 print(f"Error: Failed to import file from path '{path}' for {name}.")
-                pass
         else:
             print(f"Path is None for {name}.")
-            pass
 
+        if obj is None:
+            obj = bpy.data.objects.new(name, None)
+            bpy.context.scene.collection.objects.link(obj)
+
+        obj.is_car_part = mark_as_car_part
         obj.location = obj_location
         # Check if the object is already in the scene collection
         if obj.name not in bpy.context.scene.collection.objects:
@@ -163,7 +167,12 @@ def import_car(params, filepath, scene):
     try:
         body_path = get_path(params['body']['modelnum'], 'body')
         if body_path:
-            body_obj = import_or_placeholder(body_path, "body", to_blender_coord(params["body"]["offset"]))
+            body_obj = import_or_placeholder(
+                body_path,
+                "body",
+                to_blender_coord(params["body"]["offset"]),
+                mark_as_car_part=True,
+            )
             body_obj.name = "body"
             imported_objects.append(body_obj)
             print(f"Imported body at {params['body']['offset']}")
@@ -179,7 +188,12 @@ def import_car(params, filepath, scene):
         try:
             wheel_path = get_path(params['wheel'][i]['modelnum'], 'wheel')
             if wheel_path:
-                wheel = import_or_placeholder(wheel_path, wheel_names[i], to_blender_coord(params['wheel'][i]['offset1']))
+                wheel = import_or_placeholder(
+                    wheel_path,
+                    wheel_names[i],
+                    to_blender_coord(params['wheel'][i]['offset1']),
+                    mark_as_car_part=True,
+                )
                 wheel.parent = body_obj
                 is_right_wheel = i in [1, 3]
                 apply_camber_to_wheel(wheel, cambers[i], is_right_wheel)
@@ -198,7 +212,12 @@ def import_car(params, filepath, scene):
             try:
                 spring_path = get_path(params['spring'][i]['modelnum'], 'spring')
                 if spring_path:
-                    spring = import_or_placeholder(spring_path, spring_names[i], to_blender_coord(params['spring'][i]['offset']))
+                    spring = import_or_placeholder(
+                        spring_path,
+                        spring_names[i],
+                        to_blender_coord(params['spring'][i]['offset']),
+                        mark_as_car_part=True,
+                    )
                     spring.parent = body_obj
                     springs.append(spring)
                     align_to_axis(spring, 'Z')
@@ -222,7 +241,12 @@ def import_car(params, filepath, scene):
             try:
                 axle_path = get_path(params['axle'][i]['modelnum'], 'axle')
                 if axle_path:
-                    axle = import_or_placeholder(axle_path, axle_names[i], axle_locations[i])
+                    axle = import_or_placeholder(
+                        axle_path,
+                        axle_names[i],
+                        axle_locations[i],
+                        mark_as_car_part=True,
+                    )
                     axle.parent = body_obj
                     axles.append(axle)
                     align_to_axis(axle, 'Y')
@@ -247,7 +271,12 @@ def import_car(params, filepath, scene):
                     continue  # Skip this pin if ModelNum is -1
                 pin_path = get_path(params['pin'][i]['modelnum'], 'pin')
                 if pin_path:
-                    pin = import_or_placeholder(pin_path, pin_names[i], pin_locations[i])
+                    pin = import_or_placeholder(
+                        pin_path,
+                        pin_names[i],
+                        pin_locations[i],
+                        mark_as_car_part=True,
+                    )
                     pin.parent = body_obj
                     pins.append(pin)
 
@@ -348,7 +377,12 @@ def import_car(params, filepath, scene):
             spinner_path = get_path(spinner_params["modelnum"], 'spinner')
             if spinner_path:
                 spinner_loc = to_blender_coord(spinner_params["offset"])
-                spinner_obj = import_or_placeholder(spinner_path, "spinner", spinner_loc)
+                spinner_obj = import_or_placeholder(
+                    spinner_path,
+                    "spinner",
+                    spinner_loc,
+                    mark_as_car_part=True,
+                )
                 spinner_obj.parent = body_obj
                 imported_objects.append(spinner_obj)
                 print(f"Imported spinner at {spinner_loc}")
