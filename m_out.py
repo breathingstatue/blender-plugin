@@ -132,14 +132,25 @@ def export_mesh(me, obj, scene, filepath, model):
     # Determine texture prefix based on model-specific settings
     model_name = obj.name.lower().split('.')[0]
 
+    prefix = common.get_scene_value(scene, "level_texture_base", "").lower()
+
     for i in range(MAX_MODEL_SLOTS):
         if common.get_scene_value(scene, f"m_model_name_{i}", "").lower() == model_name:
             mode = common.get_scene_value(scene, f"m_texture_mode_{i}", "VERTEX_COLOR")
             path = common.get_scene_value(scene, f"m_texture_path_{i}", "")
-            if mode == "TEXTURE_NAME" and os.path.isfile(path):
+
+            if mode == "TEXTURE_NAME" and path:
                 prefix = os.path.splitext(os.path.basename(path))[0].lower()
-            elif mode == "LEVEL_TEXTURES" and os.path.isdir(path):
-                prefix = os.path.basename(path).lower()  # Optional: just use folder name
+            elif mode == "LEVEL_TEXTURES" and path:
+                normalized_path = path.rstrip("/\\")
+                if os.path.isdir(normalized_path):
+                    prefix = os.path.basename(normalized_path).lower()
+                else:
+                    # If a single file is provided, fall back to its parent directory name
+                    directory = os.path.basename(os.path.dirname(normalized_path))
+                    prefix = directory.lower() if directory else os.path.splitext(os.path.basename(normalized_path))[0].lower()
+
+            break
 
     for face in bm.faces:
         poly = rvstruct.Polygon()
