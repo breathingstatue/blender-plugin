@@ -111,6 +111,20 @@ def export_mesh(me, obj, scene, filepath, model):
     va_layer = bm.loops.layers.color.get("Alpha") or bm.loops.layers.color.new("Alpha")
     texnum_layer = bm.faces.layers.int.get("Texture Number") or bm.faces.layers.int.new("Texture Number")
     type_layer = bm.faces.layers.int.get("Type") or bm.faces.layers.int.new("Type")
+    custom_type_layers = {}
+    for prop in [
+        "FACE_DOUBLE",
+        "FACE_TRANSLUCENT",
+        "FACE_MIRROR",
+        "FACE_TRANSL_TYPE",
+        "FACE_TEXANIM",
+        "FACE_NOENV",
+        "FACE_ENV",
+        "FACE_CLOTH",
+    ]:
+        layer = bm.faces.layers.int.get(prop)
+        if layer:
+            custom_type_layers[prop] = layer
 
     model.polygon_count += len(bm.faces)
     model.vertex_count += len(bm.verts)
@@ -131,6 +145,9 @@ def export_mesh(me, obj, scene, filepath, model):
         poly = rvstruct.Polygon()
         is_quad = len(face.verts) == 4
         poly.type = face[type_layer] & FACE_PROP_MASK
+        for prop, layer in custom_type_layers.items():
+            if face[layer]:
+                poly.type |= getattr(common, prop)
         if is_quad:
             poly.type |= FACE_QUAD
 
