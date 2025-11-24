@@ -54,6 +54,13 @@ def update_ta_current_slot(self, context):
     scene = context.scene
     slot = scene.ta_current_slot
 
+    # If no slots are available, keep the current slot at 0 and exit early to
+    # avoid Blender repeatedly clamping the value and triggering a recursion.
+    if scene.ta_max_slots == 0:
+        if slot != 0:
+            scene.ta_current_slot = 0
+        return
+
     ta = eval(scene.texture_animations)  # Convert string to dictionary
 
     # Ensure the current slot is within bounds
