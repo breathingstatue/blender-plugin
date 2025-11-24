@@ -231,7 +231,7 @@ def export_split_world(filepath, scene, split_size_faces):
         anim = rvstruct.TexAnimation()
         anim.from_dict(animdict)
         world.animations.append(anim)
-    world.animation_count = scene.ta_max_slots
+    world.animation_count = len(world.animations)
 
     with open(filepath, "wb") as file:
         world.write(file)
@@ -253,7 +253,7 @@ def export_standard_world(filepath, scene):
         anim = rvstruct.TexAnimation()
         anim.from_dict(animdict)
         world.animations.append(anim)
-    world.animation_count = scene.ta_max_slots
+    world.animation_count = len(world.animations)
 
     with open(filepath, "wb") as file:
         world.write(file)
@@ -309,7 +309,7 @@ def fast_batch_assign_materials(mesh_objects, material_choice):
     # Ensure a valid active object
     bpy.context.view_layer.objects.active = mesh_objects[0]
 
-    # Make sure we’re in OBJECT mode before running the operator
+    # Make sure weÂ’re in OBJECT mode before running the operator
     if bpy.context.object and bpy.context.object.mode != 'OBJECT':
         bpy.ops.object.mode_set(mode='OBJECT')
 
