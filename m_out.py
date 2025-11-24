@@ -55,7 +55,9 @@ def export_file(filepath, scene):
         anim = rvstruct.TexAnimation()
         anim.from_dict(animdict)
         model.animations.append(anim)
-    model.animation_count = scene.ta_max_slots
+    # Always match the written count to the actual number of animations,
+    # mirroring the behaviour used by world exports.
+    model.animation_count = len(model.animations)
 
     with open(filepath, "wb") as file:
         model.write(file)
