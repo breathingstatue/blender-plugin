@@ -55,8 +55,6 @@ def import_file(filepath, scene, texture_base_name=None):
         print(f"Importing instance {idx + 1}/{len(fin.instances)}: {instance.name}")
         import_instance(filepath, scene, instance, texture_base_name, mesh_cache, name_counter)
 
-    print("Assigning vertex color materials...")
-    assign_col_materials(scene)
     print("Assigning Tex+VC+Alpha materials...")
     assign_texvc_materials(scene)
     print("Import complete.")
@@ -288,131 +286,6 @@ def get_base_name_for_layers(obj):
     extension = ".prm"
     return f"{base_name}{extension}", suffix
 
-# ---------------------------------------------------------------------------
-# COL material assignment
-# ---------------------------------------------------------------------------
-
-def assign_col_materials(scene):
-    mesh_objects = [obj for obj in scene.objects if obj.type == 'MESH' and obj.data]
-    if not mesh_objects:
-        return
-
-    targets = [obj for obj in mesh_objects if "material_assigned_col" not in obj]
-    if not targets:
-        return
-
-    bpy.ops.object.select_all(action='DESELECT')
-
-    scene.material_choice = 'COL'
-
-    for obj in targets:
-        obj.select_set(True)
-    bpy.context.view_layer.objects.active = targets[0]
-
-    if bpy.context.object and bpy.context.object.mode != 'OBJECT':
-        bpy.ops.object.mode_set(mode='OBJECT')
-
-    bpy.ops.object.assign_materials_impexp()
-
-    for obj in targets:
-        obj["material_assigned_col"] = True
-
-# ---------------------------------------------------------------------------
-# UV texture material assignment
-# ---------------------------------------------------------------------------
-
-def assign_uvtex_materials(scene):
-    """Assign .bmp-based UV materials to all mesh objects after import, in OBJECT mode."""
-
-    def _clean_base(s: str) -> str:
-        return ''.join(ch for ch in os.path.splitext(s)[0].lower() if ch.isalnum() or ch in ('_', '-'))
-
-    def _int_to_texture_suffix(tex_num: int) -> str:
-        # a, b, ..., z, aa, ab, ...
-        suffix1 = chr(tex_num % 26 + 97)
-        suffix2_num = tex_num // 26 - 1
-        suffix2 = chr(suffix2_num % 26 + 97) if suffix2_num >= 0 else ''
-        return suffix2 + suffix1
-
-    def _collect_bmp_materials():
-        out = {}
-        for mat in bpy.data.materials:
-            if not mat.use_nodes:
-                continue
-            for node in mat.node_tree.nodes:
-                if node.type == 'TEX_IMAGE' and node.image and node.image.name.lower().endswith('.bmp'):
-                    out[node.image.name] = mat
-        return out
-
-    def _is_instance(obj):
-        return getattr(obj, "is_instance", obj.get("is_instance", False))
-
-    def _get_fin_base(obj):
-        if _is_instance(obj):
-            val = getattr(obj, "fin_texture_base", obj.get("fin_texture_base", ""))
-            if val:
-                return str(val).strip().lower()
-        return ""
-
-    mesh_objects = [obj for obj in scene.objects if obj.type == 'MESH' and obj.data]
-    if not mesh_objects:
-        return
-
-    bmp_materials = _collect_bmp_materials()
-
-    scene_level_base = ""
-    level_base = common.get_scene_value(scene, "level_texture_base", "")
-    if level_base:
-        scene_level_base = os.path.splitext(level_base.strip().lower())[0]
-
-    for obj in mesh_objects:
-        if obj.get("material_assigned_uv"):
-            continue
-
-        me = obj.data
-        bm = bmesh.new()
-        bm.from_mesh(me)
-
-        texnum_layer = bm.faces.layers.int.get("Texture Number")
-        if not texnum_layer:
-            bm.free()
-            continue
-
-        fin_base = _get_fin_base(obj)
-        if _is_instance(obj) and fin_base:
-            base = fin_base
-        elif scene_level_base:
-            base = scene_level_base
-        else:
-            base = _clean_base(obj.name)
-
-        for face in bm.faces:
-            tex_num = face[texnum_layer]
-            if tex_num is None or tex_num < 0:
-                continue
-
-            suffix = _int_to_texture_suffix(tex_num)
-            img_key = f"{base}{suffix}.bmp"
-
-            mat = bmp_materials.get(img_key)
-            if not mat:
-                mat = bpy.data.materials.get(img_key) or bpy.data.materials.get(img_key[:-4])
-
-            if not mat:
-                continue
-
-            if mat.name not in me.materials:
-                me.materials.append(mat)
-
-            face.material_index = me.materials.find(mat.name)
-
-        bm.to_mesh(me)
-        me.update()
-        bm.free()
-
-        obj["material_assigned_uv"] = True
-
-
 def assign_texvc_materials(scene):
     """Assign Tex+VC+Alpha materials to all mesh objects after import."""
 
@@ -432,4 +305,4 @@ def assign_texvc_materials(scene):
     if bpy.context.object and bpy.context.object.mode != 'OBJECT':
         bpy.ops.object.mode_set(mode='OBJECT')
 
-    bpy.ops.object.assign_materials_impexp()
+    bpy.ops.object.assign_materials_auto()

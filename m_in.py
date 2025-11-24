@@ -93,17 +93,10 @@ def import_file(filepath, scene, model_name=None):
         if bpy.context.object and bpy.context.object.mode != 'OBJECT':
             bpy.ops.object.mode_set(mode='OBJECT')
 
-        # 1) Assign COL materials using Scene-level material_choice
-        if hasattr(scene, "material_choice"):
-            scene.material_choice = 'COL'
-            bpy.ops.object.assign_materials_impexp()
-        else:
-            print("[WARN] Scene has no 'material_choice' property; COL assignment skipped.")
-
-        # 2) Assign Tex+VC+Alpha materials using Scene-level material_choice
+        # Assign Tex+VC+Alpha materials using Scene-level material_choice
         if hasattr(scene, "material_choice"):
             scene.material_choice = 'TEX_VC'
-            bpy.ops.object.assign_materials_impexp()
+            bpy.ops.object.assign_materials_auto()
         else:
             print("[WARN] Scene has no 'material_choice' property; TEX_VC assignment skipped.")
 

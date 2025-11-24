@@ -59,9 +59,6 @@ def import_file(filepath, scene):
             obj = bpy.data.objects.new(filename, me)
             bpy.context.scene.collection.objects.link(obj)
             bpy.context.view_layer.objects.active = obj
-            set_material_to_prm_col([obj])  # First assign COL
-            assign_uv_tex_material(obj, filepath)  # Then assign TEX_VC
-
             mesh_objects = [obj for obj in scene.objects if obj.type == 'MESH']
             set_material_to_prm_texture(mesh_objects)
 
@@ -207,19 +204,6 @@ def create_materials_for_attributes(me, bm, obj_name):
 
     return materials
 
-def assign_uv_tex_material(obj, filepath):
-    bm = bmesh.from_edit_mesh(obj.data) if obj.mode == 'EDIT' else bmesh.new()
-    bm.from_mesh(obj.data)
-
-    uv_layer = bm.loops.layers.uv.verify()
-
-    # Ensure the mesh is updated in the viewport
-    if obj.mode != 'EDIT':
-        bm.to_mesh(obj.data)
-        bm.free()
-
-    obj.data.update()
-
 def set_material_to_prm_texture(mesh_objects):
     """Sets the material to Texture + Vertex Colour + Alpha (TEX_VC) for all mesh objects."""
     if not mesh_objects:
@@ -241,27 +225,5 @@ def set_material_to_prm_texture(mesh_objects):
     # Run the import/export material assigner once over all selected meshes
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.mesh.select_all(action='SELECT')
-    bpy.ops.object.assign_materials_impexp()
-    bpy.ops.object.mode_set(mode='OBJECT')
-
-
-def set_material_to_prm_col(mesh_objects):
-    """Sets the material to Vertex Colour (COL) for all mesh objects."""
-    if not mesh_objects:
-        print("No mesh objects selected for material assignment.")
-        return
-
-    scene = bpy.context.scene
-    scene.material_choice = 'COL'  # <-- now on Scene
-
-    bpy.ops.object.select_all(action='DESELECT')
-    for obj in mesh_objects:
-        if obj.type == 'MESH':
-            obj.select_set(True)
-
-    bpy.context.view_layer.objects.active = mesh_objects[0]
-
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.select_all(action='SELECT')
-    bpy.ops.object.assign_materials_impexp()
+    bpy.ops.object.assign_materials_auto()
     bpy.ops.object.mode_set(mode='OBJECT')
