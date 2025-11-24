@@ -93,7 +93,6 @@ from .operators import ButtonZoneHide, AddTrackZone, ReverseTrackZone, ButtonTri
 from .operators import DuplicateFobObject, DuplicateTrigger, CopyTrigger, PasteTrigger, SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere
 from .operators import ButtonCopyUvToFrame, ButtonCopyFrameToUv, PreviewNextFrame, PreviewPrevFrame, TexAnimTransform, TexAnimGrid, CarAutoShader
 from .operators import ToggleVisiboxVisibility, ToggleFOBVisibility, FindSpecialFile, BakeVertexBatch
-from .operators import menu_func_import, menu_func_export
 from .texanim import update_ta_max_frames, update_ta_current_slot, update_ta_current_frame, update_ta_current_frame_uv
 from .texanim import update_ta_current_frame_delay, update_ta_current_frame_tex, update_ta_max_slots
 from .tools import get_trigger_type_items, get_trigger_type, set_trigger_type, get_low_flag_items, get_low_flag, set_low_flag, get_high_flag_items
@@ -112,8 +111,8 @@ from .ui.viewlayer_panel import RVIO_PT_RevoltViewLayerPanel
 bl_info = {
 "name": "Re-Volt",
 "author": "Marvin Thiel & Theman",
-"version": (20, 25, 91),
-"blender": (4, 5, 1),
+"version": (20, 25, 94),
+"blender": (5, 0, 0),
 "location": "File > Import-Export",
 "description": "Import and export Re-Volt file formats.",
 "wiki_url": "https://www.breathingstatue.com/blender-plugin",
@@ -783,9 +782,6 @@ def register():
         default=(1.0, 1.0, 1.0),
         description="Base color used for vertex shading"
     )
-
-    bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
-    bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
     
     bpy.types.Scene.is_hull_sphere = bpy.props.BoolProperty(
         name="Is Interior Sphere",
@@ -1222,9 +1218,6 @@ def unregister():
     del bpy.types.Object.is_hull_sphere
     del bpy.types.Scene.is_hull_convex
     del bpy.types.Scene.is_hull_sphere
-
-    bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
-    bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
 
     del bpy.types.Scene.car_shader_color
     del bpy.types.Scene.vertex_alpha_percentage

@@ -6,6 +6,13 @@ place 'io_revolt' in Blender/"version"/scripts/addons/
 
 -Theman with the help of AI and a bunch of friends in the RV I/O community.
 
+20.25.94
+Fixed Material Asssignment for various imports
+Smoothened out the plugin in general (bmesh / edit mode)
+Added "Animation" Face property for .m files
+Fixed .m files export
+Changed first Texture Number back to 0
+
 20.25.93
 Fixed the rest of Blender 5.0 incompabilities
 
