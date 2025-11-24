@@ -453,26 +453,16 @@ def get_active_face(bm):
 
 
 def get_edit_bmesh(obj):
-	if obj is None or obj.type != 'MESH' or obj.mode != 'EDIT':
-		return None
+        if obj is None or obj.type != 'MESH' or obj.mode != 'EDIT':
+                return None
 
-	bmesh_dic = {}
-
-	try:
-		# Attempt to retrieve the existing bmesh
-		bm = dic[obj.name]
-		bm.faces.layers.int.get("Type")
-		return bm
-
-	except KeyError:
-		# KeyError occurs if obj.name is not in dic - create a new bmesh
-		bm = bmesh.from_edit_mesh(obj.data)
-		dic[obj.name] = bm
-		return bm
-
-	except Exception as e:
-		# Handle other unexpected errors
-		return None
+        try:
+                bm = bmesh.from_edit_mesh(obj.data)
+                bm.faces.layers.int.get("Type")
+                return bm
+        except Exception:
+                # Return None if the edit bmesh is unavailable or invalid
+                return None
 
 
 def apply_trs(obj, bm, transform=False):
