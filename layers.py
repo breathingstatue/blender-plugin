@@ -171,8 +171,19 @@ def update_face_env(self, context):
     
 def update_envmapping(self, context):
     obj = context.object
-    if obj.type == 'MESH':
-        bm = bmesh.from_edit_mesh(obj.data)
+    if obj is None or obj.type != 'MESH':
+        return
+
+    is_edit_mode = obj.mode == 'EDIT'
+
+    if is_edit_mode:
+        try:
+            bm = bmesh.from_edit_mesh(obj.data)
+        except Exception:
+            return
+    else:
+        bm = bmesh.new()
+        bm.from_mesh(obj.data)
 
         # Find or create the _Env material
         base_name, suffix = get_base_name_for_layers(obj)
@@ -202,7 +213,12 @@ def update_envmapping(self, context):
         mat_index = obj.data.materials.find(material.name)
         type_layer = bm.faces.layers.int.get("Type") or bm.faces.layers.int.new("Type")
 
-        bmesh.update_edit_mesh(obj.data)
+        if is_edit_mode:
+            bmesh.update_edit_mesh(obj.data)
+        else:
+            bm.to_mesh(obj.data)
+            bm.free()
+
         obj.data.update()
 
         # Force update the viewport
@@ -210,8 +226,19 @@ def update_envmapping(self, context):
 
 def update_no_envmapping(self, context):
     obj = context.object
-    if obj.type == 'MESH':
-        bm = bmesh.from_edit_mesh(obj.data)
+    if obj is None or obj.type != 'MESH':
+        return
+
+    is_edit_mode = obj.mode == 'EDIT'
+
+    if is_edit_mode:
+        try:
+            bm = bmesh.from_edit_mesh(obj.data)
+        except Exception:
+            return
+    else:
+        bm = bmesh.new()
+        bm.from_mesh(obj.data)
 
         # Find the _Env material
         base_name, suffix = get_base_name_for_layers(obj)
@@ -224,7 +251,12 @@ def update_no_envmapping(self, context):
             mat_index = obj.data.materials.find(material.name)
             type_layer = bm.faces.layers.int.get("Type")
 
-            bmesh.update_edit_mesh(obj.data)
+            if is_edit_mode:
+                bmesh.update_edit_mesh(obj.data)
+            else:
+                bm.to_mesh(obj.data)
+                bm.free()
+
             obj.data.update()
 
             # Force update the viewport
