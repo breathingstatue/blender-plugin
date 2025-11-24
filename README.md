@@ -9,8 +9,7 @@ place 'io_revolt' in Blender/"version"/scripts/addons/
 20.25.94
 Fixed Material Asssignment for various imports
 Smoothened out the plugin in general (bmesh / edit mode)
-Added "Animation" Face property for .m files
-Fixed .m files export
+Added Custom Face Properties for Models (.m files)
 Changed first Texture Number back to 0
 
 20.25.93
