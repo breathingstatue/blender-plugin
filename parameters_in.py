@@ -17,7 +17,15 @@ from mathutils import Vector, Quaternion, Matrix, Euler
 from . import common
 from . import carinfo
 from . import prm_in
-from .common import to_blender_axis, to_blender_coord, to_blender_scale, PARAMETERS, to_blender_angle
+from .common import (
+    PARAMETERS,
+    get_scene_value,
+    set_scene_value,
+    to_blender_angle,
+    to_blender_axis,
+    to_blender_coord,
+    to_blender_scale,
+)
 from .prm_in import import_file
 
 # Check if 'bpy' is already in locals to determine if this is a reload scenario
@@ -31,6 +39,11 @@ def import_file(filepath, scene):
     Imports a parameters.txt file and loads car body and wheels.
     """
     PARAMETERS[filepath] = carinfo.read_parameters(filepath)
+
+    # Car imports always rely on the car texture set; avoid prompting the user
+    # for a level texture base when it is already implied.
+    if not get_scene_value(scene, "level_texture_base", "").strip():
+        set_scene_value(scene, "level_texture_base", "car")
 
     # Import the car and its parts
     import_car(PARAMETERS[filepath], filepath, scene)
