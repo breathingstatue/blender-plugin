@@ -38,7 +38,7 @@ class RVIO_PT_RevoltInstancesPanel(bpy.types.Panel):
             if obj.mode == 'EDIT':
                 if getattr(obj, "fin_model_rgb", False):
                     try:
-                        col.prop(obj, "fin_col", text="RGB Modeling Color")
+                        col.prop(obj, "fin_col", text="Fin RGB Modeling Color")
                     except SystemError as e:
                         col.label(text="Unable to access Modeling Color in current mode.")
             else:
@@ -50,7 +50,5 @@ class RVIO_PT_RevoltInstancesPanel(bpy.types.Panel):
             col.prop(obj, "fin_no_lights", text="Not affected by Lights")
             col.prop(obj, "fin_no_cam_coll", text="No Camera Collision")
             col.prop(obj, "fin_no_obj_coll", text="No Object Collision")
-            col.operator("object.mark_as_model", text="Mark/Unmark as .m Model")
-            col.prop(obj, "is_model", text="Is Model (.m)")
         else:
             pass
