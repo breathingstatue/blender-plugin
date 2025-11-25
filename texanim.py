@@ -1,4 +1,4 @@
-"""
+﻿"""
 Name:    texanim
 Purpose: Provides operators and functions for the texture animation panel
 
@@ -16,7 +16,7 @@ if "common" in locals():
     import importlib
     importlib.reload(common)
 
-from .common import TEX_PAGES_MAX, get_edit_bmesh, get_active_face, msg_box
+from .common import TEX_PAGES_MAX, get_edit_bmesh, get_active_face, msg_box, FACE_TEXANIM
 from .common import TEX_ANIM_MAX, int_to_texture
 from .rvstruct import TexAnimation, Frame
 
@@ -204,10 +204,29 @@ def copy_frame_to_uv(context):
     if not material:
         msg_box(f"Material using texture '{texture_image.name}' not found!", "ERROR")
         return
-        
-    # Get the index of the material in the object's material slots
-    material_index = obj.data.materials.find(material.name)
-        
+
+    # -------------------------------------------------
+    # 🔹 ENSURE MATERIAL IS ON THIS OBJECT
+    # -------------------------------------------------
+    mats = obj.data.materials
+
+    # Check if material already exists in the object’s slots
+    existing_names = [m.name for m in mats if m]
+    if material.name not in existing_names:
+        mats.append(material)
+
+    # Get the index again AFTER appending
+    material_index = mats.find(material.name)
+
+    # Safety check: if still invalid, bail out with an error
+    if material_index < 0 or material_index >= len(mats):
+        msg_box(
+            f"Internal error: material index for '{material.name}' is invalid.",
+            "ERROR"
+        )
+        return
+    # -------------------------------------------------
+
     # Iterate over selected faces
     selected_faces = [f for f in bm.faces if f.select]
     if not selected_faces:
@@ -248,11 +267,25 @@ def find_matching_texture(texture_letter):
     return None
 
 def find_material_using_texture(obj, texture_image):
-    """Find a material on the object that uses the given texture image."""
+    """Find a material that uses the given texture image.
+
+    1) First check materials already assigned to the object.
+    2) If not found, search all materials in bpy.data.materials.
+    """
+    # --- 1) Search materials already on this object ---
     for material_slot in obj.material_slots:
         material = material_slot.material
         if material and material.use_nodes:
             for node in material.node_tree.nodes:
                 if node.type == 'TEX_IMAGE' and node.image == texture_image:
                     return material
+
+    # --- 2) Fallback: search all materials in the file ---
+    for material in bpy.data.materials:
+        if not material or not material.use_nodes:
+            continue
+        for node in material.node_tree.nodes:
+            if node.type == 'TEX_IMAGE' and node.image == texture_image:
+                return material
+
     return None

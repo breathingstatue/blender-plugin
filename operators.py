@@ -494,12 +494,33 @@ def exec_export(filepath, format_type, context):
 
         elif frmt == 'M':
             from . import m_out
+            scene = context.scene
 
-            if context.scene.get("skip_texture_prompt_once", False):
-                del context.scene["skip_texture_prompt_once"]
-                m_out.export_file(filepath, context.scene)
+            model_name = os.path.splitext(os.path.basename(filepath))[0].lower()
+
+            # --- 1) If we already have a slot for this model, skip the prompt entirely ---
+            from .common import get_scene_value  # if not already imported at top
+
+            existing_slot = -1
+            for i in range(MAX_MODEL_SLOTS):
+                slot_name = get_scene_value(scene, f"m_model_name_{i}", "").lower()
+                if slot_name == model_name:
+                    existing_slot = i
+                    break
+
+            if existing_slot != -1:
+                print(f"[M EXPORT] Using existing texture config for '{model_name}' (slot {existing_slot}), no prompt.")
+                m_out.export_file(filepath, scene)
                 return {'FINISHED'}
 
+            # --- 2) Second-chance path: skip prompt if flag is set (dialog already ran) ---
+            if scene.get("skip_texture_prompt_once", False):
+                print("[M EXPORT] skip_texture_prompt_once=True → exporting directly without prompting")
+                del scene["skip_texture_prompt_once"]
+                m_out.export_file(filepath, scene)
+                return {'FINISHED'}
+
+            # --- 3) Otherwise: first time for this model → optional light check + prompt ---
             print("Checking textures before exporting .m file...")
             export_folder = os.path.dirname(filepath)
             missing = check_missing_textures(export_folder)
@@ -508,14 +529,9 @@ def exec_export(filepath, format_type, context):
                 print(f"[WARNING] {len(missing)} texture(s) not found in export folder, but continuing anyway.")
                 print("[INFO] RVGL will find textures from its own folders")
 
-            model_name = os.path.splitext(os.path.basename(filepath))[0].lower()
-            context.scene.last_exported_filepath = filepath
-            context.scene["skip_texture_prompt_once"] = True
+            scene.last_exported_filepath = filepath
+            scene["skip_texture_prompt_once"] = True
             bpy.ops.wm.prompt_texture_prefix_model('INVOKE_DEFAULT', model_name=model_name)
-            return {'CANCELLED'}
-
-        else:
-            print(f"[ERROR] Export format '{frmt}' is not handled.")
             return {'CANCELLED'}
 
     finally:
@@ -661,28 +677,45 @@ class TexturePrefixPrompt(bpy.types.Operator):
     def execute(self, context):
         scene = context.scene
 
-        # Save texture config
+        from .common import get_scene_value, set_scene_value
+
+        # --- Reuse existing slot if present ---
+        target_slot = -1
         for i in range(MAX_MODEL_SLOTS):
-            if not get_scene_value(scene, f"m_model_name_{i}", ""):
-                set_scene_value(scene, f"m_model_name_{i}", self.model_name)
-                set_scene_value(scene, f"m_texture_mode_{i}", self.choice)
-                set_scene_value(scene, f"m_texture_path_{i}", self.texture_path_input)
+            slot_name = get_scene_value(scene, f"m_model_name_{i}", "").lower()
+            if slot_name == self.model_name.lower():
+                target_slot = i
                 break
 
-        # Handle single export without a queue
+        # --- Otherwise pick first free slot ---
+        if target_slot == -1:
+            for i in range(MAX_MODEL_SLOTS):
+                slot_name = get_scene_value(scene, f"m_model_name_{i}", "")
+                if not slot_name:
+                    target_slot = i
+                    break
+
+        if target_slot == -1:
+            self.report({'ERROR'}, "No free model slots available.")
+            return {'CANCELLED'}
+
+        # --- Save selection ---
+        set_scene_value(scene, f"m_model_name_{target_slot}", self.model_name)
+        set_scene_value(scene, f"m_texture_mode_{target_slot}", self.choice)
+        set_scene_value(scene, f"m_texture_path_{target_slot}", self.texture_path_input)
+
+        # --- Single export path (no queue) ---
         if not hasattr(scene, "m_models_prompt_queue"):
-            # Mark that the prompt has already occurred
             context.scene["skip_texture_prompt_once"] = True
             bpy.ops.export_scene.revolt('EXEC_DEFAULT')
             return {'FINISHED'}
 
-        # Continue queue if more models left
+        # --- Queue continues ---
         scene.m_models_prompt_index += 1
         if scene.m_models_prompt_index < len(scene.m_models_prompt_queue):
             next_model = scene.m_models_prompt_queue[scene.m_models_prompt_index]
             bpy.ops.wm.prompt_texture_prefix_model('INVOKE_DEFAULT', model_name=next_model)
         else:
-            # All prompts done
             del scene.m_models_prompt_queue
             del scene.m_models_prompt_index
             context.scene["skip_texture_prompt_once"] = True
@@ -5212,10 +5245,33 @@ class TexAnimTransform(bpy.types.Operator):
         frame_start = scene.ta_frame_start
         frame_end = scene.ta_frame_end
 
+        # Bounds check against current slot's max_frames
         if frame_start >= max_frames or frame_end >= max_frames:
-            msg_box("Frame index out of range.", "ERROR")
+            msg_box("Frame index out of range. Please increase Frames Limit if needed.", "ERROR")
             return {'FINISHED'}
 
+        # Remember original values for the message
+        orig_start = frame_start
+        orig_end = frame_end
+
+        # Ensure start <= end for interpolation math
+        if frame_end < frame_start:
+            frame_start, frame_end = frame_end, frame_start
+
+        # Shortcut: if start == end, nothing to interpolate – just ensure delay/texture are set
+        if frame_start == frame_end:
+            idx = frame_start
+            ta[slot]["frames"][idx]["delay"] = scene.ta_delay
+            ta[slot]["frames"][idx]["texture"] = scene.ta_texture
+            # No UV change needed, but we could also copy current frame UVs here if desired
+
+            scene.texture_animations = str(ta)
+            update_ta_current_frame(self, context)
+
+            msg_box(f"Single-frame transform applied at frame {idx}.", icon="FILE_TICK")
+            return {'FINISHED'}
+
+        # Read UVs from the start frame
         uv_start = (
             (ta[slot]["frames"][frame_start]["uv"][0]["u"],
              ta[slot]["frames"][frame_start]["uv"][0]["v"]),
@@ -5227,6 +5283,7 @@ class TexAnimTransform(bpy.types.Operator):
              ta[slot]["frames"][frame_start]["uv"][3]["v"])
         )
 
+        # And from the end frame
         uv_end = (
             (ta[slot]["frames"][frame_end]["uv"][0]["u"],
              ta[slot]["frames"][frame_end]["uv"][0]["v"]),
@@ -5238,28 +5295,34 @@ class TexAnimTransform(bpy.types.Operator):
              ta[slot]["frames"][frame_end]["uv"][3]["v"])
         )
 
-        nframes = abs(frame_end - frame_start) + 1
+        nframes = (frame_end - frame_start) + 1
+        denom = (frame_end - frame_start)
 
-        for i in range(0, nframes):
+        for i in range(nframes):
             current_frame = frame_start + i
-            prog = i / (frame_end - frame_start)
+            prog = i / denom  # safe because frame_end != frame_start here
 
-            ta[slot]["frames"][frame_start + i]["delay"] = scene.ta_delay
-            ta[slot]["frames"][frame_start + i]["texture"] = scene.ta_texture
+            ta[slot]["frames"][current_frame]["delay"] = scene.ta_delay
+            ta[slot]["frames"][current_frame]["texture"] = scene.ta_texture
 
-            for j in range(0, 4):
+            for j in range(4):
                 new_u = uv_start[j][0] * (1 - prog) + uv_end[j][0] * prog
                 new_v = uv_start[j][1] * (1 - prog) + uv_end[j][1] * prog
 
-                ta[slot]["frames"][frame_start + i]["uv"][j]["u"] = new_u
-                ta[slot]["frames"][frame_start + i]["uv"][j]["v"] = new_v
+                ta[slot]["frames"][current_frame]["uv"][j]["u"] = new_u
+                ta[slot]["frames"][current_frame]["uv"][j]["v"] = new_v
+
+        # 🔸 IMPORTANT: do NOT touch frame_count here.
+        # Transform only reshapes existing frames inside [frame_start, frame_end].
+        # Frame count / allocation is handled when user sets Frames Limit (ta_max_frames)
+        # and by Grid (which already updates frame_count safely).
 
         scene.texture_animations = str(ta)
         update_ta_current_frame(self, context)
 
         msg_box("Animation from frame {} to {} completed.".format(
-            frame_start, frame_end),
-            icon = "FILE_TICK"
+            orig_start, orig_end),
+            icon="FILE_TICK"
         )
 
         return {'FINISHED'}
@@ -5279,54 +5342,123 @@ class TexAnimGrid(bpy.types.Operator):
 
         ta = eval(scene.texture_animations)
         slot = scene.ta_current_slot
-        max_frames = scene.ta_max_frames
 
+        if slot >= len(ta):
+            msg_box("Slot index out of range.", "ERROR")
+            return {'FINISHED'}
+
+        # Current info for this slot
+        max_frames = scene.ta_max_frames
         frame_start = scene.ta_frame_start
         grid_x = scene.grid_x
         grid_y = scene.grid_y
         nframes = grid_x * grid_y
 
-        if nframes > max_frames:
+        # We need at least frame_start + nframes frames available
+        needed_frames = frame_start + nframes
+
+        # If the UI limit is too small, warn the user (keeps existing behaviour)
+        if needed_frames > max_frames:
             msg_box(
                 "Frame out of range.\n"
-                "Please set the amount of frames to {}.".format(
-                    nframes + 1),
+                "Please set the amount of frames to at least {}.".format(needed_frames),
                 "ERROR"
             )
             return {'FINISHED'}
 
+        # Ensure the internal frames list is large enough for this slot
+        # (in case something got out of sync)
+        frames_list = ta[slot]["frames"]
+        while len(frames_list) < needed_frames:
+            new_frame = rvstruct.Frame().as_dict()
+            frames_list.append(new_frame)
+
         i = 0
         for y in range(grid_x):
             for x in range(grid_y):
-                uv0 = (x/grid_x, y/grid_y)
-                uv1 = ((x+1)/grid_x, y/grid_y)
-                uv2 = ((x+1)/grid_x, (y+1)/grid_y)
-                uv3 = (x/grid_x, (y+1)/grid_y)
+                uv0 = (x / grid_x,     y / grid_y)
+                uv1 = ((x + 1) / grid_x, y / grid_y)
+                uv2 = ((x + 1) / grid_x, (y + 1) / grid_y)
+                uv3 = (x / grid_x,     (y + 1) / grid_y)
 
-                ta[slot]["frames"][frame_start + i]["delay"] = scene.ta_delay
-                ta[slot]["frames"][frame_start + i]["texture"] = scene.ta_texture
+                idx = frame_start + i
 
-                ta[slot]["frames"][frame_start + i]["uv"][0]["u"] = uv0[0]
-                ta[slot]["frames"][frame_start + i]["uv"][0]["v"] = uv0[1]
-                ta[slot]["frames"][frame_start + i]["uv"][1]["u"] = uv1[0]
-                ta[slot]["frames"][frame_start + i]["uv"][1]["v"] = uv1[1]
-                ta[slot]["frames"][frame_start + i]["uv"][2]["u"] = uv2[0]
-                ta[slot]["frames"][frame_start + i]["uv"][2]["v"] = uv2[1]
-                ta[slot]["frames"][frame_start + i]["uv"][3]["u"] = uv3[0]
-                ta[slot]["frames"][frame_start + i]["uv"][3]["v"] = uv3[1]
+                frames_list[idx]["delay"] = scene.ta_delay
+                frames_list[idx]["texture"] = scene.ta_texture
+
+                frames_list[idx]["uv"][0]["u"] = uv0[0]
+                frames_list[idx]["uv"][0]["v"] = uv0[1]
+                frames_list[idx]["uv"][1]["u"] = uv1[0]
+                frames_list[idx]["uv"][1]["v"] = uv1[1]
+                frames_list[idx]["uv"][2]["u"] = uv2[0]
+                frames_list[idx]["uv"][2]["v"] = uv2[1]
+                frames_list[idx]["uv"][3]["u"] = uv3[0]
+                frames_list[idx]["uv"][3]["v"] = uv3[1]
 
                 i += 1
 
+        # 🔹 Update frame_count so export writes ALL generated frames
+        ta[slot]["frame_count"] = max(ta[slot].get("frame_count", 0), needed_frames)
+
+        # Keep UI in sync with actual data
+        scene.ta_max_frames = ta[slot]["frame_count"]
+
+        # Store back once with the updated frame_count
         scene.texture_animations = str(ta)
+
+        # Refresh current frame UI
         update_ta_current_frame(self, context)
 
-        msg_box("Animation of {} frames completed.".format(
-            nframes),
-            icon = "FILE_TICK"
-        )
-        
+        msg_box("Animation of {} frames completed.".format(nframes), icon="FILE_TICK")
+
         return {'FINISHED'}
     
+class TexAnimAssignSlot(bpy.types.Operator):
+    bl_idname = "texanim.assign_anim_slot"
+    bl_label = "Assign Anim Slot"
+    bl_description = "Assign the current animation slot to the selected faces and enable texture animation"
+
+    def execute(self, context):
+        scene = context.scene
+        obj = context.object
+
+        if not obj or obj.type != 'MESH' or not obj.data:
+            msg_box("Please select a valid mesh object in Edit Mode.", "ERROR")
+            return {'CANCELLED'}
+
+        if obj.mode != 'EDIT':
+            bpy.ops.object.mode_set(mode='EDIT')
+
+        import bmesh
+        bm = bmesh.from_edit_mesh(obj.data)
+
+        # Get / create layers
+        anim_slot_layer = bm.faces.layers.int.get("Anim Slot")
+        if anim_slot_layer is None:
+            anim_slot_layer = bm.faces.layers.int.new("Anim Slot")
+
+        type_layer = bm.faces.layers.int.get("Type")
+        if type_layer is None:
+            type_layer = bm.faces.layers.int.new("Type")
+
+        selected_faces = [f for f in bm.faces if f.select]
+        if not selected_faces:
+            msg_box("Please select at least one face.", "ERROR")
+            return {'CANCELLED'}
+
+        slot = scene.ta_current_slot
+
+        for f in selected_faces:
+            f[anim_slot_layer] = slot
+            # Enable texture animation bit in the Type field
+            f[type_layer] |= FACE_TEXANIM
+
+        bmesh.update_edit_mesh(obj.data)
+        if context.area:
+            context.area.tag_redraw()
+
+        return {'FINISHED'}
+
 """
 VERTEX COLORS -----------------------------------------------------------------
 """

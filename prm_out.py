@@ -1,4 +1,4 @@
-"""
+﻿"""
 Name:    prm_out
 Purpose: Exports Probe mesh files (.prm)
 
@@ -18,10 +18,10 @@ from . import img_in
 from . import layers
 
 from .common import (
-    dprint, get_all_lod, triangulate_ngons, queue_error, FACE_QUAD,
-    FACE_PROP_MASK, texture_to_int, FACE_ENV, to_revolt_coord, to_revolt_axis,
-    rvbbox_from_bm, center_from_rvbbox, radius_from_bmesh
+    dprint, get_all_lod, triangulate_ngons, queue_error,
+    FACE_QUAD, FACE_PROP_MASK, texture_to_int, FACE_ENV, FACE_TEXANIM
 )
+from .common import to_revolt_coord, to_revolt_axis, rvbbox_from_bm, center_from_rvbbox, radius_from_bmesh
 from .layers import *
 
 # --- Proper module reloads for development mode ---
@@ -283,22 +283,38 @@ def export_mesh(me, obj, scene, filepath, world=None):
         if is_quad:
             poly.type |= FACE_QUAD
 
-        # Gets the texture number from the integer layer if setting enabled
-        # use_tex_num is the only way to achieve no texture
-        if scene.use_tex_num and texnum_layer:
+        # --- NEW: resolve animation slot vs texture page ---
+        anim_slot_layer = bm.faces.layers.int.get("Anim Slot")
+        is_texanim = bool(poly.type & FACE_TEXANIM)
+
+        if is_texanim and anim_slot_layer:
+            # Animated face: poly.texture is index into World.animations[]
+            poly.texture = face[anim_slot_layer]
+            print(f"[ANIM] Face {face.index}: Using Anim Slot layer → {poly.texture}")
+            image = None  # purely for debug print below
+        elif scene.use_tex_num and texnum_layer:
+            # Non-animated or no Anim Slot: use Texture Number layer
             poly.texture = face[texnum_layer]
-        # Falls back to texture if not enabled or texnum layer not found
-        image = get_texture_from_material(face, obj) if world else get_texture_from_material(face, obj, scene.default_texture_name)
-        if image:
-            if image.name not in _texture_assignment_logs:
-                dprint(f"Assigning texture: {image.name} to faces")
-                _texture_assignment_logs.add(image.name)
-            poly.texture = texture_to_int(image.name)
+            print(f"[OK] Face {face.index}: Using Texture Number layer → {poly.texture}")
+            image = None
         else:
-            if not _missing_texture_logged:
-                dprint("No texture assigned to at least one face")
-                _missing_texture_logged = True
-            poly.texture = -1
+            # Falls back to material-based texture name
+            if world is None:
+                # PRM export
+                image = get_texture_from_material(face, obj)
+            else:
+                # World export: may use scene.default_texture_name
+                image = get_texture_from_material(face, obj, scene.default_texture_name)
+
+            if image:
+                print(f"Assigning texture: {image.name} to face")
+                poly.texture = texture_to_int(image.name)
+            else:
+                print(f"No texture assigned to face")
+                poly.texture = -1
+        # --- END slot / page resolution ---
+
+        print(f"Face texture index = {poly.texture} ({image.name if image else 'NO IMAGE'})")
 
         # Sets vertex indices for the polygon
         vert_order = [2, 1, 0, 3] if not is_quad else [3, 2, 1, 0]

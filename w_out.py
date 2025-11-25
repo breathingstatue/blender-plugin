@@ -63,6 +63,8 @@ def create_split_mesh(original_mesh, face_indices, original_obj_name, created_ob
     texnum_layer = split_bm.faces.layers.int.new("Texture Number") if texnum_src else None
     type_src = original_bm.faces.layers.int.get("Type")
     type_layer = split_bm.faces.layers.int.new("Type") if type_src else None
+    anim_slot_src = original_bm.faces.layers.int.get("Anim Slot")
+    anim_slot_layer = split_bm.faces.layers.int.new("Anim Slot") if anim_slot_src else None
 
     # Custom properties layers
     custom_props_layers = {}
@@ -110,6 +112,8 @@ def create_split_mesh(original_mesh, face_indices, original_obj_name, created_ob
             new_face[texnum_layer] = face[texnum_src]
         if type_layer and type_src:
             new_face[type_layer] = face[type_src]
+        if anim_slot_layer and anim_slot_src:
+            new_face[anim_slot_layer] = face[anim_slot_src]
 
         for prop, layer in custom_props_layers.items():
             if layer:
@@ -314,7 +318,7 @@ def fast_batch_assign_materials(mesh_objects, material_choice):
         bpy.ops.object.mode_set(mode='OBJECT')
 
     # Apply material assignment for all selected objects
-    bpy.ops.object.assign_materials_impexp()
+    bpy.ops.object.assign_materials_auto()
 
     print(f"Assigned materials ({material_choice}) to all mesh objects.")
 

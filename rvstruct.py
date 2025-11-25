@@ -735,7 +735,7 @@ class BigCube:
 
 class TexAnimation:
     """
-    Reads and stores a texture animation of a .w file
+    Reads and stores a texture animation of .w and .m files.
     """
     def __init__(self, file=None):
         self.frame_count = 0    # rvlong, amount of frames

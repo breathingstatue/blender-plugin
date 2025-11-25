@@ -13,7 +13,8 @@ from mathutils import Color, Vector, Matrix
 from . import common, rvstruct, img_in, layers
 from .common import (
     dprint, get_all_lod, triangulate_ngons, queue_error, FACE_PROP_MASK,
-    FACE_QUAD, texture_to_int, FACE_ENV, to_revolt_coord, to_revolt_axis,
+    FACE_QUAD, texture_to_int, FACE_ENV, FACE_TEXANIM,
+    to_revolt_coord, to_revolt_axis,
     rvbbox_from_bm, center_from_rvbbox, radius_from_bmesh, MAX_MODEL_SLOTS
 )
 from .layers import *
@@ -111,7 +112,7 @@ def export_mesh(me, obj, scene, filepath, model):
     env_layer = bm.loops.layers.color.get("Env") or bm.loops.layers.color.new("Env")
     env_alpha_layer = bm.faces.layers.float.get("EnvAlpha") or bm.faces.layers.float.new("EnvAlpha")
     va_layer = bm.loops.layers.color.get("Alpha") or bm.loops.layers.color.new("Alpha")
-    texnum_layer = bm.faces.layers.int.get("Texture Number") or bm.faces.layers.int.new("Texture Number")
+    texnum_layer = bm.faces.layers.int.get("Texture Number")
     type_layer = bm.faces.layers.int.get("Type") or bm.faces.layers.int.new("Type")
     custom_type_layers = {}
     for prop in [
@@ -164,10 +165,20 @@ def export_mesh(me, obj, scene, filepath, model):
         if is_quad:
             poly.type |= FACE_QUAD
 
-        if scene.use_tex_num and texnum_layer:
+        # --- NEW: resolve animation slot vs texture page ---
+        anim_slot_layer = bm.faces.layers.int.get("Anim Slot")
+        is_texanim = bool(poly.type & FACE_TEXANIM)
+
+        if is_texanim and anim_slot_layer:
+            # Animated face: poly.texture is the *animation index*
+            poly.texture = face[anim_slot_layer]
+            print(f"[ANIM] Face {face.index}: Using Anim Slot layer → {poly.texture}")
+        elif scene.use_tex_num and texnum_layer:
+            # Non-animated, or no Anim Slot: use Texture Number as before
             poly.texture = face[texnum_layer]
             print(f"[OK] Face {face.index}: Using Texture Number layer → {poly.texture}")
         else:
+            # Fallback: derive texture from material
             image = get_texture_from_material(face, obj)
             if image:
                 image_name = image.name
@@ -182,6 +193,7 @@ def export_mesh(me, obj, scene, filepath, model):
             else:
                 poly.texture = -1  # Ensure it's marked untextured
                 print(f"[INFO] Face {face.index}: No texture assigned → index -1")
+        # --- END texture / slot resolution ---
 
         vert_order = [2, 1, 0, 3] if not is_quad else [3, 2, 1, 0]
 

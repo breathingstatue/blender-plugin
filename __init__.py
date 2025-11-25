@@ -92,7 +92,7 @@ from .operators import CopyAndRemoveSprings, PinMessageBox, ConfirmLoadOriginalP
 from .operators import ButtonZoneHide, AddTrackZone, ReverseTrackZone, ButtonTriggerHide, CreateTrigger, MarkAsModel, CreateFobObject
 from .operators import DuplicateFobObject, DuplicateTrigger, CopyTrigger, PasteTrigger, SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere
 from .operators import ButtonCopyUvToFrame, ButtonCopyFrameToUv, PreviewNextFrame, PreviewPrevFrame, TexAnimTransform, TexAnimGrid, CarAutoShader
-from .operators import ToggleVisiboxVisibility, ToggleFOBVisibility, FindSpecialFile, BakeVertexBatch
+from .operators import ToggleVisiboxVisibility, ToggleFOBVisibility, FindSpecialFile, BakeVertexBatch, TexAnimAssignSlot
 from .texanim import update_ta_max_frames, update_ta_current_slot, update_ta_current_frame, update_ta_current_frame_uv
 from .texanim import update_ta_current_frame_delay, update_ta_current_frame_tex, update_ta_max_slots
 from .tools import get_trigger_type_items, get_trigger_type, set_trigger_type, get_low_flag_items, get_low_flag, set_low_flag, get_high_flag_items
@@ -111,7 +111,7 @@ from .ui.viewlayer_panel import RVIO_PT_RevoltViewLayerPanel
 bl_info = {
 "name": "Re-Volt",
 "author": "Marvin Thiel & Theman",
-"version": (20, 25, 94),
+"version": (20, 25, 95),
 "blender": (5, 0, 0),
 "location": "File > Import-Export",
 "description": "Import and export Re-Volt file formats.",
@@ -652,7 +652,7 @@ def register():
     
     bpy.types.Mesh.face_texture_animation = bpy.props.BoolProperty(
         name = "Animated",
-        description = "Uses texture animation for this poly (.w files only)",
+        description = "Uses texture animation for this poly (.w and .m files)",
         get=lambda self: bool(get_face_property(self, FACE_TEXANIM)),
         set=lambda self, value: set_face_property(self, value, FACE_TEXANIM)
     )
@@ -1049,6 +1049,7 @@ def register():
     bpy.utils.register_class(ToggleFOBVisibility)
     bpy.utils.register_class(FindSpecialFile)
     bpy.utils.register_class(BakeVertexBatch)
+    bpy.utils.register_class(TexAnimAssignSlot)
     bpy.utils.register_class(ButtonZoneHide)
     bpy.utils.register_class(AddTrackZone)
     bpy.utils.register_class(ReverseTrackZone)
@@ -1121,6 +1122,7 @@ def unregister():
     bpy.utils.unregister_class(ReverseTrackZone)
     bpy.utils.unregister_class(AddTrackZone)
     bpy.utils.unregister_class(ButtonZoneHide)
+    bpy.utils.unregister_class(TexAnimAssignSlot)
     bpy.utils.unregister_class(BakeVertexBatch)
     bpy.utils.unregister_class(FindSpecialFile)
     bpy.utils.unregister_class(ToggleFOBVisibility)
