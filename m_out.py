@@ -165,7 +165,7 @@ def export_mesh(me, obj, scene, filepath, model):
         if is_quad:
             poly.type |= FACE_QUAD
 
-        # --- NEW: resolve animation slot vs texture page ---
+        # --- resolve animation slot vs texture page ---
         anim_slot_layer = bm.faces.layers.int.get("Anim Slot")
         is_texanim = bool(poly.type & FACE_TEXANIM)
 
@@ -173,10 +173,12 @@ def export_mesh(me, obj, scene, filepath, model):
             # Animated face: poly.texture is the *animation index*
             poly.texture = face[anim_slot_layer]
             print(f"[ANIM] Face {face.index}: Using Anim Slot layer → {poly.texture}")
-        elif scene.use_tex_num and texnum_layer:
-            # Non-animated, or no Anim Slot: use Texture Number as before
+
+        elif texnum_layer:
+            # Non-animated (or no Anim Slot): always honor Texture Number if it exists
             poly.texture = face[texnum_layer]
             print(f"[OK] Face {face.index}: Using Texture Number layer → {poly.texture}")
+
         else:
             # Fallback: derive texture from material
             image = get_texture_from_material(face, obj)
@@ -193,7 +195,6 @@ def export_mesh(me, obj, scene, filepath, model):
             else:
                 poly.texture = -1  # Ensure it's marked untextured
                 print(f"[INFO] Face {face.index}: No texture assigned → index -1")
-        # --- END texture / slot resolution ---
 
         vert_order = [2, 1, 0, 3] if not is_quad else [3, 2, 1, 0]
 

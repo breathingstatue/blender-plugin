@@ -2496,6 +2496,53 @@ class MaterialAssignmentHelper:
                 obj.active_material_index = i
                 return
 
+    def _find_level_texture_material(self, base_name, tex_num):
+        """
+        Resolve a level texture material for a given texture page.
+
+        Supports BOTH:
+        - classic letter suffixes:  tracka.bmp, trackb.bmp, ...
+        - numeric variants:         track0.bmp, track1.bmp, 0.bmp, 1.bmp, ...
+
+        Returns a bpy.types.Material or None.
+        """
+        mat = None
+
+        # 1) Existing behaviour: letter suffix via int_to_texture()
+        try:
+            letter_name = int_to_texture(tex_num, name=base_name)
+        except Exception:
+            letter_name = None
+
+        if letter_name:
+            mat = self.find_material_loose(letter_name)
+            if mat:
+                return mat
+
+        # 2) Numeric fallbacks
+        num = str(tex_num)
+        candidates = []
+
+        if base_name:
+            # track1 / track1.bmp
+            candidates.extend([
+                f"{base_name}{num}",
+                f"{base_name}{num}.bmp",
+            ])
+
+        # bare 1 / 1.bmp
+        candidates.extend([
+            num,
+            f"{num}.bmp",
+        ])
+
+        for cand in candidates:
+            mat = self.find_material_loose(cand)
+            if mat:
+                return mat
+
+        return None
+
     def _reassign_faces_off_tex_vc(self, obj):
         """Force any *_TexVC faces to the correct texture-only material by texnum."""
         import bmesh
@@ -2562,14 +2609,16 @@ class MaterialAssignmentHelper:
                 continue
 
             tex_num = face[texnum_layer]
+            mat = None
+
             if source_mode == "TEXTURE_NAME":
-                mat_name = f"{base_name}.bmp"
+                mat = self.find_material_loose(f"{base_name}.bmp")
             elif source_mode == "LEVEL_TEXTURES" and tex_num >= 0:
-                mat_name = int_to_texture(tex_num, name=base_name)
+                # NEW: support both letter and numeric schemes
+                mat = self._find_level_texture_material(base_name, tex_num)
             else:
                 continue
 
-            mat = self.find_material_loose(mat_name)
             if not mat:
                 # If it doesn't exist yet, UV assignment (step 1) should have added it;
                 # if not, skip defensively.
@@ -2703,15 +2752,17 @@ class MaterialAssignmentHelper:
 
         for face in bm.faces:
             tex_num = face[texnum_layer]
+            mat = None
 
             if source_mode == 'TEXTURE_NAME':
-                mat_name = f"{base_name}.bmp"
+                # single texture, no tex_num variation
+                mat = self.find_material_loose(f"{base_name}.bmp")
             elif source_mode == 'LEVEL_TEXTURES' and tex_num >= 0:
-                mat_name = int_to_texture(tex_num, name=base_name)
+                # NEW: support both tracka / trackb *and* track0 / track1 / 0 / 1
+                mat = self._find_level_texture_material(base_name, tex_num)
             else:
                 continue
 
-            mat = self.find_material_loose(mat_name)
             if not mat:
                 continue
 
@@ -3093,6 +3144,44 @@ class MaterialAssignment(bpy.types.Operator):
             prefix in obj.name.lower() for prefix in self.car_parts_prefixes
         )
 
+    def _find_level_texture_material(self, base_name, tex_num):
+        """
+        Local copy of the helper: resolve a level texture material for tex_num,
+        supporting both letter and numeric naming.
+        """
+        mat = None
+
+        # 1) Letter suffix (existing behaviour)
+        try:
+            letter_name = int_to_texture(tex_num, name=base_name)
+        except Exception:
+            letter_name = None
+
+        if letter_name:
+            mat = self.find_material_loose(letter_name)
+            if mat:
+                return mat
+
+        # 2) Numeric variants
+        num = str(tex_num)
+        candidates = []
+        if base_name:
+            candidates.extend([
+                f"{base_name}{num}",
+                f"{base_name}{num}.bmp",
+            ])
+        candidates.extend([
+            num,
+            f"{num}.bmp",
+        ])
+
+        for cand in candidates:
+            mat = self.find_material_loose(cand)
+            if mat:
+                return mat
+
+        return None
+
     def execute(self, context):
         scene = context.scene
 
@@ -3262,18 +3351,19 @@ class MaterialAssignment(bpy.types.Operator):
                 continue
 
             tex_num = face[texnum_layer]
+            mat = None
+
             if source_mode == 'TEXTURE_NAME':
-                material_name = f"{base_name_for_texture}.bmp"
+                mat = self.find_material_loose(f"{base_name_for_texture}.bmp")
             elif source_mode == 'LEVEL_TEXTURES':
                 if tex_num == -1:
                     continue
-                material_name = int_to_texture(tex_num, name=base_name_for_texture)
+                # NEW: supports track1 / track0 / 1 / 0 patterns
+                mat = self._find_level_texture_material(base_name_for_texture, tex_num)
             else:
                 continue
 
-            mat = self.find_material_loose(material_name)
-
-            # Try to infer from the current slot if missing
+            # Existing fallback: try current material slot if direct lookup failed
             if not mat:
                 try:
                     slot_index = face.material_index
@@ -3389,6 +3479,42 @@ class MaterialAssignmentImportExport(bpy.types.Operator):
         return getattr(obj, "is_car_part", False) or any(
             prefix in obj.name.lower() for prefix in self.car_parts_prefixes
         )
+
+    def _find_level_texture_material(self, base_name, tex_num):
+        """
+        Resolve a level texture material for tex_num using both
+        classic letter suffixes and numeric variants.
+        """
+        mat = None
+
+        try:
+            letter_name = int_to_texture(tex_num, name=base_name)
+        except Exception:
+            letter_name = None
+
+        if letter_name:
+            mat = self.find_material_loose(letter_name)
+            if mat:
+                return mat
+
+        num = str(tex_num)
+        candidates = []
+        if base_name:
+            candidates.extend([
+                f"{base_name}{num}",
+                f"{base_name}{num}.bmp",
+            ])
+        candidates.extend([
+            num,
+            f"{num}.bmp",
+        ])
+
+        for cand in candidates:
+            mat = self.find_material_loose(cand)
+            if mat:
+                return mat
+
+        return None
 
     def execute(self, context):
         if bpy.context.mode != 'OBJECT':
@@ -3595,19 +3721,20 @@ class MaterialAssignmentImportExport(bpy.types.Operator):
 
         for face in bm.faces:
             tex_num = face[texnum_layer]
+            mat = None
 
             if source_mode == 'TEXTURE_NAME':
-                material_name = f"{base_name_for_texture}.bmp"
+                mat = self.find_material_loose(f"{base_name_for_texture}.bmp")
             elif source_mode == 'LEVEL_TEXTURES':
                 if tex_num == -1:
                     continue
-                material_name = int_to_texture(tex_num, name=base_name_for_texture)
+                # NEW: support numeric as well as letter suffixes
+                mat = self._find_level_texture_material(base_name_for_texture, tex_num)
             else:
                 continue
 
-            mat = self.find_material_loose(material_name)
-
             if not mat:
+                # Existing “infer from slot” fallback
                 slot_index = face.material_index
                 if slot_index < len(mesh.materials):
                     candidate = mesh.materials[slot_index].name
@@ -3793,14 +3920,74 @@ class TextureAssigner(bpy.types.Operator):
     def invoke(self, context, event):
         return context.window_manager.invoke_props_dialog(self)
 
+class TexturesLoadFromDisk(bpy.types.Operator, ImportHelper):
+    bl_idname = "helpers.textures_load_from_disk"
+    bl_label = "Load Textures From Disk"
+    bl_description = "Load all .bmp textures from a folder into Blender"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    # We only care about the directory; this just helps the file browser
+    filename_ext = ""
+
+    filter_glob: bpy.props.StringProperty(
+        default="*.bmp",
+        options={'HIDDEN'},
+    )
+
+    def execute(self, context):
+        import os
+        import bpy
+
+        # User picks any .bmp in the folder → we take the folder
+        directory = os.path.dirname(self.filepath)
+        if not os.path.isdir(directory):
+            self.report({'ERROR'}, "Invalid directory selected.")
+            return {'CANCELLED'}
+
+        loaded = 0
+        skipped = 0
+
+        # Load all .bmp textures in that folder
+        for name in sorted(os.listdir(directory)):
+            if not name.lower().endswith(".bmp"):
+                continue
+
+            full_path = os.path.join(directory, name)
+            if not os.path.isfile(full_path):
+                continue
+
+            try:
+                # check_existing=True avoids duplicates if already loaded
+                bpy.data.images.load(full_path, check_existing=True)
+                loaded += 1
+            except RuntimeError as e:
+                print(f"[ERROR] Failed to load '{full_path}': {e}")
+                skipped += 1
+
+        msg = f"Loaded {loaded} texture(s) from '{directory}'."
+        if skipped:
+            msg += f" Skipped {skipped} file(s) that failed to load."
+        self.report({'INFO'}, msg)
+
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+
 class SetFaceTextureNumber(bpy.types.Operator):
     bl_idname = "mesh.set_face_texnum"
     bl_label = "Fix Texture Numbers and Materials"
-    bl_description = "Sets the texture number based on image suffix and optionally renames materials to .bmp"
+    bl_description = (
+        "Sets the texture number based on image suffix (letters or numbers), "
+        "creates missing materials and assigns them per-face"
+    )
 
     texture_base: bpy.props.StringProperty(
         name="Texture Base",
-        description="Prefix for textures (e.g. 'box')",
+        description="Prefix for textures (e.g. 'box', 'kit_hexcity'). "
+                    "Leave empty if textures are just 'a.bmp', '0.bmp', etc.",
         default=""
     )
 
@@ -3808,63 +3995,211 @@ class SetFaceTextureNumber(bpy.types.Operator):
         return context.window_manager.invoke_props_dialog(self)
 
     def execute(self, context):
-        base = self.texture_base.lower()
+        import bmesh
+        import bpy
+        from .common import TEX_PAGES_MAX  # make sure this exists in common.py
+
+        base = self.texture_base.lower().strip()
         renamed = 0
 
-        def suffix_to_texnum(name, base):
-            """Extract tex_num from name, allowing a-z and aa–lb (0–63)."""
-            if not name.lower().startswith(base):
+        # ------------------------------------------------------------------
+        # Helper: map image name -> tex_num (supports letters AND numbers)
+        # ------------------------------------------------------------------
+        def suffix_to_texnum(image_name: str) -> int:
+            """
+            Extract tex_num from name.
+
+            Handles:
+              base + 'a'...'z', 'aa'...'lb' (0..63)
+              base + '0'...'63' (0..63)
+
+            If base is empty, the whole name is treated as the suffix.
+            """
+            name = image_name.lower().removesuffix(".bmp")
+
+            # Split base + suffix
+            if base:
+                if not name.startswith(base):
+                    return -1
+                suffix = name[len(base):]
+            else:
+                suffix = name
+
+            suffix = suffix.strip()
+            if not suffix:
                 return -1
-            suffix = name[len(base):].lower().removesuffix(".bmp")
+
+            # Numeric suffix: base0, base1, ... or just "0", "1", ...
+            if suffix.isdigit():
+                try:
+                    num = int(suffix)
+                except ValueError:
+                    return -1
+                return num if 0 <= num < TEX_PAGES_MAX else -1
+
+            # Alphabetic suffix: a..z, aa..??
             if not suffix.isalpha() or len(suffix) > 2:
                 return -1
+
             if len(suffix) == 1:
                 index = ord(suffix) - ord('a')
             else:
                 major = ord(suffix[0]) - ord('a') + 1
                 minor = ord(suffix[1]) - ord('a')
                 index = major * 26 + minor
-            return index if 0 <= index <= 63 else -1
 
+            return index if 0 <= index < TEX_PAGES_MAX else -1
+
+        # ------------------------------------------------------------------
+        # 1) Build tex_num → image mapping once (global)
+        # ------------------------------------------------------------------
+        texnum_to_image = {}
+        for img in bpy.data.images:
+            if img.name in {"Render Result", "Viewer Node"}:
+                continue
+
+            tex_num = suffix_to_texnum(img.name)
+            if tex_num < 0:
+                continue
+
+            # Keep the first image we find for a given tex_num
+            if tex_num not in texnum_to_image:
+                texnum_to_image[tex_num] = img
+
+        # ------------------------------------------------------------------
+        # 2) For each mapped image, ensure there is a material using it
+        #    Build tex_num → material map only once
+        # ------------------------------------------------------------------
+        texnum_to_material = {}
+        existing_mats = {m.name: m for m in bpy.data.materials}
+
+        for tex_num, image in texnum_to_image.items():
+            image_name_norm = image.name.lower().removesuffix(".bmp")
+            mat_name = f"{image_name_norm}.bmp" if image_name_norm else image.name
+
+            mat = existing_mats.get(mat_name)
+            if not mat:
+                mat = bpy.data.materials.new(name=mat_name)
+                existing_mats[mat_name] = mat
+                mat.use_nodes = True
+                nodes = mat.node_tree.nodes
+                links = mat.node_tree.links
+                nodes.clear()
+
+                out_node = nodes.new("ShaderNodeOutputMaterial")
+                bsdf = nodes.new("ShaderNodeBsdfPrincipled")
+                img_node = nodes.new("ShaderNodeTexImage")
+                img_node.image = image
+                img_node.interpolation = 'Linear'
+
+                links.new(img_node.outputs["Color"], bsdf.inputs["Base Color"])
+                links.new(bsdf.outputs["BSDF"], out_node.inputs["Surface"])
+
+            texnum_to_material[tex_num] = mat
+
+        # ------------------------------------------------------------------
+        # 3) Per-object pass: per-face texture number + per-face material
+        # ------------------------------------------------------------------
         for obj in context.scene.objects:
             if obj.type != 'MESH':
                 continue
 
-            bm = bmesh.from_edit_mesh(obj.data) if obj.mode == 'EDIT' else bmesh.new()
-            if obj.mode != 'EDIT':
+            if obj.mode == 'EDIT':
+                bm = bmesh.from_edit_mesh(obj.data)
+                is_edit = True
+            else:
+                bm = bmesh.new()
                 bm.from_mesh(obj.data)
+                is_edit = False
 
-            texnum_layer = bm.faces.layers.int.get("Texture Number") or bm.faces.layers.int.new("Texture Number")
+            texnum_layer = bm.faces.layers.int.get("Texture Number")
+            had_texnum_layer = texnum_layer is not None
+            if not texnum_layer:
+                texnum_layer = bm.faces.layers.int.new("Texture Number")
+
+            # Cache: for this object, which material slot index is used for each tex_num
+            obj_texnum_to_slot = {}
+
+            # Speed: local view of material slots
+            obj_mats = list(obj.material_slots)
+
             for face in bm.faces:
-                mat_index = face.material_index
-                if mat_index >= len(obj.material_slots):
-                    continue
-                mat = obj.material_slots[mat_index].material
-                if not mat or not mat.use_nodes:
-                    continue
+                # 1) Start with existing tex_num if layer existed
+                tex_num = face[texnum_layer] if had_texnum_layer else -1
 
-                image = next((n.image for n in mat.node_tree.nodes if n.type == 'TEX_IMAGE' and n.image), None)
-                if not image:
-                    continue
+                # 2) Try to derive from current face material if tex_num invalid
+                if tex_num < 0:
+                    mat_index = face.material_index
+                    if 0 <= mat_index < len(obj_mats):
+                        mat = obj_mats[mat_index].material
+                        if mat and mat.use_nodes and mat.node_tree:
+                            image = None
+                            for node in mat.node_tree.nodes:
+                                if node.type == 'TEX_IMAGE' and node.image:
+                                    image = node.image
+                                    break
 
-                tex_num = suffix_to_texnum(image.name, base)
-                face[texnum_layer] = tex_num
+                            if image:
+                                tex_num = suffix_to_texnum(image.name)
 
-                # Rename material to match new base + suffix
-                image_name_normalized = image.name.lower().removesuffix(".bmp")
-                suffix = image_name_normalized[len(base):]
-                correct_name = f"{base}{suffix}.bmp"
-                if mat.name != correct_name:
-                    mat.name = correct_name
-                    renamed += 1
+                                # Optional: rename material based on base + suffix
+                                image_name_norm = image.name.lower().removesuffix(".bmp")
+                                if base:
+                                    if image_name_norm.startswith(base):
+                                        suffix = image_name_norm[len(base):]
+                                    else:
+                                        suffix = ""
+                                    mat_base = base
+                                else:
+                                    suffix = image_name_norm
+                                    mat_base = ""
 
-            if obj.mode != 'EDIT':
+                                if mat_base or suffix:
+                                    correct_name = f"{(mat_base + suffix) if mat_base else image_name_norm}.bmp"
+                                    if mat.name != correct_name:
+                                        mat.name = correct_name
+                                        renamed += 1
+
+                # 3) Write Texture Number (even if -1)
+                face[texnum_layer] = tex_num if tex_num is not None else -1
+
+                # 4) Assign material based on texture number (per-face)
+                if tex_num is not None and tex_num >= 0 and tex_num in texnum_to_material:
+                    target_mat = texnum_to_material[tex_num]
+
+                    # Quick lookup: have we already bound this tex_num to a slot in this object?
+                    if tex_num in obj_texnum_to_slot:
+                        target_index = obj_texnum_to_slot[tex_num]
+                    else:
+                        # Try to find existing slot with this material
+                        target_index = None
+                        for idx, slot in enumerate(obj.material_slots):
+                            if slot.material == target_mat:
+                                target_index = idx
+                                break
+
+                        # If not found, append a new slot
+                        if target_index is None:
+                            obj.data.materials.append(target_mat)
+                            target_index = len(obj.data.materials) - 1
+
+                        obj_texnum_to_slot[tex_num] = target_index
+
+                    # This is the crucial *per-face* assignment:
+                    face.material_index = target_index
+
+            # Write back BMesh
+            if is_edit:
+                bmesh.update_edit_mesh(obj.data)
+            else:
                 bm.to_mesh(obj.data)
                 bm.free()
-            else:
-                bmesh.update_edit_mesh(obj.data)
 
-        self.report({'INFO'}, f"Renamed {renamed} materials to match BMP naming.")
+        self.report(
+            {'INFO'},
+            f"Renamed {renamed} materials, updated Texture Numbers "
+            f"and assigned per-face materials from texture numbers."
+        )
         return {'FINISHED'}
 
 class ClearExtraAssignments(bpy.types.Operator):
