@@ -29,10 +29,15 @@ class RVIO_PT_RevoltIOToolPanel(bpy.types.Panel):
         box = self.layout.box()
         box.label(text="Texture / Material Tools:")
         box.operator("helpers.textures_save")
+        box.operator(
+            "helpers.textures_load_from_disk",
+            text="Load Textures From Disk",
+            icon='IMAGE_DATA'
+        )
         col = box.column(align=True)
-        col.operator("mesh.set_face_texnum", text="Fix Texture Numbers and Materials")
+        col.operator("mesh.set_face_texnum", text="Fix Texture N:o / Materials")
         col = box.column(align=True)
-        col.operator("mesh.clear_extra_assignments", text="Clear Extra Material Assignments")
+        col.operator("mesh.clear_extra_assignments", text="Clear Extra Material Slots")
         
         self.layout.label(text="HELPERS:")
         
