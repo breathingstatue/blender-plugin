@@ -370,6 +370,12 @@ def export_mesh(me, obj, scene, filepath, world=None):
 
     # World extras
     if world is not None:
+        # Skip empty meshes (0 verts) – they have no valid PRM representation
+        if len(bm.verts) == 0:
+            dprint(f"[Re-Volt Export] Skipping empty mesh (0 verts): {obj.name}")
+            bm.free()
+            return None
+
         rvbbox = rvbbox_from_bm(bm)
         center = center_from_rvbbox(rvbbox)
         radius = radius_from_bmesh(bm, center)

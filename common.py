@@ -346,13 +346,24 @@ def rvbbox_from_bm(bm):
 	return rvbbox_from_verts(bm.verts)
 
 def rvbbox_from_verts(verts):
-	xlo = min(v.co[0] for v in verts) / SCALE
-	xhi = max(v.co[0] for v in verts) / SCALE
-	ylo = -max(v.co[2] for v in verts) / SCALE
-	yhi = -min(v.co[2] for v in verts) / SCALE
-	zlo = min(v.co[1] for v in verts) / SCALE
-	zhi = max(v.co[1] for v in verts) / SCALE
-	return(xlo, xhi, ylo, yhi, zlo, zhi)
+    # Robust empty check (works for bmesh sequences and iterables)
+    try:
+        if len(verts) == 0:
+            dprint("[Re-Volt] Skipping bbox: empty vertex sequence.")
+            return None
+    except TypeError:
+        verts = list(verts)
+        if len(verts) == 0:
+            dprint("[Re-Volt] Skipping bbox: empty vertex sequence.")
+            return None
+
+    xlo = min(v.co[0] for v in verts) / SCALE
+    xhi = max(v.co[0] for v in verts) / SCALE
+    ylo = -max(v.co[2] for v in verts) / SCALE
+    yhi = -min(v.co[2] for v in verts) / SCALE
+    zlo = min(v.co[1] for v in verts) / SCALE
+    zhi = max(v.co[1] for v in verts) / SCALE
+    return (xlo, xhi, ylo, yhi, zlo, zhi)
 
 def get_distance(v1, v2):
 	return sqrt((v1[0] - v2[0])**2 + (v1[1] - v2[1])**2 + (v1[2] - v2[2])**2)

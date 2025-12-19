@@ -142,6 +142,9 @@ def create_split_mesh(original_mesh, face_indices, original_obj_name, created_ob
     return new_obj
 
 def calculate_bounding_box(mesh):
+    if not mesh.vertices or len(mesh.vertices) == 0:
+        return None
+
     min_x = min_y = min_z = float('inf')
     max_x = max_y = max_z = float('-inf')
 
@@ -156,12 +159,20 @@ def calculate_bounding_box(mesh):
     return (min_x, max_x), (min_y, max_y), (min_z, max_z)
 
 def simple_split_mesh_by_grid(obj, split_size_faces):
+    # Skip empty meshes
+    if not obj.data or len(obj.data.vertices) == 0:
+        return []
+
     bm = bmesh.new()
     bm.from_mesh(obj.data)
     bm.faces.ensure_lookup_table()
 
-    # Calculate the bounding box
-    (min_x, max_x), (min_y, max_y), (min_z, max_z) = calculate_bounding_box(obj.data)
+    bbox = calculate_bounding_box(obj.data)
+    if bbox is None:
+        bm.free()
+        return []
+
+    (min_x, max_x), (min_y, max_y), (min_z, max_z) = bbox
 
     # Determine grid size based on the desired number of faces
     num_faces = len(bm.faces)
@@ -210,6 +221,8 @@ def export_split_world(filepath, scene, split_size_faces):
 
     for obj in scene.objects:
         if obj.type == 'MESH' and not obj.hide_render and '_split_' not in obj.name:
+            if not obj.data or len(obj.data.vertices) == 0:
+                continue
             face_batches = simple_split_mesh_by_grid(obj, split_size_faces)
             for batch in face_batches:
                 new_obj = create_split_mesh(obj.data, batch, f"{obj.name}_split", created_objects)
@@ -246,11 +259,28 @@ def export_split_world(filepath, scene, split_size_faces):
 def export_standard_world(filepath, scene):
     scene = bpy.context.scene
     world = rvstruct.World()
-    meshes = [export_mesh(obj.data, obj, scene, filepath, world=world) for obj in scene.objects if obj_conditions(obj)]
+
+    meshes = []
+    skipped_empty = 0
+
+    for obj in scene.objects:
+        if not obj_conditions(obj):
+            continue
+
+        prm = export_mesh(obj.data, obj, scene, filepath, world=world)
+        if prm is None:
+            skipped_empty += 1
+            continue
+
+        meshes.append(prm)
+
+    if skipped_empty:
+        dprint(f"[Re-Volt Export] Skipped {skipped_empty} empty mesh object(s) during world export.")
+
     world.meshes.extend(meshes)
     world.mesh_count = len(world.meshes)
     world.generate_bigcubes()
-    
+
     # Exports the texture animation
     animations = eval(scene.texture_animations)
     for animdict in animations:
@@ -263,7 +293,18 @@ def export_standard_world(filepath, scene):
         world.write(file)
 
 def obj_conditions(obj):
-    return obj.type == "MESH" and obj.data and not any(obj.get(attr) for attr in ["is_instance", "is_cube", "is_bcube", "is_bbox", "is_mirror_plane", "is_hull_sphere", "is_hull_convex", "is_track_zone"])
+    if obj.type != "MESH" or not obj.data:
+        return False
+
+    # Skip empty meshes early
+    if len(obj.data.vertices) == 0:
+        return False
+
+    # Skip special helper objects
+    return not any(obj.get(attr) for attr in [
+        "is_instance", "is_cube", "is_bcube", "is_bbox",
+        "is_mirror_plane", "is_hull_sphere", "is_hull_convex", "is_track_zone"
+    ])
 
 def export_file(filepath, scene):
     split_size_faces = getattr(scene, 'split_size_faces', 100) * 2
