@@ -10,6 +10,7 @@ Some functions that are called by operators
 import bpy
 import bmesh
 import mathutils
+from mathutils import Vector
 from . import common
 from .common import create_material, COL_HULL, int_to_texture, texture_to_int, TRIGGER_TYPES, LOW_FLAG_OPTIONS, HIGH_FLAG_OPTIONS
 from .fob_subtypes import OBJECT_TYPE_NAMES
@@ -163,3 +164,24 @@ def visibox_type_items(self, context):
         ('1', "Camera", "Camera visibility box"),
         ('2', "Cubes", "Cubes visibility box")
     ]
+
+def get_rig_root(obj):
+    while obj and obj.parent:
+        obj = obj.parent
+    return obj
+
+def get_rig_objects(root):
+    return [root] + list(root.children_recursive)
+
+def rig_world_bbox_center(objs):
+    pts = []
+    for o in objs:
+        if o.type not in {'MESH', 'EMPTY'}:
+            continue
+        for c in o.bound_box:
+            pts.append(o.matrix_world @ Vector(c))
+    if not pts:
+        return None
+    mn = Vector((min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts)))
+    mx = Vector((max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts)))
+    return (mn + mx) * 0.5

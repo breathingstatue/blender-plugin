@@ -39,7 +39,7 @@ from .parameters_out_redux import compare_and_adjust_axle_lengths, remove_import
 from .parameters_out_redux import remove_imported_springs, compare_and_adjust_pin_lengths, remove_imported_pins
 from .taz_in import create_zone
 from .texanim import copy_frame_to_uv, copy_uv_to_frame
-from .tools import trigger_type_items, fob_type_items, visibox_type_items
+from .tools import trigger_type_items, fob_type_items, visibox_type_items, get_rig_objects, get_rig_root, rig_world_bbox_center
 from .tri_in import create_trigger
 
 from bpy.props import (
@@ -1598,6 +1598,60 @@ class CopyAerialParams(bpy.types.Operator):
         self.report({'INFO'}, "Aerial parameters copied to clipboard.")
         return {'FINISHED'}
     
+class AlignCarRevolt(bpy.types.Operator):
+    bl_idname = "headers.align_car_to_revolt"
+    bl_label = "Align Car to Re-Volt"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        obj = context.active_object
+        if not obj:
+            self.report({'ERROR'}, "Select the car (or any part of it) first.")
+            return {'CANCELLED'}
+
+        root = get_rig_root(obj)
+        objs = get_rig_objects(root)
+
+        center = rig_world_bbox_center(objs)
+        if center is None:
+            self.report({'ERROR'}, "Could not compute car bounding box center.")
+            return {'CANCELLED'}
+
+        cursor = context.scene.cursor.location.copy()
+        fwd = (cursor - center)
+        fwd.z = 0.0
+
+        if fwd.length < 1e-6:
+            self.report({'ERROR'}, "Cursor is too close to car center. Place it at the front bumper center.")
+            return {'CANCELLED'}
+
+        fwd.normalize()
+        target_fwd = BlenderVector((0, 1, 0))
+
+        # Rotate root so fwd -> +Y
+        rot = fwd.rotation_difference(target_fwd)
+
+        # Apply rotation in WORLD space by rotating matrix_world
+        mw = root.matrix_world.copy()
+        R = rot.to_matrix().to_4x4()
+        root.matrix_world = R @ mw
+
+        # Optional: snap tiny floating errors
+        context.view_layer.update()
+
+        self.report({'INFO'}, f"Aligned '{root.name}' so cursor points to +Y (Re-Volt forward).")
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self, width=420)
+
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text="Place the 3D Cursor at the FRONT bumper center", icon='INFO')
+        layout.label(text="(between the front tires), then click OK.", icon='BLANK1')
+        layout.separator()
+        layout.label(text="Rule: Cursor defines where the car's nose should point.", icon='DOT')
+
 """
 INSTANCES -----------------------------------------------------------------------
 """
@@ -2059,12 +2113,13 @@ class ButtonHullSphere(bpy.types.Operator):
         radius = to_revolt_scale(0.1)
         filename = "Hull_Sphere"
 
-        ob = create_sphere(scene, center, radius, filename)
+        ob = create_sphere(scene, center, radius, "Hull_Sphere")
 
-        if ob.name not in context.collection.objects:
+        # Link only if it is not linked anywhere yet
+        if not ob.users_collection:
             context.collection.objects.link(ob)
         else:
-            self.report({'WARNING'}, f"Object '{ob.name}' already exists")
+            self.report({'WARNING'}, f"'{ob.name}' is already linked")
             return {'CANCELLED'}
 
         ob["is_hull_sphere"] = True
@@ -6031,83 +6086,105 @@ class CarAutoShader(bpy.types.Operator):
     def execute(self, context):
         scene = context.scene
         base_color = scene.car_shader_color
-        alpha_percent = int(scene.vertex_alpha_percentage)
-        alpha_value = alpha_percent / 100.0
-        scene.vertex_alpha = alpha_value
 
-        # Create two temporary lights
+        # --- Create temp lights in a safe way (scene collection, object mode) ---
+        prev_active = context.view_layer.objects.active
+        prev_mode = prev_active.mode if prev_active else 'OBJECT'
+
+        if context.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+
         def create_temp_light(name, location):
             light_data = bpy.data.lights.new(name=name, type='POINT')
-            light_data.energy = 3500.0  # or higher if needed
+            light_data.energy = 3500.0
             light_obj = bpy.data.objects.new(name, light_data)
-            light_obj.location = location
-            bpy.context.collection.objects.link(light_obj)
+            light_obj.location = BlenderVector(location)
+            context.scene.collection.objects.link(light_obj)
             return light_obj
 
         temp_lights = [
             create_temp_light("TempLight1", (4, 1.5, 7)),
-            create_temp_light("TempLight2", (-4, -1.5, 7))
+            create_temp_light("TempLight2", (-4, -1.5, 7)),
         ]
 
-        for obj in context.selected_objects:
-            if obj.type != 'MESH' or not obj.visible_get():
-                continue
+        # Cache light info (avoid property lookups in the hot loop)
+        light_positions = [l.location.copy() for l in temp_lights]
+        light_energies = [float(l.data.energy) for l in temp_lights]
+        light_count = len(temp_lights)
 
-            original_mode = obj.mode
-            bpy.context.view_layer.objects.active = obj
-            bpy.ops.mesh.vertex_color_and_alpha_setup()
+        try:
+            # Process each selected mesh
+            for obj in context.selected_objects:
+                if obj.type != 'MESH' or not obj.visible_get():
+                    continue
 
-            bm = bmesh.from_edit_mesh(obj.data)
-            col_layer = bm.loops.layers.color.get("Col")
-            alpha_layer = bm.loops.layers.color.get("Alpha")
+                me = obj.data
+                bm = bmesh.new()
+                bm.from_mesh(me)
+                bm.verts.ensure_lookup_table()
+                bm.faces.ensure_lookup_table()
 
-            if not col_layer or not alpha_layer:
-                self.report({'ERROR'}, f"Missing Col or Alpha layer on {obj.name}")
-                continue
+                # Ensure layers exist (BMesh loop color layers)
+                col_layer = bm.loops.layers.color.get("Col") or bm.loops.layers.color.new("Col")
+                alpha_layer = bm.loops.layers.color.get("Alpha") or bm.loops.layers.color.new("Alpha")
 
-            for face in bm.faces:
-                for loop in face.loops:
-                    world_pos = obj.matrix_world @ loop.vert.co
-                    normal = (obj.matrix_world.to_3x3() @ loop.vert.normal).normalized()
-                    light_val = 0.0
+                mw = obj.matrix_world
+                nmat = mw.to_3x3()
 
-                    for light in temp_lights:
-                        to_light = (light.location - world_pos).normalized()
-                        brightness = max(0.0, normal.dot(to_light))
-                        light_val += brightness * light.data.energy
+                # Optional speedup: compute lighting per-vertex once, then reuse for loops
+                v_light = [0.0] * len(bm.verts)
+                for i, v in enumerate(bm.verts):
+                    world_pos = mw @ v.co
+                    world_n = (nmat @ v.normal).normalized()
 
-                    light_val = light_val / (len(temp_lights) * 1000.0)
-                    light_val = max(0.1, min(light_val, 1.0))
+                    lv = 0.0
+                    for lp, e in zip(light_positions, light_energies):
+                        to_light = (lp - world_pos)
+                        to_light.normalize()
+                        b = world_n.dot(to_light)
+                        if b > 0.0:
+                            lv += b * e
 
-                    loop[col_layer] = (
-                        base_color[0] * light_val,
-                        base_color[1] * light_val,
-                        base_color[2] * light_val,
-                        1.0
-                    )
-                    loop[alpha_layer] = (0.0, 0.0, 0.0, 1.0)  # Set alpha black
+                    lv = lv / (light_count * 1000.0)
+                    if lv < 0.1:
+                        lv = 0.1
+                    elif lv > 1.0:
+                        lv = 1.0
+                    v_light[i] = lv
 
-            bmesh.update_edit_mesh(obj.data, destructive=False)
-            obj.data.update()
-            bpy.ops.object.assign_materials()
+                # Write loop colors
+                for face in bm.faces:
+                    for loop in face.loops:
+                        li = v_light[loop.vert.index]
+                        loop[col_layer] = (
+                            base_color[0] * li,
+                            base_color[1] * li,
+                            base_color[2] * li,
+                            1.0
+                        )
+                        loop[alpha_layer] = (0.0, 0.0, 0.0, 1.0)
 
-        for light in temp_lights:
-            try:
-                bpy.data.objects.remove(light, do_unlink=True)
-            except Exception:
-                pass
+                bm.to_mesh(me)
+                bm.free()
+                me.update()
+
+                # If you really need it, do it once per object, but it's expensive:
+                # context.view_layer.objects.active = obj
+                # bpy.ops.object.assign_materials()
+
+        finally:
+            # cleanup lights even if something fails
+            for l in temp_lights:
+                if l and l.name in bpy.data.objects:
+                    bpy.data.objects.remove(l, do_unlink=True)
+
+            # restore previous mode
+            if prev_active:
+                context.view_layer.objects.active = prev_active
+                try:
+                    bpy.ops.object.mode_set(mode=prev_mode)
+                except Exception:
+                    pass
 
         self.report({'INFO'}, "Vertex colors and alpha baked based on lighting.")
         return {'FINISHED'}
-
-def menu_func_import(self, context):
-    self.layout.operator(
-        ImportRV.bl_idname,
-        text="Re-Volt (.fin, .fob, .hul, .lit, .ncp, .parameters.txt, .prm, .rim, .taz, .fan, .pan, .tri, .vis, .w, .m)"
-    )
-
-def menu_func_export(self, context):
-    self.layout.operator(
-        ExportExtension.bl_idname,
-        text="Re-Volt (.fin, .fob, .hul, .lit, .ncp, .prm, .rim, .taz, .fan, .pan, .tri, .vis, .w, .m)"
-    )

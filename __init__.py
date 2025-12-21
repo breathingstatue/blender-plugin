@@ -88,7 +88,7 @@ from .operators import SetVertexAlpha, SetFaceTextureNumber, MFileExtension, Tex
 from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, MaterialAssignmentAuto, MaterialAssignment, MaterialAssignmentImportExport
 from .operators import TextureAssigner, SetInstanceProperty, RemoveInstanceProperty, LaunchRV, TexturesSave, TexturesRename, ClearExtraAssignments
 from .operators import CopyAerialParams, AxleMessageBox, ConfirmLoadOriginalAxle, CopyAndRemoveAxles, SpringMessageBox, ConfirmLoadOriginalSpring
-from .operators import CopyAndRemoveSprings, PinMessageBox, ConfirmLoadOriginalPin, CopyAndRemovePins, CopyWheelParams, CreateVisibox
+from .operators import CopyAndRemoveSprings, PinMessageBox, ConfirmLoadOriginalPin, CopyAndRemovePins, CopyWheelParams, CreateVisibox, AlignCarRevolt
 from .operators import ButtonZoneHide, AddTrackZone, ReverseTrackZone, ButtonTriggerHide, CreateTrigger, MarkAsModel, CreateFobObject
 from .operators import DuplicateFobObject, DuplicateTrigger, CopyTrigger, PasteTrigger, SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere
 from .operators import ButtonCopyUvToFrame, ButtonCopyFrameToUv, PreviewNextFrame, PreviewPrevFrame, TexAnimTransform, TexAnimGrid, CarAutoShader
@@ -111,7 +111,7 @@ from .ui.viewlayer_panel import RVIO_PT_RevoltViewLayerPanel
 bl_info = {
 "name": "Re-Volt",
 "author": "Marvin Thiel & Theman",
-"version": (20, 25, 97),
+"version": (20, 25, 98),
 "blender": (5, 0, 0),
 "location": "File > Import-Export",
 "description": "Import and export Re-Volt file formats.",
@@ -1021,6 +1021,7 @@ def register():
     bpy.utils.register_class(TextureAssigner)
     bpy.utils.register_class(CopyWheelParams)
     bpy.utils.register_class(CreateVisibox)
+    bpy.utils.register_class(AlignCarRevolt)
     bpy.utils.register_class(ExportExtension)
     bpy.utils.register_class(AxleMessageBox)
     bpy.utils.register_class(ConfirmLoadOriginalAxle)
@@ -1153,6 +1154,7 @@ def unregister():
     bpy.utils.unregister_class(ConfirmLoadOriginalAxle)
     bpy.utils.unregister_class(AxleMessageBox)
     bpy.utils.unregister_class(ExportExtension)
+    bpy.utils.unregister_class(AlignCarRevolt)
     bpy.utils.unregister_class(CreateVisibox)
     bpy.utils.unregister_class(CopyWheelParams)
     bpy.utils.unregister_class(TextureAssigner)

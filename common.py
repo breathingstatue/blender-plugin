@@ -108,34 +108,34 @@ NCP_PROPS = [
 ]
 
 MATERIALS = (
-	("-1", "NONE", "No material. Faces with this material will not be exported.", "POTATO", -1),
-	("0", "DEFAULT",            "Default material", "POTATO", 0),
-	("1", "MARBLE",             "Marble material", "POTATO", 1),
-	("2", "STONE",              "Stone material", "POTATO", 2),
-	("3", "WOOD",               "Wood material", "POTATO", 3),
-	("4", "SAND",               "Sand material", "POTATO", 4),
-	("5", "PLASTIC",            "Plastic material", "POTATO", 5),
-	("6", "CARPETTILE",         "Carpet Tile material", "POTATO", 6),
-	("7", "CARPETSHAG",         "Carpet Shag material", "POTATO", 7),
-	("8", "BOUNDARY",           "Boundary material", "POTATO", 8),
-	("9", "GLASS",              "Glass material", "POTATO", 9),
-	("10", "ICE1",              "Most slippery ice material", "FREEZE", 10),
-	("11", "METAL",             "Metal material", "POTATO", 11),
-	("12", "GRASS",             "Grass material", "POTATO", 12),
-	("13", "BUMPMETAL",         "Bump metal material", "POTATO", 13),
-	("14", "PEBBLES",           "Pebbles material", "POTATO", 14),
-	("15", "GRAVEL",            "Gravel material", "POTATO", 15),
-	("16", "CONVEYOR1",         "First conveyor material", "POTATO", 16),
-	("17", "CONVEYOR2",         "Second conveyor material", "POTATO", 17),
-	("18", "DIRT1",             "First dirt material", "POTATO", 18),
-	("19", "DIRT2",             "Second dirt material", "POTATO", 19),
-	("20", "DIRT3",             "Third dirt material", "POTATO", 20),
-	("21", "ICE2",              "Medium slippery ice material", "FREEZE", 21),
-	("22", "ICE3",              "Least slippery ice material", "FREEZE", 22),
-	("23", "WOOD2",             "Second wood material", "POTATO", 23),
-	("24", "CONVEYOR_MARKET1",  "First supermarket conveyor", "POTATO", 24),
-	("25", "CONVEYOR_MARKET2",  "Second supermarket conveyor", "POTATO", 25),
-	("26", "PAVING",            "Paving material", "POTATO", 26),
+	("-1", "NONE", "No material. Faces with this material will not be exported.", "NONE", -1),
+	("0", "DEFAULT",            "Default material", "NONE", 0),
+	("1", "MARBLE",             "Marble material", "NONE", 1),
+	("2", "STONE",              "Stone material", "NONE", 2),
+	("3", "WOOD",               "Wood material", "NONE", 3),
+	("4", "SAND",               "Sand material", "NONE", 4),
+	("5", "PLASTIC",            "Plastic material", "NONE", 5),
+	("6", "CARPETTILE",         "Carpet Tile material", "NONE", 6),
+	("7", "CARPETSHAG",         "Carpet Shag material", "NONE", 7),
+	("8", "BOUNDARY",           "Boundary material", "NONE", 8),
+	("9", "GLASS",              "Glass material", "NONE", 9),
+	("10", "ICE1",              "Most slippery ice material", "NONE", 10),
+	("11", "METAL",             "Metal material", "NONE", 11),
+	("12", "GRASS",             "Grass material", "NONE", 12),
+	("13", "BUMPMETAL",         "Bump metal material", "NONE", 13),
+	("14", "PEBBLES",           "Pebbles material", "NONE", 14),
+	("15", "GRAVEL",            "Gravel material", "NONE", 15),
+	("16", "CONVEYOR1",         "First conveyor material", "NONE", 16),
+	("17", "CONVEYOR2",         "Second conveyor material", "NONE", 17),
+	("18", "DIRT1",             "First dirt material", "NONE", 18),
+	("19", "DIRT2",             "Second dirt material", "NONE", 19),
+	("20", "DIRT3",             "Third dirt material", "NONE", 20),
+	("21", "ICE2",              "Medium slippery ice material", "NONE", 21),
+	("22", "ICE3",              "Least slippery ice material", "NONE", 22),
+	("23", "WOOD2",             "Second wood material", "NONE", 23),
+	("24", "CONVEYOR_MARKET1",  "First supermarket conveyor", "NONE", 24),
+	("25", "CONVEYOR_MARKET2",  "Second supermarket conveyor", "NONE", 25),
+	("26", "PAVING",            "Paving material", "NONE", 26),
 )
 
 
@@ -450,7 +450,6 @@ def create_material(name, diffuse, alpha):
 
 	return mat
 
-
 """
 Blender helpers
 """
@@ -512,40 +511,66 @@ def apply_trs(obj, bm, transform=False):
 			obj.parent = parent
 			obj.matrix_basis = old_mat
 
+def _normalize_dialog_icon(icon: str) -> str:
+    if not icon:
+        return "INFO"
+    icon = str(icon).upper()
+
+    # Common “levels” used by add-ons
+    if icon in {"WARNING", "WARN"}:
+        return "WARNING_LARGE"
+    if icon in {"ERROR", "CANCEL"}:
+        return "ERROR"
+    if icon in {"INFO"}:
+        return "INFO"
+    if icon in {"QUESTION"}:
+        return "QUESTION"
+
+    # Otherwise assume caller gave a real Blender icon enum
+    return icon
+
+
 class DialogOperator(bpy.types.Operator):
-	bl_idname = "revolt.dialog"
-	bl_label = "Re-Volt Add-On Notification"
+    bl_idname = "revolt.dialog"
+    bl_label = "Re-Volt Add-On Notification"
 
-	def execute(self, context):
-		return {"FINISHED"}
+    def execute(self, context):
+        return {"FINISHED"}
 
-	def invoke(self, context, event):
-		wm = context.window_manager
-		return wm.invoke_props_dialog(self)
+    def invoke(self, context, event):
+        wm = context.window_manager
+        return wm.invoke_props_dialog(self)
 
-	def draw(self, context):
-		global dialog_message
-		global dialog_icon
-		row = self.layout.row()
-		row.label(text="", icon=dialog_icon)
-		column = row.column()
-		for line in str.split(dialog_message, "\n"):
-			column.label(text=line)
-			
+    def draw(self, context):
+        global dialog_message
+        global dialog_icon
+
+        row = self.layout.row()
+        icon = _normalize_dialog_icon(dialog_icon)
+
+        # Defensive: if icon still isn’t valid, don’t crash the dialog
+        try:
+            row.label(text="", icon=icon)
+        except TypeError:
+            row.label(text="", icon="INFO")
+
+        col = row.column()
+        for line in str(dialog_message).split("\n"):
+            col.label(text=line)
+
 def msg_box(message, icon="INFO"):
-	global dialog_message
-	global dialog_icon
-	dprint(message)
-	dialog_message = message
-	dialog_icon = icon
-	bpy.ops.revolt.dialog("INVOKE_DEFAULT")
+    global dialog_message
+    global dialog_icon
+    dprint(message)
+    dialog_message = message
+    dialog_icon = icon  # keep original, normalized at draw time
+    bpy.ops.revolt.dialog("INVOKE_DEFAULT")
 
 def queue_error(action, error_message):
 	""" Adds an error message to the error dict """
 	global ERRORS
 	dprint("Error while {}: {}".format(action, error_message))
 	ERRORS[action] = error_message
-
 
 def get_errors():
 	global ERRORS

@@ -114,7 +114,6 @@ def create_sphere(scene, center, radius, filename):
     ob = bpy.data.objects.new("Hull_Sphere", me)
     ob.location = center
     ob.scale = (1, 1, 1)  # Avoid double-scaling by setting uniform scale
-    ob.display_type = "SOLID"
     ob.is_hull_sphere = True
     ob["is_hull_sphere"] = True
     # Check if the object is already in the scene collection 

@@ -6,6 +6,12 @@ place 'io_revolt' in Blender/"version"/scripts/addons/
 
 -Theman with the help of AI and a bunch of friends in the RV I/O community.
 
+20.25.98
+The Copy Params was fixed
+Some icons in NCP Materials were removed
+Added to exporting of car a function to correct orientation.
+Fixed Freezing of Car Auto Shade
+
 20.25.97
 Export doesn't crash during exporting empty meshes
 
