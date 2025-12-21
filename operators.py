@@ -3195,6 +3195,18 @@ class MaterialAssignmentHelper:
             return bpy.data.materials[name[:-4]]
         elif f"{name}.bmp" in bpy.data.materials:
             return bpy.data.materials[f"{name}.bmp"]
+        else:
+            # Case-insensitive lookup to catch variants like CAR.bmp vs car.bmp
+            target_lower = name.lower()
+            target_base = target_lower[:-4] if target_lower.endswith('.bmp') else target_lower
+
+            for mat in bpy.data.materials:
+                m_lower = mat.name.lower()
+                m_base = m_lower[:-4] if m_lower.endswith('.bmp') else m_lower
+
+                if m_lower == target_lower or m_lower == f"{target_base}.bmp" or m_base == target_base:
+                    return mat
+
         return None
 
 
@@ -3599,6 +3611,18 @@ class MaterialAssignment(bpy.types.Operator):
             return bpy.data.materials[name[:-4]]
         elif f"{name}.bmp" in bpy.data.materials:
             return bpy.data.materials[f"{name}.bmp"]
+        else:
+            # Case-insensitive lookup to catch variants like CAR.bmp vs car.bmp
+            target_lower = name.lower()
+            target_base = target_lower[:-4] if target_lower.endswith('.bmp') else target_lower
+
+            for mat in bpy.data.materials:
+                m_lower = mat.name.lower()
+                m_base = m_lower[:-4] if m_lower.endswith('.bmp') else m_lower
+
+                if m_lower == target_lower or m_lower == f"{target_base}.bmp" or m_base == target_base:
+                    return mat
+
         return None
 
 class MaterialAssignmentImportExport(bpy.types.Operator):
@@ -3982,6 +4006,18 @@ class MaterialAssignmentImportExport(bpy.types.Operator):
             return bpy.data.materials[name[:-4]]
         elif f"{name}.bmp" in bpy.data.materials:
             return bpy.data.materials[f"{name}.bmp"]
+        else:
+            # Case-insensitive lookup to catch variants like CAR.bmp vs car.bmp
+            target_lower = name.lower()
+            target_base = target_lower[:-4] if target_lower.endswith('.bmp') else target_lower
+
+            for mat in bpy.data.materials:
+                m_lower = mat.name.lower()
+                m_base = m_lower[:-4] if m_lower.endswith('.bmp') else m_lower
+
+                if m_lower == target_lower or m_lower == f"{target_base}.bmp" or m_base == target_base:
+                    return mat
+
         return None
 
 class TextureAssigner(bpy.types.Operator):
@@ -4437,6 +4473,18 @@ class SetFaceTextureDropdown(bpy.types.Operator):
             return bpy.data.materials[name[:-4]]
         elif f"{name}.bmp" in bpy.data.materials:
             return bpy.data.materials[f"{name}.bmp"]
+        else:
+            # Case-insensitive lookup to catch variants like CAR.bmp vs car.bmp
+            target_lower = name.lower()
+            target_base = target_lower[:-4] if target_lower.endswith('.bmp') else target_lower
+
+            for mat in bpy.data.materials:
+                m_lower = mat.name.lower()
+                m_base = m_lower[:-4] if m_lower.endswith('.bmp') else m_lower
+
+                if m_lower == target_lower or m_lower == f"{target_base}.bmp" or m_base == target_base:
+                    return mat
+
         return None
 
     def invoke(self, context, event):
@@ -5966,8 +6014,8 @@ class VertexAndAlphaLayer(bpy.types.Operator):
                     created_layer = bm.loops.layers.color.get(layer_name)
                     if not created_layer:
                         created_layer = bm.loops.layers.color.new(layer_name)
-                        # Set default color to gray (0.5, 0.5, 0.5) with full opacity (1.0) for both layers
-                        default_color = (0.5, 0.5, 0.5, 1.0) if layer_name == 'Alpha' else (1.0, 1.0, 1.0, 1.0)
+                        # Default alpha layer should start fully transparent (black)
+                        default_color = (0.0, 0.0, 0.0, 1.0) if layer_name == 'Alpha' else (1.0, 1.0, 1.0, 1.0)
                         for face in bm.faces:
                             if face.select:  # Apply to selected faces only
                                 for loop in face.loops:
@@ -5977,7 +6025,7 @@ class VertexAndAlphaLayer(bpy.types.Operator):
                         for face in bm.faces:
                             if face.select:  # Ensure selected faces have the correct layer data
                                 for loop in face.loops:
-                                    loop[created_layer] = (1.0, 1.0, 1.0, 1.0)  # Reapply default white color with full opacity
+                                    loop[created_layer] = (0.0, 0.0, 0.0, 1.0 if layer_name == 'Alpha' else 1.0)
                         self.report({'INFO'}, f"{layer_name} vertex color layer already exists for {obj.name}.")
 
                 bmesh.update_edit_mesh(mesh, destructive=True)
@@ -6045,7 +6093,7 @@ class VertexAndAlphaLayer(bpy.types.Operator):
                 for face in bm.faces:
                     if face.select:
                         for loop in face.loops:
-                            loop[created_layer] = (1.0, 1.0, 1.0, 1.0)  # Reapply white color with full opacity
+                            loop[created_layer] = (0.0, 0.0, 0.0, 1.0) if layer_name == 'Alpha' else (1.0, 1.0, 1.0, 1.0)
         bmesh.update_edit_mesh(mesh, destructive=True)
 
 class VertexColorRemove(bpy.types.Operator):
@@ -6175,6 +6223,19 @@ class CarAutoShader(bpy.types.Operator):
         scene = context.scene
         base_color = scene.car_shader_color
 
+        # Preserve the active color attribute so we don't end up previewing Alpha
+        # after the bake adds / updates layers.
+        active_color_by_object = {}
+
+        for obj in context.selected_objects:
+            if obj.type != 'MESH':
+                continue
+
+            color_attrs = getattr(obj.data, "color_attributes", None)
+            if color_attrs:
+                active_attr = getattr(color_attrs, "active", None)
+                active_color_by_object[obj.name] = active_attr.name if active_attr else None
+
         # --- Create temp lights in a safe way (scene collection, object mode) ---
         prev_active = context.view_layer.objects.active
         prev_mode = prev_active.mode if prev_active else 'OBJECT'
@@ -6255,6 +6316,24 @@ class CarAutoShader(bpy.types.Operator):
                 bm.to_mesh(me)
                 bm.free()
                 me.update()
+
+                # Restore the active color layer so the viewport preview stays consistent
+                color_attrs = getattr(me, "color_attributes", None)
+                if color_attrs:
+                    target_name = active_color_by_object.get(obj.name)
+
+                    def _set_active_by_name(name):
+                        if not name:
+                            return False
+                        for i, attr in enumerate(color_attrs):
+                            if attr.name == name:
+                                color_attrs.active_color_index = i
+                                color_attrs.active_render_index = i
+                                return True
+                        return False
+
+                    if not _set_active_by_name(target_name):
+                        _set_active_by_name("Col")
 
                 # If you really need it, do it once per object, but it's expensive:
                 # context.view_layer.objects.active = obj
