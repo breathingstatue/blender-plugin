@@ -2284,8 +2284,13 @@ class MaterialAssignmentHelper:
                     continue
 
                 print(f"[DEBUG] Processing: {obj.name}")
+                keep_names = set()
+                if material_choice == 'TEX_VC':
+                    # Preserve base texture / helper materials so toggling back to
+                    # texture/alpha/col keeps the original slots available.
+                    keep_names = {m.name for m in obj.data.materials if m and not self._is_tex_vc_mat(m)}
                 self.update_material_assignment(obj, existing_textures, material_choice)
-                prune_unused_material_slots(obj)
+                prune_unused_material_slots(obj, keep_names=keep_names)
                 print(f"[DEBUG] Done: {obj.name}")
 
             except Exception as e:
@@ -2310,6 +2315,13 @@ class MaterialAssignmentHelper:
         if obj.get("is_instance") and "fin_texture_base" in obj:
             print(f"[DEBUG] Using fin_texture_base: {obj['fin_texture_base']} for {obj.name}")
             return obj["fin_texture_base"]
+
+        # Car parts should always derive their base from the selected car texture
+        # instead of the object name (body, wheel, etc.).
+        if self._is_car_part(obj):
+            scene = bpy.context.scene
+            car_tex = get_scene_value(scene, "selected_car_texture", "car.bmp")
+            return clean_model_base_name(car_tex)
 
         model_name = clean_model_base_name(obj.name)
         print(f"[DEBUG] checking model_name={model_name}, obj['is_model']={obj.get('is_model', False)}")
@@ -2383,10 +2395,30 @@ class MaterialAssignmentHelper:
             if not orig_mat:
                 continue
 
+            # If the face already uses a TexVC material, keep it as-is so we
+            # don't end up nesting names like "*_TexVC_TexVC" on repeated runs.
+            if self._is_tex_vc_mat(orig_mat):
+                continue
+
             # Base name from the texture material
             base_name = orig_mat.name
             if base_name.lower().endswith('.bmp'):
                 base_name = base_name[:-4]
+            if base_name.endswith('_Col'):
+                # COL-only assignment leaves faces on *_Col; strip that suffix
+                # so TexVC is generated from the texture base again.
+                base_name = base_name[:-4]
+            if base_name.endswith('_Alpha'):
+                # Avoid minting *_Alpha_TexVC; fall back to the texture root.
+                base_name = base_name[:-6]
+
+            # If the source is a generic utility material (starts with '_') or we
+            # still don't have a usable base, fall back to the object's active
+            # texture base (car, track, etc.) so we don't mint names like
+            # `_Alpha_TexVC` or `_Col_TexVC_TexVC` on repeated toggles.
+            if not base_name or base_name.startswith('_'):
+                base_name = self.get_current_base_name(obj)
+
             new_name = f"{base_name}_TexVC"
 
             new_mat = blended_cache.get(new_name)
@@ -3077,9 +3109,10 @@ class MaterialAssignmentHelper:
     def assign_regular_materials(self, obj, material_suffix):
         print(f"[FAST] assign_regular_materials: {obj.name}")
 
-        base_name = clean_model_base_name(obj.name, truncate=False)
+        base_name = self.get_current_base_name(obj)
         potential_names = [
             f"{base_name}{material_suffix}",
+            f"{base_name}.bmp{material_suffix}",
             f"{base_name}.prm{material_suffix}",
             f"{base_name}.w{material_suffix}",
             f"{base_name}.m{material_suffix}"
@@ -3286,6 +3319,11 @@ class MaterialAssignment(bpy.types.Operator):
         if obj.get("is_instance") and "fin_texture_base" in obj:
             return obj["fin_texture_base"]
 
+        if self._is_car_part(obj):
+            scene = bpy.context.scene
+            car_tex = get_scene_value(scene, "selected_car_texture", "car.bmp")
+            return clean_model_base_name(car_tex)
+
         model_name = clean_model_base_name(obj.name)
 
         if obj.get("is_model", False):
@@ -3478,10 +3516,11 @@ class MaterialAssignment(bpy.types.Operator):
         obj.data.update()
 
     def assign_regular_materials(self, obj, material_suffix):
-        base_name = clean_model_base_name(obj.name, truncate=False)
+        base_name = self.get_current_base_name(obj)
 
         potential_names = [
             f"{base_name}{material_suffix}",
+            f"{base_name}.bmp{material_suffix}",
             f"{base_name}.prm{material_suffix}",
             f"{base_name}.w{material_suffix}",
             f"{base_name}.m{material_suffix}",
@@ -3623,6 +3662,11 @@ class MaterialAssignmentImportExport(bpy.types.Operator):
         if obj.get("is_instance") and "fin_texture_base" in obj:
             print(f"[DEBUG] Using fin_texture_base: {obj['fin_texture_base']} for {obj.name}")
             return obj["fin_texture_base"]
+
+        if self._is_car_part(obj):
+            scene = bpy.context.scene
+            car_tex = get_scene_value(scene, "selected_car_texture", "car.bmp")
+            return clean_model_base_name(car_tex)
 
         model_name = clean_model_base_name(obj.name)
         print(f"[DEBUG] checking model_name={model_name}, obj['is_model']={obj.get('is_model', False)}")
@@ -3853,13 +3897,14 @@ class MaterialAssignmentImportExport(bpy.types.Operator):
         obj.data.update()
 
     def assign_regular_materials(self, obj, material_suffix):
-        base_name = clean_model_base_name(obj.name, truncate=False)
+        base_name = self.get_current_base_name(obj)
 
         potential_names = [
             f"{base_name}{material_suffix}",
+            f"{base_name}.bmp{material_suffix}",
             f"{base_name}.prm{material_suffix}",
             f"{base_name}.w{material_suffix}",
-            f"{base_name}.m{material_suffix}"
+            f"{base_name}.m{material_suffix}" 
         ]
 
         material = None
