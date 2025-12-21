@@ -2264,6 +2264,48 @@ def prune_unused_material_slots(obj, keep_names=None):
             mesh.materials.pop(index=idx)
 
 
+def ensure_material_for_image(image_name: str):
+    """Return a material mapped to the given image name, creating one if needed."""
+
+    if not image_name:
+        return None
+
+    candidates = [image_name]
+    if image_name.endswith('.bmp'):
+        candidates.append(image_name[:-4])
+    else:
+        candidates.append(f"{image_name}.bmp")
+
+    for cand in candidates:
+        mat = bpy.data.materials.get(cand)
+        if mat:
+            return mat
+
+    image = None
+    for cand in candidates:
+        image = bpy.data.images.get(cand)
+        if not image and cand.endswith('.bmp'):
+            image = bpy.data.images.get(cand[:-4])
+        if image:
+            mat = bpy.data.materials.new(name=cand)
+            mat.use_nodes = True
+            nodes = mat.node_tree.nodes
+            links = mat.node_tree.links
+            nodes.clear()
+
+            out_node = nodes.new("ShaderNodeOutputMaterial")
+            bsdf = nodes.new("ShaderNodeBsdfPrincipled")
+            img_node = nodes.new("ShaderNodeTexImage")
+            img_node.image = image
+            img_node.interpolation = 'Linear'
+
+            links.new(img_node.outputs["Color"], bsdf.inputs["Base Color"])
+            links.new(bsdf.outputs["BSDF"], out_node.inputs["Surface"])
+            return mat
+
+    return None
+
+
 class MaterialAssignmentHelper:
     car_parts_prefixes = ["body", "wheel", "axle", "spring", "pin", "spinner"]
 
@@ -2665,6 +2707,7 @@ class MaterialAssignmentHelper:
                     break
 
         is_car_part = self._is_car_part(obj)
+        car_material = ensure_material_for_image(get_scene_value(scene, "selected_car_texture", "car.bmp")) if is_car_part else None
         if not matched and not is_car_part:
             if obj.get("is_instance") and "fin_texture_base" in obj:
                 base_name = obj["fin_texture_base"]
@@ -2812,6 +2855,7 @@ class MaterialAssignmentHelper:
                     break
 
         is_car_part = self._is_car_part(obj)
+        car_material = ensure_material_for_image(get_scene_value(scene, "selected_car_texture", "car.bmp")) if is_car_part else None
         if not matched and not is_car_part:
             if obj.get("is_instance") and "fin_texture_base" in obj:
                 base_name = obj["fin_texture_base"]
@@ -2842,7 +2886,10 @@ class MaterialAssignmentHelper:
                 continue
 
             if not mat:
-                continue
+                if car_material:
+                    mat = car_material
+                else:
+                    continue
 
             if mat.name not in obj.data.materials:
                 obj.data.materials.append(mat)
@@ -3413,6 +3460,7 @@ class MaterialAssignment(bpy.types.Operator):
                     break
 
         is_car_part = self._is_car_part(obj)
+        car_material = ensure_material_for_image(get_scene_value(scene, "selected_car_texture", "car.bmp")) if is_car_part else None
         if not matched and not is_car_part:
             if obj.get("is_instance") and "fin_texture_base" in obj:
                 base_name_for_texture = obj["fin_texture_base"]
@@ -3458,9 +3506,12 @@ class MaterialAssignment(bpy.types.Operator):
                 except Exception:
                     pass
 
+            if not mat and car_material:
+                mat = car_material
+
             if not mat and is_car_part:
                 fallback_name = get_scene_value(scene, "selected_car_texture", "car.bmp")
-                mat = bpy.data.materials.get(fallback_name)
+                mat = car_material or ensure_material_for_image(fallback_name)
 
             if not mat:
                 continue
@@ -3791,6 +3842,7 @@ class MaterialAssignmentImportExport(bpy.types.Operator):
                     break
 
         is_car_part = self._is_car_part(obj)
+        car_material = ensure_material_for_image(get_scene_value(scene, "selected_car_texture", "car.bmp")) if is_car_part else None
         if not matched and not is_car_part:
             if obj.get("is_instance") and "fin_texture_base" in obj:
                 base_name_for_texture = obj["fin_texture_base"]
@@ -3832,9 +3884,12 @@ class MaterialAssignmentImportExport(bpy.types.Operator):
                     elif not mat and candidate.endswith('.bmp'):
                         mat = bpy.data.materials.get(candidate[:-4])
 
+            if not mat and car_material:
+                mat = car_material
+
             if not mat and is_car_part:
                 fallback_name = get_scene_value(scene, "selected_car_texture", "car.bmp")
-                mat = bpy.data.materials.get(fallback_name)
+                mat = car_material or ensure_material_for_image(fallback_name)
                 if mat:
                     print(f"[INFO] Fallback texture '{fallback_name}' used for {obj.name}")
 
