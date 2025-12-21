@@ -2403,14 +2403,8 @@ class MaterialAssignmentHelper:
                 # COL-only assignment leaves faces on *_Col; strip that suffix
                 # so TexVC is generated from the texture base again.
                 base_name = base_name[:-4]
-
-            # If the source is a generic utility material (starts with '_') or we
-            # still don't have a usable base, fall back to the object's active
-            # texture base (car, track, etc.) so we don't mint names like
-            # `_Alpha_TexVC` or `_Col_TexVC_TexVC` on repeated toggles.
-            if not base_name or base_name.startswith('_'):
+            if not base_name:
                 base_name = self.get_current_base_name(obj)
-
             new_name = f"{base_name}_TexVC"
 
             new_mat = blended_cache.get(new_name)
