@@ -2284,8 +2284,13 @@ class MaterialAssignmentHelper:
                     continue
 
                 print(f"[DEBUG] Processing: {obj.name}")
+                keep_names = set()
+                if material_choice == 'TEX_VC':
+                    # Preserve base texture / helper materials so toggling back to
+                    # texture/alpha/col keeps the original slots available.
+                    keep_names = {m.name for m in obj.data.materials if m and not self._is_tex_vc_mat(m)}
                 self.update_material_assignment(obj, existing_textures, material_choice)
-                prune_unused_material_slots(obj)
+                prune_unused_material_slots(obj, keep_names=keep_names)
                 print(f"[DEBUG] Done: {obj.name}")
 
             except Exception as e:
