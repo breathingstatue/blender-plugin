@@ -20,6 +20,7 @@ class RVIO_PT_RevoltIOToolPanel(bpy.types.Panel):
         
         box = self.layout.box()
         box.label(text="Car tools:")
+        box.operator("headers.align_car_to_revolt", text="Align Car to Re-Volt")
         box.operator("headers.copy_wheel_params", text="Copy Wheel Params")
         box.operator("headers.axle_message_box", text="Copy Axle Params")
         box.operator("headers.spring_message_box", text="Copy Spring Params")
@@ -69,10 +70,6 @@ class RVIO_PT_RevoltIOToolPanel(bpy.types.Panel):
         box = self.layout.box()
         box.label(text="Select RVGL Directory:")
         box.operator("rvio.select_rvgl_dir", text="Browse")
-        # Tagging the area for a redraw
-        for area in context.screen.areas:
-            if area.type == 'PROPERTIES':
-                area.tag_redraw()
 
         # Display current directory
         rvgl_dir = context.scene.rvgl_dir

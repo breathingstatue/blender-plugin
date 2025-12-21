@@ -15,10 +15,6 @@ class RVIO_PT_RevoltHelpersPanelMesh(bpy.types.Panel):
         box = layout.box()
         box.label(text="Select RVGL Directory:")
         box.operator("rvio.select_rvgl_dir", text="Browse")
-        # Tagging the area for a redraw
-        for area in context.screen.areas:
-            if area.type == 'PROPERTIES':
-                area.tag_redraw()
 
         # Display current directory
         rvgl_dir = context.scene.rvgl_dir
