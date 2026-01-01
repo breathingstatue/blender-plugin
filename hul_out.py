@@ -3,100 +3,140 @@ Name:    hul_out
 Purpose: Exports hull collision files.
 
 Description:
-
+Exports Re-Volt .hul collision data (convex hulls + interior spheres).
+Uses a "bake transforms once" pipeline to avoid invalid halfspace sets for Qhull.
 """
 
 import bpy
 import bmesh
-import mathutils
 import importlib
 from . import common
 from . import rvstruct
 from . import prm_in
 
-# Check if 'bpy' is already in locals to determine if this is a reload scenario
+# Reload support
 if "bpy" in locals():
     importlib.reload(common)
     importlib.reload(rvstruct)
 
-# Importing specific classes and functions
 from .common import apply_trs, to_revolt_axis, to_revolt_coord, to_revolt_scale, rvbbox_from_verts
-from .rvstruct import Hull, ConvexHull, BoundingBox, Edge, Sphere, Plane, Interior
-from mathutils import Color, Vector
+from .rvstruct import Hull
+from mathutils import Vector
+
+
+# -------------------------------------------------------------------------
+# Debug toggle
+# -------------------------------------------------------------------------
+RV_HUL_DEBUG = False
+def _d(msg: str):
+    if RV_HUL_DEBUG:
+        print(msg)
 
 
 def export_file(filepath, scene):
     return export_hull(filepath, scene)
 
+
 def export_hull(filepath, scene):
     hull = Hull()
 
-    # Get convex hull objects
+    # Only MESH objects can be hulls
     chull_objs = [
         obj for obj in scene.objects
-        if getattr(obj, "is_hull_convex", obj.get("is_hull_convex", False))
+        if obj.type == "MESH" and (getattr(obj, "is_hull_convex", False) or obj.get("is_hull_convex", False))
     ]
     hull.chull_count = len(chull_objs)
 
+    _d(f"[HUL] convex selected: {[o.name for o in chull_objs]}")
+
     for obj in chull_objs:
         chull = rvstruct.ConvexHull()
+
         bm = bmesh.new()
         bm.from_mesh(obj.data)
-        apply_trs(obj, bm)
 
-        # Calculate and assign the bounding box
-        define_bounding_box(chull, bm, obj.matrix_world)
+        # IMPORTANT:
+        # Bake full world TRS into bm ONCE.
+        # This prevents double-transform issues and makes plane/bbox consistent.
+        apply_trs(obj, bm, transform=True)
 
-        # Process faces into planes
+        # Ensure normals are consistent after transform.
+        bm.normal_update()
+        try:
+            bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+        except Exception:
+            # Some Blender builds may not need/like it; normal_update still helps.
+            pass
+
+        # Bounding box from baked vertices (no obj.matrix_world here)
+        define_bounding_box(chull, bm)
+
+        # Planes from baked faces
         for face in bm.faces:
-            plane = create_plane_from_face(face, obj.matrix_world)  # Apply object transformations
+            plane = create_plane_from_face(face)
             chull.faces.append(plane)
-            chull.face_count += 1
 
-        # Optional: Process edges and vertices (if needed)
+        chull.face_count = len(chull.faces)
+
+        # Optional edges/verts
         process_edges_and_vertices(chull, bm)
 
         hull.chulls.append(chull)
 
-    # Process hull spheres
+        _d(f"[HUL] {obj.name}: faces={chull.face_count} edges={chull.edge_count} verts={chull.vertex_count}")
+
+        bm.free()
+
+    # Spheres
     hull.interior = process_sphere_hulls(scene)
 
     # Write the hull data to a file
     try:
         with open(filepath, "wb") as f:
+            _d(f"[HUL] writing: chull_count={hull.chull_count}, built={len(hull.chulls)}, spheres={getattr(hull.interior, 'sphere_count', 0)}")
             hull.write(f)
     except IOError as e:
         print(f"Failed to write hull data: {e}")
 
-def create_plane_from_face(face, obj_matrix):
+
+def create_plane_from_face(face):
+    """
+    Face plane in baked (world) space.
+    Plane is defined as: normal . x + distance = 0
+    distance = -normal . point_on_plane
+    """
     plane = rvstruct.Plane()
-    # Apply world transformations to the face normal and vertex coordinates
-    normal = rvstruct.Vector(data=to_revolt_axis(obj_matrix @ face.normal))
-    vec = rvstruct.Vector(data=to_revolt_coord(obj_matrix @ face.verts[0].co))
-    distance = -normal.dot(vec)
+
+    # Face normal & point are already in baked world space (Blender axes)
+    world_normal = face.normal.normalized()
+    world_point = face.verts[0].co
+
+    normal = rvstruct.Vector(data=to_revolt_axis(world_normal))
+    vec = rvstruct.Vector(data=to_revolt_coord(world_point))
 
     plane.normal = normal
-    plane.distance = distance
+    plane.distance = -normal.dot(vec)
     return plane
 
-def define_bounding_box(chull, bm, obj_matrix):
-    # Create a temporary class to mimic .co attribute
-    class TempVert:
-        def __init__(self, co):
-            self.co = co
 
-    # Transform vertices and wrap them in the temporary class
-    transformed_verts = [TempVert(obj_matrix @ vert.co) for vert in bm.verts]
+def define_bounding_box(chull, bm):
+    bbox_data = rvbbox_from_verts(bm.verts)
+    if bbox_data is None:
+        # Empty mesh safety
+        chull.bbox = rvstruct.BoundingBox(data=(0, 0, 0, 0, 0, 0))
+        chull.bbox_offset = rvstruct.Vector(data=(0, 0, 0))
+        return
 
-    # Calculate bounding box
-    bbox = rvstruct.BoundingBox(data=rvbbox_from_verts(transformed_verts))
+    bbox = rvstruct.BoundingBox(data=bbox_data)
 
+    # Center offset
     chull.bbox_offset = rvstruct.Vector(data=(
         (bbox.xlo + bbox.xhi) / 2,
         (bbox.ylo + bbox.yhi) / 2,
         (bbox.zlo + bbox.zhi) / 2
     ))
 
+    # Make bbox relative to the offset (as Re-Volt expects)
     bbox.xlo -= chull.bbox_offset[0]
     bbox.xhi -= chull.bbox_offset[0]
     bbox.ylo -= chull.bbox_offset[1]
@@ -105,40 +145,46 @@ def define_bounding_box(chull, bm, obj_matrix):
     bbox.zhi -= chull.bbox_offset[2]
 
     chull.bbox = bbox
-    
+
+
 def process_sphere_hulls(scene):
     interior = rvstruct.Interior()
+
     sphere_objs = [
         obj for obj in scene.objects
-        if getattr(obj, "is_hull_sphere", obj.get("is_hull_sphere", False))
+        if obj.type == "MESH" and (getattr(obj, "is_hull_sphere", False) or obj.get("is_hull_sphere", False))
     ]
     interior.sphere_count = len(sphere_objs)
+
+    _d(f"[HUL] spheres selected: {[o.name for o in sphere_objs]}")
 
     for obj in sphere_objs:
         sphere = rvstruct.Sphere()
 
-        # Convert location to Re-Volt coordinates
-        sphere.center = rvstruct.Vector(data=to_revolt_coord(obj.location))
-        
-        # Use the geometry-based radius calculation
-        sphere.radius = to_revolt_scale(calculate_radius_from_geometry(obj))
-        
+        # Use world-space center (handles parenting/constraints)
+        world_center = obj.matrix_world.translation
+        sphere.center = rvstruct.Vector(data=to_revolt_coord(world_center))
+
+        # Local radius from geometry, then scale to world using max scale component
+        r_local = calculate_radius_from_geometry(obj)
+        s = obj.matrix_world.to_scale()
+        r_world = r_local * max(s.x, s.y, s.z)
+
+        sphere.radius = to_revolt_scale(r_world)
+
         interior.spheres.append(sphere)
 
     return interior
 
+
 def calculate_radius_from_geometry(obj):
     """
-    Calculate the radius of a spherical object based on its vertex geometry.
-    Works for UV spheres or similar.
+    Local-space radius estimate from mesh bounds.
     """
     if not obj.data.vertices:
-        return 0  # No geometry, return a default radius
+        return 0.0
 
-    # Get all vertex coordinates in the local space of the object
     verts = [v.co for v in obj.data.vertices]
-
-    # Calculate the min and max coordinates along each axis
     min_x = min(v.x for v in verts)
     max_x = max(v.x for v in verts)
     min_y = min(v.y for v in verts)
@@ -146,16 +192,12 @@ def calculate_radius_from_geometry(obj):
     min_z = min(v.z for v in verts)
     max_z = max(v.z for v in verts)
 
-    # Compute the bounding box diameter along each axis
     diameter_x = max_x - min_x
     diameter_y = max_y - min_y
     diameter_z = max_z - min_z
 
-    # The radius is half the largest diameter
-    max_diameter = max(diameter_x, diameter_y, diameter_z)
-    radius = max_diameter / 2
+    return max(diameter_x, diameter_y, diameter_z) * 0.5
 
-    return radius
 
 def process_edges_and_vertices(chull, bm):
     ind = 0
@@ -163,6 +205,7 @@ def process_edges_and_vertices(chull, bm):
         rvedge = rvstruct.Edge()
         for vert in edge.verts:
             rvvert = rvstruct.Vector(data=to_revolt_coord(vert.co))
+
             existing_vertex = next((v for v in chull.vertices if v.data == rvvert.data), None)
             if existing_vertex:
                 rvedge.vertices.append(chull.vertices.index(existing_vertex))
@@ -170,6 +213,8 @@ def process_edges_and_vertices(chull, bm):
                 chull.vertices.append(rvvert)
                 rvedge.vertices.append(ind)
                 ind += 1
+
         chull.edges.append(rvedge)
+
     chull.vertex_count = len(chull.vertices)
     chull.edge_count = len(chull.edges)

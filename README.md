@@ -6,6 +6,13 @@ place 'io_revolt' in Blender/"version"/scripts/addons/
 
 -Theman with the help of AI and a bunch of friends in the RV I/O community.
 
+20.26.11
+Fixed HULL export
+Improved handling of materials
+
+20.25.99
+Improved handling of materials
+
 20.25.98
 The Copy Params was fixed
 Some icons in NCP Materials were removed
@@ -30,7 +37,6 @@ Fixed Material Asssignment for various imports
 Smoothened out the plugin in general (bmesh / edit mode)
 Added Custom Face Properties for Models (.m files)
 Changed first Texture Number back to 0
-Removed Import / Export from the Upper UI to reduce crashes in Blender 5.0
 
 20.25.93
 Fixed the rest of Blender 5.0 incompabilities
