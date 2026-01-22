@@ -112,14 +112,20 @@ def create_visibox(id_=0, typ=1, location=(0, 0, 0), size=(1, 1, 1), existing_na
     # Set object properties
     obj.location = Vector(location)
     obj.rotation_mode = 'XYZ'
-    obj.rotation_euler = Euler((math.radians(-90), 0, 0), 'XYZ')  # <- fix orientation
+    obj.rotation_euler = Euler((math.radians(-90), 0, 0), 'XYZ')
     obj.display_type = 'WIRE'
     obj.show_in_front = True
     obj.scale = Vector((1, 1, 1))
 
+    # --- Visibox markers (set BOTH ID-props and RNA props) ---
     obj["is_visibox"] = True
-    obj["visibox_id"] = id_
+    obj["visibox_id"] = int(id_)
     obj["visibox_type"] = str(typ)
+
+    # These are your registered bpy.props on bpy.types.Object:
+    obj.is_visibox = True
+    obj.visibox_id = int(id_)
+    obj.visibox_type = str(typ)
 
     return obj
 

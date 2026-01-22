@@ -1185,19 +1185,14 @@ class Plane:
         if file:
             self.read(file)
 
-    def contains_vertex(self, vertex):
-        # Get one point of the plane
-        p = (-1 * self.normal.scale(self.distance)).normalize()
-        result = self.normal.dot(vertex-p)
-
-        # result = (vertex[0] - p[0]) * self.normal[0] + (vertex[1] - p[1]) * self.normal[1] + (vertex[2] - p[2]) * self.normal[2]
-        #Where (x, y, z) is the point your testing, (x0, y0, z0) is the point derived from the normal and (Dx, Dy, Dz) is the normal itself
-
-        if abs(result) < 0.5:
-            return True
-        else:
-            print(result)
+    def contains_vertex(self, vertex, eps=0.5):
+        n = self.normal
+        nn = n.dot(n)
+        if nn == 0:
             return False
+        # distance scaled with |n|, so normalize behavior:
+        signed = (n.dot(vertex) - self.distance) / (nn ** 0.5)
+        return abs(signed) < eps
 
     def read(self, file):
         self.normal = Vector(file=file)
@@ -1855,37 +1850,33 @@ class Visiboxes:
 
     def append(self, type, id, coords):
         new_visibox = Visibox()
-        new_visibox.type = type
-        new_visibox.id = id
-        new_visibox.coords = Vector(data=coords)
+        new_visibox.type = int(type)
+        new_visibox.id = int(id)
+        new_visibox.coords = tuple(float(c) for c in coords)  # keep all 6
         self.visiboxes.append(new_visibox)
         self.visiboxes_count += 1
 
 class Visibox:
-    """
-    Single visibox structure, 28 bytes: 4 metadata, 6 floats (coords)
-    """
     def __init__(self, file=None, parent=None):
-        self.type = 1  # 1 = Camera, 2 = Cubes
+        self.type = 1
         self.id = 0
-        self.coords = None  # Vector of 6 floats (bounding box corner pairs)
+        self.tag = 0x5667   # <-- store the field
+        self.coords = None
         self.parent = parent
-
         if file:
             self.read(file)
 
-    def __repr__(self):
-        return f"Visibox {self.id} (type {self.type})"
-
     def read(self, file):
-        type_byte, id_byte, _padding = struct.unpack("<BBH", file.read(4))
+        type_byte, id_byte, tag = struct.unpack("<BBH", file.read(4))
         self.type = type_byte
         self.id = id_byte
+        self.tag = tag
         self.coords = struct.unpack("<6f", file.read(24))
 
     def write(self, file):
-        file.write(struct.pack("<BBH", self.type, self.id, 0))
+        file.write(struct.pack("<BBH", self.type, self.id, self.tag))
         file.write(struct.pack("<6f", *self.coords))
+
 
     def as_dict(self):
         return {

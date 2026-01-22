@@ -6,6 +6,18 @@ place 'io_revolt' in Blender/"version"/scripts/addons/
 
 -Theman with the help of AI and a bunch of friends in the RV I/O community.
 
+20.26.13
+Fixed .taz (Track Zones) export (addressed by sinaosal)
+
+20.26.12
+Fixed Visiboxes import / export
+Fixed the naming of Visiboxes (in Blender)
+Added Duplicate Visibox function
+Cleaned the MakeItGood panel
+Added Duplicate Track Zone function (requested by sinaosal)
+Tex+VC+Alpha Material Preview has now more visible effect
+.rim (Mirrors) import / export fix (addressed by Skitch)
+
 20.26.11
 Fixed HULL export
 Improved handling of materials

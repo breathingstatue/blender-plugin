@@ -8,7 +8,7 @@ Visibox file contains IDs of either Camera or Cubes (Visiboxes).
 
 import struct
 from mathutils import Vector
-from .common import to_revolt_coord
+from .common import SCALE  # <-- add this
 
 
 def export_file(filepath, scene):
@@ -33,7 +33,7 @@ def export_file(filepath, scene):
             # Transform corners to world space
             bbox_world = [obj.matrix_world @ corner for corner in bbox_local]
 
-            # Compute axis-aligned min and max directly
+            # Blender world AABB
             min_corner = Vector((
                 min(v.x for v in bbox_world),
                 min(v.y for v in bbox_world),
@@ -45,16 +45,21 @@ def export_file(filepath, scene):
                 max(v.z for v in bbox_world),
             ))
 
-            # Convert to Re-Volt coordinate system (x, z, -y)
-            min_rv = to_revolt_coord(min_corner)
-            max_rv = to_revolt_coord(max_corner)
+            # Convert Blender world AABB -> Re-Volt bbox pairs
+            # RV: x = Blender x
+            # RV: y = -Blender z   (NOTE: negation swaps min/max!)
+            # RV: z = Blender y
+            xlo = min_corner.x / SCALE
+            xhi = max_corner.x / SCALE
 
-            coords = [
-                min_rv[0], max_rv[0],  # x
-                min_rv[1], max_rv[1],  # y
-                min_rv[2], max_rv[2],  # z
-            ]
+            ylo = -max_corner.z / SCALE  # <-- swapped
+            yhi = -min_corner.z / SCALE  # <-- swapped
+
+            zlo = min_corner.y / SCALE
+            zhi = max_corner.y / SCALE
+
+            coords = [xlo, xhi, ylo, yhi, zlo, zhi]
 
             # Write data
-            f.write(struct.pack("<BBH", typ, id_, 0))
+            f.write(struct.pack("<BBH", typ, id_, 0x5667))
             f.write(struct.pack("<6f", *coords))

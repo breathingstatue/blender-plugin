@@ -1,4 +1,4 @@
-"""
+﻿"""
 Name:    taz_out
 Purpose: Exports Re-Volt level track zone files (.taz)
 
@@ -24,26 +24,23 @@ def export_file(filepath, scene):
     if track_zones_collection is None:
         print("No 'TRACK_ZONES' collection found.")
         return
-    
+
     for obj in track_zones_collection.objects:
-        if "is_track_zone" not in obj or not obj["is_track_zone"]:
+        if not getattr(obj, "is_track_zone", False) and not obj.get("is_track_zone"):
             continue
-        
-        # Get the ID from the custom property
+
         zid = obj.get("track_zone_id")
         if zid is None:
             print(f"Skipping object {obj.name}: No 'track_zone_id' custom property found")
             continue
-        
+
         # Convert object transforms to Re-Volt format
-        location, rotation_matrix, scale = transforms_to_revolt(obj.location, obj.rotation_euler, obj.scale)
-        # Append the zone to the TrackZones object
-        zones.append(zid, location, rotation_matrix, scale)
-    
-    # Export all zones to the TAZ file
+        location, rotation_matrix, size = transforms_to_revolt(obj.location, obj.rotation_euler, obj.scale)
+
+        zones.append(int(zid), location, rotation_matrix, size)
+
+    # IMPORTANT: TrackZones.write() already writes the count.
     with open(filepath, "wb") as file:
-        file.write(struct.pack("<l", len(zones.zones)))  # 4-byte count
-        file.write(b'\x00\x00\x00\x00')                  # 4-byte padding
         zones.write(file)
 
 def transforms_to_revolt(location, rotation_euler=(0,0,0), scale=(1,1,1)):

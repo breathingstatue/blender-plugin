@@ -89,10 +89,11 @@ from .operators import ButtonRenameAllObjects, SelectByName, SelectByData, Mater
 from .operators import TextureAssigner, SetInstanceProperty, RemoveInstanceProperty, LaunchRV, TexturesSave, TexturesRename, ClearExtraAssignments
 from .operators import CopyAerialParams, AxleMessageBox, ConfirmLoadOriginalAxle, CopyAndRemoveAxles, SpringMessageBox, ConfirmLoadOriginalSpring
 from .operators import CopyAndRemoveSprings, PinMessageBox, ConfirmLoadOriginalPin, CopyAndRemovePins, CopyWheelParams, CreateVisibox, AlignCarRevolt
-from .operators import ButtonZoneHide, AddTrackZone, ReverseTrackZone, ButtonTriggerHide, CreateTrigger, MarkAsModel, CreateFobObject
+from .operators import ButtonZoneHide, AddTrackZone, ReverseTrackZone, ButtonTriggerHide, CreateTrigger, MarkAsModel, CreateFobObject, DuplicateVisibox
 from .operators import DuplicateFobObject, DuplicateTrigger, CopyTrigger, PasteTrigger, SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere
 from .operators import ButtonCopyUvToFrame, ButtonCopyFrameToUv, PreviewNextFrame, PreviewPrevFrame, TexAnimTransform, TexAnimGrid, CarAutoShader
 from .operators import ToggleVisiboxVisibility, ToggleFOBVisibility, FindSpecialFile, BakeVertexBatch, TexAnimAssignSlot, TexturesLoadFromDisk
+from .operators import DuplicateTrackZone
 from .texanim import update_ta_max_frames, update_ta_current_slot, update_ta_current_frame, update_ta_current_frame_uv
 from .texanim import update_ta_current_frame_delay, update_ta_current_frame_tex, update_ta_max_slots
 from .tools import get_trigger_type_items, get_trigger_type, set_trigger_type, get_low_flag_items, get_low_flag, set_low_flag, get_high_flag_items
@@ -111,7 +112,7 @@ from .ui.viewlayer_panel import RVIO_PT_RevoltViewLayerPanel
 bl_info = {
 "name": "Re-Volt",
 "author": "Marvin Thiel & Theman",
-"version": (20, 26, 11),
+"version": (20, 26, 13),
 "blender": (5, 0, 0),
 "location": "File > Import-Export",
 "description": "Import and export Re-Volt file formats.",
@@ -1052,6 +1053,7 @@ def register():
     bpy.utils.register_class(BakeVertexBatch)
     bpy.utils.register_class(TexAnimAssignSlot)
     bpy.utils.register_class(TexturesLoadFromDisk)
+    bpy.utils.register_class(DuplicateTrackZone)
     bpy.utils.register_class(ButtonZoneHide)
     bpy.utils.register_class(AddTrackZone)
     bpy.utils.register_class(ReverseTrackZone)
@@ -1059,6 +1061,7 @@ def register():
     bpy.utils.register_class(CreateTrigger)
     bpy.utils.register_class(MarkAsModel)
     bpy.utils.register_class(CreateFobObject)
+    bpy.utils.register_class(DuplicateVisibox)
     bpy.utils.register_class(DuplicateFobObject)
     bpy.utils.register_class(DuplicateTrigger)
     bpy.utils.register_class(CopyTrigger)
@@ -1117,6 +1120,7 @@ def unregister():
     bpy.utils.unregister_class(CopyTrigger)
     bpy.utils.unregister_class(DuplicateTrigger)
     bpy.utils.unregister_class(DuplicateFobObject)
+    bpy.utils.unregister_class(DuplicateVisibox)
     bpy.utils.unregister_class(CreateFobObject)
     bpy.utils.unregister_class(MarkAsModel)
     bpy.utils.unregister_class(CreateTrigger)
@@ -1124,6 +1128,7 @@ def unregister():
     bpy.utils.unregister_class(ReverseTrackZone)
     bpy.utils.unregister_class(AddTrackZone)
     bpy.utils.unregister_class(ButtonZoneHide)
+    bpy.utils.unregister_class(DuplicateTrackZone)
     bpy.utils.unregister_class(TexturesLoadFromDisk)
     bpy.utils.unregister_class(TexAnimAssignSlot)
     bpy.utils.unregister_class(BakeVertexBatch)

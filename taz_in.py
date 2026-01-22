@@ -157,8 +157,13 @@ def create_zone(zid=None, location=(0, 0, 0), size=(1, 1, 1), rotation=(0, 0, 0)
     # Additional properties
     ob.display_type = 'WIRE'
     ob.show_in_front = True
+    # Set the registered RNA properties
+    ob.is_track_zone = True
+    ob.track_zone_id = int(zid) if zid is not None else 0
+
+    # (Optional) also keep ID props for backward compatibility with older files/scripts
     ob["is_track_zone"] = True
-    ob["track_zone_id"] = zid if zid is not None else 0
+    ob["track_zone_id"] = int(zid) if zid is not None else 0
 
     # Create the mesh data. This is an example of creating a simple cube.
     bm = bmesh.new()

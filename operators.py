@@ -1800,6 +1800,61 @@ class ReverseTrackZone(bpy.types.Operator):
                 # Ensure the new name isn't already taken by another object
                 if not bpy.data.objects.get(base_name):
                     obj.name = base_name
+
+class DuplicateTrackZone(bpy.types.Operator):
+    bl_idname = "object.duplicate_track_zone"
+    bl_label = "Duplicate Track Zone"
+    bl_description = "Duplicate the selected Track Zone and copy its properties"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        obj = context.object
+
+        # Accept either ID-prop or RNA bool (your codebase uses both styles in different places)
+        if not obj or not (obj.get("is_track_zone") or getattr(obj, "is_track_zone", False)):
+            self.report({'WARNING'}, "No Track Zone object selected")
+            return {'CANCELLED'}
+
+        # Duplicate object + mesh data
+        new_obj = obj.copy()
+        if obj.data:
+            new_obj.data = obj.data.copy()
+        context.collection.objects.link(new_obj)
+
+        # Copy core props
+        tz_id = int(getattr(obj, "track_zone_id", obj.get("track_zone_id", 0)))
+        new_obj.track_zone_id = tz_id
+        new_obj["track_zone_id"] = tz_id
+
+        new_obj.is_track_zone = True
+        new_obj["is_track_zone"] = True
+
+        # Nudge so it's visible (matches the style you used in DuplicateFobObject)
+        new_obj.location = obj.location + BlenderVector((1, 1, 0))
+
+        # Ensure TRACK_ZONES collection exists
+        zones_collection_name = 'TRACK_ZONES'
+        if zones_collection_name not in bpy.data.collections:
+            zones_collection = bpy.data.collections.new(zones_collection_name)
+            bpy.context.scene.collection.children.link(zones_collection)
+        else:
+            zones_collection = bpy.data.collections[zones_collection_name]
+
+        # Link to TRACK_ZONES (avoid double-linking)
+        if new_obj.name not in zones_collection.objects:
+            zones_collection.objects.link(new_obj)
+
+        # Unlink from the current context collection to avoid duplicates in main collection
+        if new_obj.name in context.collection.objects:
+            context.collection.objects.unlink(new_obj)
+
+        # Select + activate new object
+        bpy.ops.object.select_all(action='DESELECT')
+        new_obj.select_set(True)
+        context.view_layer.objects.active = new_obj
+
+        self.report({'INFO'}, f"Duplicated Track Zone: {new_obj.name}")
+        return {'FINISHED'}
     
 class CreateTrigger(bpy.types.Operator):
     bl_idname = "mesh.create_trigger"
@@ -2041,10 +2096,79 @@ class CreateVisibox(bpy.types.Operator):
         return {'FINISHED'}
 
     def generate_name(self):
-        index = 1
-        while f"Visibox_{index:02d}" in bpy.data.objects:
-            index += 1
-        return f"Visibox_{index:02d}"
+        vid = bpy.context.scene.visibox_create_id
+        return f"Visibox_{vid}"
+
+class DuplicateVisibox(bpy.types.Operator):
+    bl_idname = "object.duplicate_visibox"
+    bl_label = "Duplicate Visibox"
+    bl_description = "Duplicate selected visibox object(s)"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        if context.mode != 'OBJECT':
+            self.report({'WARNING'}, "Switch to Object Mode to duplicate visiboxes.")
+            return {'CANCELLED'}
+
+        sel = list(context.selected_objects or [])
+        if not sel:
+            self.report({'WARNING'}, "No objects selected.")
+            return {'CANCELLED'}
+
+        # Duplicate only objects that are marked as visibox in either system
+        visis = []
+        for o in sel:
+            is_vb = bool(getattr(o, "is_visibox", False)) or bool(o.get("is_visibox"))
+            if is_vb:
+                visis.append(o)
+
+        if not visis:
+            self.report({'WARNING'}, "No selected visibox objects.")
+            return {'CANCELLED'}
+
+        # Temporarily select only those visibox objects for duplication
+        prev_active = context.view_layer.objects.active
+        prev_sel = sel[:]
+
+        for o in context.selected_objects:
+            o.select_set(False)
+        for o in visis:
+            o.select_set(True)
+        context.view_layer.objects.active = visis[0]
+
+        # Duplicate (not linked)
+        bpy.ops.object.duplicate(linked=False)
+
+        # New duplicates are now selected
+        new_objs = list(context.selected_objects or [])
+
+        # Ensure properties are consistent on duplicates
+        for o in new_objs:
+            # If importer only set ID-props, upgrade RNA props too
+            if o.get("is_visibox") and not getattr(o, "is_visibox", False):
+                o.is_visibox = True
+
+            if "visibox_id" in o and hasattr(o, "visibox_id"):
+                try:
+                    o.visibox_id = int(o["visibox_id"])
+                except Exception:
+                    pass
+
+            if "visibox_type" in o and hasattr(o, "visibox_type"):
+                try:
+                    o.visibox_type = str(o["visibox_type"])
+                except Exception:
+                    pass
+
+        # Restore previous selection + active (optional; comment out if you prefer keeping duplicates selected)
+        for o in context.selected_objects:
+            o.select_set(False)
+        for o in prev_sel:
+            o.select_set(True)
+        context.view_layer.objects.active = prev_active
+
+        self.report({'INFO'}, f"Duplicated {len(visis)} visibox object(s).")
+        return {'FINISHED'}
     
 class ButtonZoneHide(bpy.types.Operator):
     bl_idname = "scene.zone_hide"
@@ -2529,7 +2653,8 @@ class MaterialAssignmentHelper:
         return textures
 
     def get_base_name_for_layers(self, obj):
-        return clean_model_base_name(obj.name)
+        # Blender-side material matching must NOT truncate
+        return clean_model_base_name(obj.name, truncate=False)
 
     def get_current_base_name(self, obj):
         if obj.get("is_instance") and "fin_texture_base" in obj:
@@ -2543,7 +2668,7 @@ class MaterialAssignmentHelper:
             _d(f"[BASE] Car part {obj.name}: selected_car_texture='{car_tex}' -> base='{base}'")
             return base
 
-        model_name = clean_model_base_name(obj.name)
+        model_name = clean_model_base_name(obj.name, truncate=False)
         _d(f"[BASE] obj={obj.name} model_name={model_name}, is_model={obj.get('is_model', False)}")
 
         if obj.get("is_model", False):
@@ -2554,7 +2679,7 @@ class MaterialAssignmentHelper:
                 tex_path = get_scene_value(scene, f"m_texture_path_{i}", "")
                 _d(f"[BASE] Slot {i}: m_model_name='{slot_name}', mode='{tex_mode}', path='{tex_path}'")
 
-                if clean_model_base_name(slot_name) == model_name:
+                if clean_model_base_name(slot_name, truncate=False) == model_name:
                     if tex_mode == "LEVEL_TEXTURES":
                         return os.path.basename(tex_path.rstrip("/\\")).lower()
                     elif tex_mode == "TEXTURE_NAME":
@@ -2569,20 +2694,6 @@ class MaterialAssignmentHelper:
     # -------------------------------------------------------------------------
 
     def assign_tex_vc_materials(self, obj, existing_textures=None):
-        """
-        Auto-assign blended materials combining texture and vertex colour per face.
-
-        Behaviour:
-        - First assigns UV texture materials (so every face has a proper texture mat).
-        - Then creates per-texture blended materials named "<base>_TexVC".
-        - Each "<base>_TexVC" material:
-            * Base = texture colour (fallback = Col if no texture).
-            * Overlay = vertex color "Col" in OVERLAY mode.
-            * Fac driven by vertex color "Alpha" brightness (0..1) mapped to:
-                  Fac = 0.5 * brightness + 0.5
-              so black Alpha -> 0.5, white Alpha -> 1.0
-            * BSDF Alpha fixed to 1.0 (fully opaque).
-        """
         _d(f"[TEXVC] assign_tex_vc_materials: {obj.name}")
 
         import bmesh
@@ -2696,11 +2807,24 @@ class MaterialAssignmentHelper:
                 links.new(mul.outputs["Value"], add.inputs[0])
 
                 # --------------------------------------------------------------
+                # Fac shaping (make VC stronger)
+                # Current add outputs 0.5..1.0
+                # Scale to 0.75..1.0 by multiplying 1.5 and clamping to 0..1
+                # --------------------------------------------------------------
+                strength = 1.5
+
+                fac_boost = nodes.new("ShaderNodeMath")
+                fac_boost.operation = "MULTIPLY"
+                fac_boost.inputs[1].default_value = strength
+                fac_boost.use_clamp = True
+                links.new(add.outputs["Value"], fac_boost.inputs[0])
+
+                # --------------------------------------------------------------
                 # Mix: texture base + VC overlay in OVERLAY mode
                 # --------------------------------------------------------------
                 mix = nodes.new("ShaderNodeMixRGB")
                 mix.blend_type = "OVERLAY"
-                links.new(add.outputs["Value"], mix.inputs["Fac"])
+                links.new(fac_boost.outputs["Value"], mix.inputs["Fac"])
 
                 if has_texture:
                     links.new(tex_node.outputs["Color"], mix.inputs[1])
@@ -2864,7 +2988,7 @@ class MaterialAssignmentHelper:
                 if base_prop:
                     base_name = os.path.splitext(base_prop.strip().lower())[0]
                 else:
-                    base_name = clean_model_base_name(obj.name)
+                    base_name = clean_model_base_name(obj.name, truncate=False)
             source_mode = "LEVEL_TEXTURES"
 
         if not matched and is_car_part:
@@ -3012,7 +3136,7 @@ class MaterialAssignmentHelper:
                 if base_prop:
                     base_name = os.path.splitext(base_prop.strip().lower())[0]
                 else:
-                    base_name = clean_model_base_name(obj.name)
+                    base_name = clean_model_base_name(obj.name, truncate=False)
             source_mode = "LEVEL_TEXTURES"
 
         if not matched and is_car_part:
@@ -3306,7 +3430,7 @@ class MaterialAssignment(bpy.types.Operator):
             car_tex = _scene_str(scene, "selected_car_texture", "car.bmp")
             return clean_model_base_name(car_tex)
 
-        model_name = clean_model_base_name(obj.name)
+        model_name = clean_model_base_name(obj.name, truncate=False)
 
         if obj.get("is_model", False):
             scene = bpy.context.scene
@@ -3315,7 +3439,7 @@ class MaterialAssignment(bpy.types.Operator):
                 tex_mode = get_scene_value(scene, f"m_texture_mode_{i}", "")
                 tex_path = get_scene_value(scene, f"m_texture_path_{i}", "")
 
-                if clean_model_base_name(slot_name) == model_name:
+                if clean_model_base_name(slot_name, truncate=False) == model_name:
                     if tex_mode == "LEVEL_TEXTURES":
                         return os.path.basename(tex_path.rstrip("/\\")).lower()
                     elif tex_mode == "TEXTURE_NAME":
@@ -3665,7 +3789,7 @@ class MaterialAssignmentImportExport(MaterialAssignmentHelper, bpy.types.Operato
             car_tex = get_scene_value(scene, "selected_car_texture", "car.bmp")
             return clean_model_base_name(car_tex)
 
-        model_name = clean_model_base_name(obj.name)
+        model_name = clean_model_base_name(obj.name, truncate=False)
         print(f"[DEBUG] checking model_name={model_name}, obj['is_model']={obj.get('is_model', False)}")
 
         if obj.get("is_model", False):
@@ -3676,7 +3800,7 @@ class MaterialAssignmentImportExport(MaterialAssignmentHelper, bpy.types.Operato
                 tex_path = get_scene_value(scene, f"m_texture_path_{i}", "")
                 print(f"[DEBUG] Slot {i}: m_model_name = '{slot_name}', mode = '{tex_mode}', path = '{tex_path}'")
 
-                if clean_model_base_name(slot_name) == model_name:
+                if clean_model_base_name(slot_name, truncate=False) == model_name:
                     if tex_mode == "LEVEL_TEXTURES":
                         return os.path.basename(tex_path.rstrip("/\\")).lower()
                     elif tex_mode == "TEXTURE_NAME":
@@ -4615,7 +4739,8 @@ class MarkAsModel(bpy.types.Operator):
     def execute(self, context):
         obj = context.active_object
         scene = context.scene
-        base_name = clean_model_base_name(self.model_name.strip().lower())
+        # Store full logical name in the editor
+        base_name = clean_model_base_name(self.model_name.strip().lower(), truncate=False)
 
         if not base_name:
             self.report({'ERROR'}, "Model name cannot be empty")
