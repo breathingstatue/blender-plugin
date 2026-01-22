@@ -13,6 +13,12 @@ class RVIO_PT_RevoltMIGPanel(bpy.types.Panel):
         obj = context.object
         scene = context.scene
         
+        # Hull properties
+        box = layout.box()
+        box.label(text="Car Hull:")
+        col = box.column(align=True)
+        col.operator("scene.add_hull_sphere")
+        
         box = layout.box()
         box.label(text="Track Zones:")
         col = box.column(align=True)
@@ -44,9 +50,3 @@ class RVIO_PT_RevoltMIGPanel(bpy.types.Panel):
         col.prop(scene, "visibox_create_id", text="ID")
         col.operator("object.create_visibox", icon="PLUS", text="Create Visibox")
         col.operator("object.toggle_visibox_visibility", icon="HIDE_OFF")
-        
-        # Hull properties
-        box = layout.box()
-        box.label(text="Car Hull:")
-        col = box.column(align=True)
-        col.operator("scene.add_hull_sphere")

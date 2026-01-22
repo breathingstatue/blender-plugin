@@ -43,16 +43,16 @@ class RVIO_PT_RevoltIOToolPanel(bpy.types.Panel):
         self.layout.label(text="HELPERS:")
         
         box = self.layout.box()
+        box.label(text="Find Special Object:")
+        box.operator("object.find_special_file", icon="VIEWZOOM")
+
+        box = self.layout.box()
         box.label(text="Rename Textures")
         box.operator("helpers.texture_rename")
         
         box = self.layout.box()
         box.label(text="Rename Selected:")
         box.operator("helpers.rename_selected_objects")
-        
-        box = self.layout.box()
-        box.label(text="Find Special Object:")
-        box.operator("object.find_special_file", icon="VIEWZOOM")
         
         box = self.layout.box()
         box.label(text="Select by Data:")

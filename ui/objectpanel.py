@@ -22,9 +22,9 @@ class RVIO_PT_RevoltObjectPanel(bpy.types.Panel):
         tz_box = layout.box()
         tz_box.label(text="Track Zone Properties")
         tz_col = tz_box.column(align=True)
-        tz_col.prop(obj, "is_track_zone", text="Is Track Zone")
         if obj and obj.is_track_zone:
             tz_col.prop(obj, "track_zone_id", text="Track Zone ID", slider=True)
+            tz_col.operator("object.duplicate_track_zone", text="Duplicate Track Zone", icon="DUPLICATE")
             
         # FOB Object properties
         if obj.get("is_fob_object"):
@@ -113,17 +113,13 @@ class RVIO_PT_RevoltObjectPanel(bpy.types.Panel):
             tri_col.operator("object.paste_trigger", text="Paste Trigger Values")
             
         # Visibox properties
-        if obj.get("is_visibox"):
+        if obj and getattr(obj, "is_visibox", False):
             visibox_box = layout.box()
             visibox_box.label(text="Visibox Properties")
             visibox_col = visibox_box.column(align=True)
-
-            typ = obj.get("visibox_type", "1")
-            id_ = obj.get("visibox_id", 0)
-
-            type_name = "Camera" if typ == '1' else "Cubes" if typ == '2' else "Unknown"
-            visibox_col.label(text=f"Type: {type_name} ({typ})")
-            visibox_col.label(text=f"ID: {id_}")
+            visibox_col.prop(obj, "visibox_type", text="Type")
+            visibox_col.prop(obj, "visibox_id", text="ID", slider=True)
+            visibox_col.operator("object.duplicate_visibox", icon="DUPLICATE", text="Duplicate Visibox")
 
         # Mirror properties
         mirror_box = layout.box()
