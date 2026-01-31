@@ -20,20 +20,6 @@ from .common import TEX_PAGES_MAX, get_edit_bmesh, get_active_face, msg_box, FAC
 from .common import TEX_ANIM_MAX, int_to_texture
 from .rvstruct import TexAnimation, Frame
 
-def ensure_slot_frames(ta, slot, frame_count):
-    """Make sure ta[slot]['frames'] contains at least frame_count frames.
-       Also ensure UV dicts are not shared references.
-    """
-    frames = ta[slot].setdefault("frames", [])
-    while len(frames) < frame_count:
-        f = rvstruct.Frame().as_dict()
-
-        # Safety: if uv dicts were created with * 4, they may be the same object.
-        uv = f.get("uv")
-        if isinstance(uv, list) and len(uv) == 4:
-            f["uv"] = [{"u": p.get("u", 0.0), "v": p.get("v", 0.0)} for p in uv]
-
-        frames.append(f)
 
 def update_ta_max_slots(self, context):
     """Update the maximum number of slots for texture animations."""
@@ -83,10 +69,8 @@ def update_ta_current_slot(self, context):
         return
 
     scene.texture_animations = str(ta)  # Save the texture animations
-    scene.ta_max_frames = ta[slot].get("frame_count", scene.ta_max_frames)
-    ensure_slot_frames(ta, slot, scene.ta_max_frames)
-    scene.texture_animations = str(ta)
-    update_ta_current_frame(self, context)
+    scene.ta_max_frames = ta[slot]["frame_count"]  # Update the max frames
+    update_ta_current_frame(self, context)  # Update the current frame
 
 
 def update_ta_current_frame(self, context):
@@ -134,179 +118,138 @@ def update_ta_current_frame_delay(self, context):
     scene.texture_animations = str(ta)  # Save the updated texture animations
 
 
-def update_ta_current_frame_uv(context, ui_index):
-    """Write UI UV(ui_index) into stored TA UV (allocation-safe)."""
-    scene = context.scene
+def update_ta_current_frame_uv(context, num):
+    """Update the UV coordinates of the current frame."""
+    scene = bpy.context.scene
+    prop_str = f"ta_current_frame_uv{num}"
     slot = scene.ta_current_slot
     frame = scene.ta_current_frame
 
+    # Reverse the accessor since they're saved in reverse order
+    num = [0, 1, 2, 3][::-1][num]
+
     ta = eval(scene.texture_animations)
-
-    # Ensure slot frames exist at least up to current frame
-    needed = max(int(scene.ta_max_frames), int(frame) + 1)
-    ensure_slot_frames(ta, slot, needed)
-
-    # UI0->stored3, UI1->stored2, UI2->stored1, UI3->stored0
-    stored_index = (3 - ui_index)
-
-    u, v_ui = getattr(scene, f"ta_current_frame_uv{ui_index}")
-    ta[slot]["frames"][frame]["uv"][stored_index]["u"] = float(u)
-    ta[slot]["frames"][frame]["uv"][stored_index]["v"] = 1.0 - float(v_ui)
-
-    scene.texture_animations = str(ta)
-
-def sync_ui_uvs_to_frame(scene, ta, slot, frame):
-    """Sync current UI UVs into the specified TA frame (allocation-safe)."""
-    needed = max(int(scene.ta_max_frames), int(frame) + 1)
-    ensure_slot_frames(ta, slot, needed)
-
-    ui_uv = [
-        scene.ta_current_frame_uv0,
-        scene.ta_current_frame_uv1,
-        scene.ta_current_frame_uv2,
-        scene.ta_current_frame_uv3,
-    ]
-
-    for ui_index, (u, v_ui) in enumerate(ui_uv):
-        stored_index = 3 - ui_index
-        ta[slot]["frames"][frame]["uv"][stored_index]["u"] = float(u)
-        ta[slot]["frames"][frame]["uv"][stored_index]["v"] = 1.0 - float(v_ui)
+    ta[slot]["frames"][frame]["uv"][num]["u"] = getattr(scene, prop_str)[0]
+    ta[slot]["frames"][frame]["uv"][num]["v"] = 1 - getattr(scene, prop_str)[1]
+    scene.texture_animations = str(ta)  # Save the updated UVs
 
 def copy_uv_to_frame(context):
     scene = context.scene
     obj = context.object
 
     if not obj or obj.type != 'MESH' or not obj.data:
-        msg_box("Please select a valid mesh object.", "ERROR")
+        msg_box("Please select a valid mesh object in Edit Mode.", "ERROR")
         return
+
     if obj.mode != 'EDIT':
-        msg_box("Please go to Edit Mode and select a quad face.", "ERROR")
-        return
+        bpy.ops.object.mode_set(mode='EDIT')
 
     bm = bmesh.from_edit_mesh(obj.data)
-    uv_layer = bm.loops.layers.uv.active
+            
+    uv_layer = bm.loops.layers.uv.get("UVMap")
     if not uv_layer:
-        msg_box("Please create a UV layer first.", "ERROR")
+        msg_box("Please create a UV layer first", "ERROR")
         return
-
+            
+    # Iterate over selected faces
     selected_faces = [f for f in bm.faces if f.select]
     if not selected_faces:
-        msg_box("Please select a face first.", "ERROR")
+        msg_box("Please select at least one face", "ERROR")
         return
 
-    face = selected_faces[0]
-    loops = list(face.loops)
-    if len(loops) != 4:
-        msg_box("UV to Frame supports quads only.", "ERROR")
-        return
-
-    # Force allocation for current slot/frame before writing
-    ta = eval(scene.texture_animations)
-    needed = max(int(scene.ta_max_frames), int(scene.ta_current_frame) + 1)
-    ensure_slot_frames(ta, scene.ta_current_slot, needed)
-    scene.texture_animations = str(ta)
-
-    # UI0<-loop3, UI1<-loop2, UI2<-loop1, UI3<-loop0
-    loop_to_ui = {3: 0, 2: 1, 1: 2, 0: 3}
-
-    for loop_index, ui_index in loop_to_ui.items():
-        uv = loops[loop_index][uv_layer].uv
-        setattr(scene, f"ta_current_frame_uv{ui_index}", (float(uv.x), float(uv.y)))
-        update_ta_current_frame_uv(context, ui_index)
-
-    update_ta_current_frame(None, context)
-    ta = eval(scene.texture_animations)
-    uv = ta[scene.ta_current_slot]["frames"][scene.ta_current_frame]["uv"]
-    print("AFTER UV->FRAME:", scene.ta_current_frame, [(p["u"], p["v"]) for p in uv])
-
+    for face in selected_faces:
+        for lnum, loop in enumerate(face.loops):
+            uv = loop[uv_layer].uv
+            if lnum == 0:
+                scene.ta_current_frame_uv0 = (uv[0], uv[1])
+            elif lnum == 1:
+                scene.ta_current_frame_uv1 = (uv[0], uv[1])
+            elif lnum == 2:
+                scene.ta_current_frame_uv2 = (uv[0], uv[1])
+            elif lnum == 3:
+                scene.ta_current_frame_uv3 = (uv[0], uv[1])
+            
+    # Update the BMesh data back to the mesh
     bmesh.update_edit_mesh(obj.data)
-    if context.area:
-        context.area.tag_redraw()
         
 def copy_frame_to_uv(context):
-    """
-    Apply current TA frame (via UI props) -> selected mesh faces.
-    Correctly maps UI UVs to face loop order:
-      UI0->loop3, UI1->loop2, UI2->loop1, UI3->loop0
-    UI props already represent unflipped Blender UV space (because update_ta_current_frame() flips them for display).
-    """
     scene = context.scene
     obj = context.object
 
     if not obj or obj.type != 'MESH' or not obj.data:
-        msg_box("Please select a valid mesh object.", "ERROR")
+        msg_box("Please select a valid mesh object in Edit Mode.", "ERROR")
         return
 
     if obj.mode != 'EDIT':
-        msg_box("Please go to Edit Mode and select face(s) first.", "ERROR")
-        return
+        bpy.ops.object.mode_set(mode='EDIT')
 
     bm = bmesh.from_edit_mesh(obj.data)
-
-    # -------------------------------
-    # Optional: assign material based on current frame texture
-    # -------------------------------
+        
+    # Get the texture number from the current frame
     texture_number = scene.ta_current_frame_tex
+        
+    # Generate the texture letter using the int_to_texture function
     texture_letter = int_to_texture(texture_number)
+        
+    # Find the matching texture image
     texture_image = find_matching_texture(texture_letter)
-
+        
     if not texture_image:
         msg_box(f"Texture ending with '{texture_letter}' not found in images!", "ERROR")
         return
-
+        
+    # Look for the material that uses this texture image
     material = find_material_using_texture(obj, texture_image)
+        
     if not material:
         msg_box(f"Material using texture '{texture_image.name}' not found!", "ERROR")
         return
 
-    # Ensure material exists in object's material slots
+    # -------------------------------------------------
+    # 🔹 ENSURE MATERIAL IS ON THIS OBJECT
+    # -------------------------------------------------
     mats = obj.data.materials
+
+    # Check if material already exists in the object’s slots
     existing_names = [m.name for m in mats if m]
     if material.name not in existing_names:
         mats.append(material)
 
+    # Get the index again AFTER appending
     material_index = mats.find(material.name)
-    if material_index < 0 or material_index >= len(mats):
-        msg_box(f"Internal error: material index for '{material.name}' is invalid.", "ERROR")
-        return
-    # -------------------------------
 
+    # Safety check: if still invalid, bail out with an error
+    if material_index < 0 or material_index >= len(mats):
+        msg_box(
+            f"Internal error: material index for '{material.name}' is invalid.",
+            "ERROR"
+        )
+        return
+    # -------------------------------------------------
+
+    # Iterate over selected faces
     selected_faces = [f for f in bm.faces if f.select]
     if not selected_faces:
-        msg_box("Please select at least one face.", "ERROR")
+        msg_box("Please select at least one face", "ERROR")
         return
 
-    uv_layer = bm.loops.layers.uv.active
+    # Assign the material to the selected faces
+    for sel_face in selected_faces:
+        sel_face.material_index = material_index
+
+    # Now handle UV coordinates only if UV layer exists
+    uv_layer = bm.loops.layers.uv.get("UVMap")
     if not uv_layer:
-        msg_box("Please create a UV layer first.", "ERROR")
+        msg_box("Please create a UV layer first")
         return
 
-    # UI -> loop mapping: UI0->loop3, UI1->loop2, UI2->loop1, UI3->loop0
-    ui_to_loop = {0: 3, 1: 2, 2: 1, 3: 0}
+    for sel_face in selected_faces:
+        for lnum, loop in enumerate(sel_face.loops):
+            uv = getattr(scene, f"ta_current_frame_uv{lnum}")
+            loop[uv_layer].uv = uv
 
-    # Read UI UVs once (Blender UV space)
-    ui_uv = [
-        scene.ta_current_frame_uv0,
-        scene.ta_current_frame_uv1,
-        scene.ta_current_frame_uv2,
-        scene.ta_current_frame_uv3,
-    ]
-
-    for face in selected_faces:
-        if len(face.loops) != 4:
-            # Skip non-quads to avoid broken mapping
-            continue
-
-        face.material_index = material_index
-        loops = list(face.loops)
-
-        for ui_index, loop_index in ui_to_loop.items():
-            u, v = ui_uv[ui_index]
-            loops[loop_index][uv_layer].uv = (float(u), float(v))
-
+    # Update the BMesh data back to the mesh
     bmesh.update_edit_mesh(obj.data)
-    if context.area:
-        context.area.tag_redraw()
     
 def find_matching_texture(texture_letter):
     # Remove the file extension if present in the texture letter
