@@ -784,7 +784,12 @@ class Frame:
     def __init__(self, file=None):
         self.texture = 0                    # texture id of the animated tex
         self.delay = 0                      # delay in milliseconds
-        self.uv = [UV(), UV(), UV(), UV()]  # list of 4 UV coordinates
+        self.uv = [
+            UV(uv=(0.0, 0.0)),
+            UV(uv=(1.0, 0.0)),
+            UV(uv=(1.0, 1.0)),
+            UV(uv=(0.0, 1.0)),
+        ]
 
         if file:
             self.read(file)

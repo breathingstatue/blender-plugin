@@ -5773,9 +5773,15 @@ class ButtonCopyFrameToUv(bpy.types.Operator):
     bl_description = "Copies the UV coordinates of the frame to the currently selected face"
 
     def execute(self, context):
+        scene = context.scene
+
+        if scene.ta_max_frames == 0:
+            msg_box("Slot is empty. No animation frame to copy.", "INFO")
+            return {"CANCELLED"}
+
         copy_frame_to_uv(context)
         context.area.tag_redraw()
-        return{"FINISHED"}
+        return {"FINISHED"}
     
 class PreviewNextFrame(bpy.types.Operator):
     bl_idname = "texanim.prev_next"
@@ -5785,17 +5791,22 @@ class PreviewNextFrame(bpy.types.Operator):
     def execute(self, context):
         scene = context.scene
 
+        # ❌ No animation assigned
+        if scene.ta_max_frames == 0:
+            msg_box("Slot is empty. No animation to preview.", "INFO")
+            return {"CANCELLED"}
+
         # Ensure we don't go beyond the maximum number of frames
         if scene.ta_current_frame < scene.ta_max_frames - 1:
             scene.ta_current_frame += 1
         else:
-            scene.ta_current_frame = 0  # Optionally loop back to the first frame
+            scene.ta_current_frame = 0  # Loop
 
         copy_frame_to_uv(context)
 
-        # Update the UI to reflect the changes
-        context.area.tag_redraw()
-        
+        if context.area:
+            context.area.tag_redraw()
+
         return {"FINISHED"}
 
 class PreviewPrevFrame(bpy.types.Operator):
@@ -5806,16 +5817,21 @@ class PreviewPrevFrame(bpy.types.Operator):
     def execute(self, context):
         scene = context.scene
 
+        # ❌ No animation assigned
+        if scene.ta_max_frames == 0:
+            msg_box("Slot is empty. No animation to preview.", "INFO")
+            return {"CANCELLED"}
+
         # Ensure we don't go below the first frame
         if scene.ta_current_frame > 0:
             scene.ta_current_frame -= 1
         else:
-            scene.ta_current_frame = scene.ta_max_frames - 1  # Optionally loop to the last frame
+            scene.ta_current_frame = scene.ta_max_frames - 1  # Loop
 
         copy_frame_to_uv(context)
 
-        # Update the UI to reflect the changes
-        context.area.tag_redraw()
+        if context.area:
+            context.area.tag_redraw()
 
         return {"FINISHED"}
 
@@ -6046,6 +6062,9 @@ class TexAnimAssignSlot(bpy.types.Operator):
         if context.area:
             context.area.tag_redraw()
 
+        # Success message
+        msg_box(f"Animation assigned to {len(selected_faces)} face(s).", "INFO")
+
         return {'FINISHED'}
 
 class TexAnimClearSelectedFaces(bpy.types.Operator):
@@ -6081,6 +6100,9 @@ class TexAnimClearSelectedFaces(bpy.types.Operator):
         bmesh.update_edit_mesh(obj.data)
         if context.area:
             context.area.tag_redraw()
+
+        # Success message
+        msg_box(f"Animation removed from {len(selected_faces)} face(s).", "INFO")
 
         return {'FINISHED'}
 
