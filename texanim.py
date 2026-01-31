@@ -187,6 +187,8 @@ def sync_frame_uvs_from_mesh(context, ta, slot, frame):
         return False
 
     face = get_active_face(bm)
+    if not face and hasattr(bm.faces, "active"):
+        face = bm.faces.active
     if not face:
         selected_faces = [f for f in bm.faces if f.select]
         if not selected_faces:
