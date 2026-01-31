@@ -15,11 +15,15 @@ class RVIO_PT_AnimModesPanel(bpy.types.Panel):
         layout = self.layout
         scene = context.scene
 
+        # ===== Top header =====
+        header = layout.row()
+        header.scale_y = 1.2
+        header.label(text="TEXTURE ANIMATION", icon='TEXTURE')
+
         # -------- Main top box --------
         box = layout.box()
         col = box.column(align=True)
 
-        # ---- Limits / Slot selection ----
         col.prop(scene, "ta_max_slots", text="Slots Limit")
         col.prop(scene, "ta_current_slot", text="Current Slot")
         col.prop(scene, "ta_max_frames", text="Frames Limit")
@@ -35,49 +39,6 @@ class RVIO_PT_AnimModesPanel(bpy.types.Panel):
         prow.operator("texanim.copy_frame_to_uv", text="", icon='VIEWZOOM')          # Frame -> UV
         prow.operator("texanim.copy_uv_to_frame", text="", icon='IMPORT')           # UV -> Frame
         prow.operator("texanim.prev_next", text="", icon='TRIA_RIGHT')
-
-        # ---- Assignment tools (same box) ----
-        tools_box = box.box()
-        tcol = tools_box.column(align=True)
-
-        tcol.operator("texanim.assign_anim_slot", text="Assign Animation", icon='KEY_HLT')
-        tcol.operator("texanim.clear_selected_faces", text="Remove Assign", icon='X')
-        tcol.operator("texanim.clear_current_slot", text="Clear Slot", icon='TRASH')
-
-        # -------- Transform animation box --------
-        box = layout.box()
-        row = box.row(align=True)
-        row.prop(scene, "ta_frame_start")
-        row.prop(scene, "ta_frame_end")
-
-        row = box.row(align=True)
-        row.label(text=f"Texture: {texnum_to_label(scene.ta_texture)} ({scene.ta_texture})")
-        row.prop(scene, "ta_texture", text="")
-
-        row = box.row(align=True)
-        row.prop(scene, "ta_delay", text="Frame Time")
-
-        row = box.row(align=True)
-        row.operator("texanim.transform")
-
-        # -------- Grid animation box --------
-        box = layout.box()
-        row = box.row(align=True)
-        row.prop(scene, "ta_frame_start")
-
-        row = box.row(align=True)
-        row.prop(scene, "grid_x")
-        row.prop(scene, "grid_y")
-
-        row = box.row(align=True)
-        row.label(text=f"Texture: {texnum_to_label(scene.ta_texture)} ({scene.ta_texture})")
-        row.prop(scene, "ta_texture", text="")
-
-        row = box.row(align=True)
-        row.prop(scene, "ta_delay", text="Frame Time")
-
-        row = box.row(align=True)
-        row.operator("texanim.grid", icon="GRID")
 
         uv_row = preview_box.row(align=True)
         uv_row.label(text="UV0")
@@ -98,3 +59,56 @@ class RVIO_PT_AnimModesPanel(bpy.types.Panel):
         uv_row.label(text="UV3")
         uv_row.prop(scene, "ta_current_frame_uv3", index=0, text="U")
         uv_row.prop(scene, "ta_current_frame_uv3", index=1, text="V")
+
+        # ---- Assignment tools (same box) ----
+        tools_box = box.box()
+        tcol = tools_box.column(align=True)
+
+        tcol.operator("texanim.assign_anim_slot", text="Assign Animation", icon='KEY_HLT')
+        tcol.operator("texanim.clear_selected_faces", text="Remove Assign", icon='X')
+        tcol.operator("texanim.clear_current_slot", text="Clear Slot", icon='TRASH')
+
+        # -------- Transform animation box --------
+        box = layout.box()
+
+        # Header
+        header = box.row()
+        header.label(text="Transform Animation", icon='DRIVER_TRANSFORM')
+
+        row = box.row(align=True)
+        row.prop(scene, "ta_frame_start")
+        row.prop(scene, "ta_frame_end")
+
+        row = box.row(align=True)
+        row.label(text=f"Texture: {texnum_to_label(scene.ta_texture)} ({scene.ta_texture})")
+        row.prop(scene, "ta_texture", text="")
+
+        row = box.row(align=True)
+        row.prop(scene, "ta_delay", text="Frame Time")
+
+        row = box.row(align=True)
+        row.operator("texanim.transform")
+
+        # -------- Grid animation box --------
+        box = layout.box()
+
+        # Header
+        header = box.row()
+        header.label(text="Grid Animation", icon='GRID')
+
+        row = box.row(align=True)
+        row.prop(scene, "ta_frame_start")
+
+        row = box.row(align=True)
+        row.prop(scene, "grid_x")
+        row.prop(scene, "grid_y")
+
+        row = box.row(align=True)
+        row.label(text=f"Texture: {texnum_to_label(scene.ta_texture)} ({scene.ta_texture})")
+        row.prop(scene, "ta_texture", text="")
+
+        row = box.row(align=True)
+        row.prop(scene, "ta_delay", text="Frame Time")
+
+        row = box.row(align=True)
+        row.operator("texanim.grid", icon="GRID")
