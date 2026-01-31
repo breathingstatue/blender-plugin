@@ -5865,6 +5865,10 @@ class TexAnimTransform(bpy.types.Operator):
         if frame_end < frame_start:
             frame_start, frame_end = frame_end, frame_start
 
+        current_frame = scene.ta_current_frame
+        if current_frame in (frame_start, frame_end):
+            sync_ui_uvs_to_frame(scene, ta, slot, current_frame)
+
         # Shortcut: if start == end, nothing to interpolate – just ensure delay/texture are set
         if frame_start == frame_end:
             idx = frame_start
