@@ -6010,11 +6010,11 @@ class TexAnimGrid(bpy.types.Operator):
         msg_box("Animation of {} frames completed.".format(nframes), icon="FILE_TICK")
 
         return {'FINISHED'}
-    
+
 class TexAnimAssignSlot(bpy.types.Operator):
     bl_idname = "texanim.assign_anim_slot"
-    bl_label = "Assign Anim Slot"
-    bl_description = "Assign the current animation slot to the selected faces and enable texture animation"
+    bl_label = "Assign Animation"
+    bl_description = "Enable texture animation on selected faces (sets FACE_TEXANIM in Type)"
 
     def execute(self, context):
         scene = context.scene
@@ -6030,11 +6030,6 @@ class TexAnimAssignSlot(bpy.types.Operator):
         import bmesh
         bm = bmesh.from_edit_mesh(obj.data)
 
-        # Get / create layers
-        anim_slot_layer = bm.faces.layers.int.get("Anim Slot")
-        if anim_slot_layer is None:
-            anim_slot_layer = bm.faces.layers.int.new("Anim Slot")
-
         type_layer = bm.faces.layers.int.get("Type")
         if type_layer is None:
             type_layer = bm.faces.layers.int.new("Type")
@@ -6044,11 +6039,7 @@ class TexAnimAssignSlot(bpy.types.Operator):
             msg_box("Please select at least one face.", "ERROR")
             return {'CANCELLED'}
 
-        slot = scene.ta_current_slot
-
         for f in selected_faces:
-            f[anim_slot_layer] = slot
-            # Enable texture animation bit in the Type field
             f[type_layer] |= FACE_TEXANIM
 
         bmesh.update_edit_mesh(obj.data)
@@ -6056,6 +6047,74 @@ class TexAnimAssignSlot(bpy.types.Operator):
             context.area.tag_redraw()
 
         return {'FINISHED'}
+
+class TexAnimClearSelectedFaces(bpy.types.Operator):
+    bl_idname = "texanim.clear_selected_faces"
+    bl_label = "Remove Assign (Selected Faces)"
+    bl_description = "Disable texture animation on selected faces (clears FACE_TEXANIM from Type)"
+
+    def execute(self, context):
+        obj = context.object
+        if not obj or obj.type != 'MESH' or not obj.data:
+            msg_box("Please select a valid mesh object in Edit Mode.", "ERROR")
+            return {'CANCELLED'}
+
+        if obj.mode != 'EDIT':
+            bpy.ops.object.mode_set(mode='EDIT')
+
+        import bmesh
+        bm = bmesh.from_edit_mesh(obj.data)
+
+        type_layer = bm.faces.layers.int.get("Type")
+        if type_layer is None:
+            msg_box("No 'Type' layer found on this mesh.", "ERROR")
+            return {'CANCELLED'}
+
+        selected_faces = [f for f in bm.faces if f.select]
+        if not selected_faces:
+            msg_box("Please select at least one face.", "ERROR")
+            return {'CANCELLED'}
+
+        for f in selected_faces:
+            f[type_layer] &= ~FACE_TEXANIM
+
+        bmesh.update_edit_mesh(obj.data)
+        if context.area:
+            context.area.tag_redraw()
+
+        return {'FINISHED'}
+
+class TexAnimClearCurrentSlot(bpy.types.Operator):
+    bl_idname = "texanim.clear_current_slot"
+    bl_label = "Clear Current Slot"
+    bl_description = "Reset current texture animation slot data (frames + frame_count) to defaults"
+
+    def execute(self, context):
+        scene = context.scene
+
+        if scene.ta_max_slots == 0:
+            msg_box("No slots exist (Slots Limit is 0).", "ERROR")
+            return {'CANCELLED'}
+
+        ta = eval(scene.texture_animations)
+        slot = scene.ta_current_slot
+
+        if slot < 0 or slot >= len(ta):
+            msg_box("Slot index out of range.", "ERROR")
+            return {'CANCELLED'}
+
+        # Reset slot dict completely, keep list length
+        ta[slot] = rvstruct.TexAnimation().as_dict()
+
+        # Keep UI in sync
+        scene.texture_animations = str(ta)
+        scene.ta_max_frames = ta[slot]["frame_count"]
+        scene.ta_current_frame = 0
+        update_ta_current_frame(self, context)
+
+        msg_box(f"Slot {slot} cleared.", icon="TRASH")
+        return {'FINISHED'}
+    
 
 """
 VERTEX COLORS -----------------------------------------------------------------
@@ -6449,3 +6508,4 @@ class CarAutoShader(bpy.types.Operator):
 
         self.report({'INFO'}, "Vertex colors and alpha baked based on lighting.")
         return {'FINISHED'}
+
