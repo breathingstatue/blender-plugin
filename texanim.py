@@ -172,51 +172,6 @@ def sync_ui_uvs_to_frame(scene, ta, slot, frame):
         ta[slot]["frames"][frame]["uv"][stored_index]["u"] = float(u)
         ta[slot]["frames"][frame]["uv"][stored_index]["v"] = 1.0 - float(v_ui)
 
-def sync_frame_uvs_from_mesh(context, ta, slot, frame):
-    """Sync UVs from the active edit-mode face into the specified TA frame."""
-    obj = context.object
-    if not obj or obj.type != 'MESH' or obj.mode != 'EDIT':
-        return False
-
-    bm = get_edit_bmesh(obj)
-    if not bm:
-        return False
-
-    uv_layer = bm.loops.layers.uv.active
-    if not uv_layer:
-        return False
-
-    face = get_active_face(bm)
-    if not face and hasattr(bm.faces, "active"):
-        face = bm.faces.active
-    if not face:
-        selected_faces = [f for f in bm.faces if f.select]
-        if not selected_faces:
-            if len(bm.faces) == 1:
-                face = bm.faces[0]
-            else:
-                return False
-        else:
-            face = selected_faces[0]
-
-    loops = list(face.loops)
-    if len(loops) != 4:
-        return False
-
-    needed = max(int(context.scene.ta_max_frames), int(frame) + 1)
-    ensure_slot_frames(ta, slot, needed)
-
-    # UI0<-loop3, UI1<-loop2, UI2<-loop1, UI3<-loop0
-    loop_to_ui = {3: 0, 2: 1, 1: 2, 0: 3}
-
-    for loop_index, ui_index in loop_to_ui.items():
-        uv = loops[loop_index][uv_layer].uv
-        stored_index = 3 - ui_index
-        ta[slot]["frames"][frame]["uv"][stored_index]["u"] = float(uv.x)
-        ta[slot]["frames"][frame]["uv"][stored_index]["v"] = 1.0 - float(uv.y)
-
-    return True
-
 def copy_uv_to_frame(context):
     scene = context.scene
     obj = context.object
