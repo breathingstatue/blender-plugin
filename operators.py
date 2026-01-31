@@ -4526,6 +4526,103 @@ class SetFaceTextureDropdown(bpy.types.Operator):
     bl_description = "Set texture page number and assign material based on it"
     bl_options = {'REGISTER', 'UNDO'}
 
+    def _assign_uv_materials_to_selected_faces(self, context, obj, texnum_layer):
+        helper = MaterialAssignmentHelper()
+        scene = context.scene
+
+        base_name_for_texture = ""
+        source_mode = ""
+        matched = False
+
+        if "is_model" in obj and obj["is_model"]:
+            for i in range(MAX_MODEL_SLOTS):
+                slot_model_name = get_scene_value(scene, f"m_model_name_{i}", "")
+                if not slot_model_name:
+                    continue
+
+                if clean_model_base_name(slot_model_name) in clean_model_base_name(obj.name):
+                    source_mode = get_scene_value(scene, f"m_texture_mode_{i}", "VERTEX_COLOR")
+                    texture_path = get_scene_value(scene, f"m_texture_path_{i}", "")
+
+                    if source_mode == "TEXTURE_NAME":
+                        base_name_for_texture = os.path.splitext(os.path.basename(texture_path))[0].lower()
+                    elif source_mode == "LEVEL_TEXTURES":
+                        base_name_for_texture = os.path.basename(texture_path.rstrip("/\\")).lower()
+
+                    matched = True
+                    break
+
+        is_car_part = helper._is_car_part(obj)
+        car_material = ensure_material_for_image(get_scene_value(scene, "selected_car_texture", "car.bmp")) if is_car_part else None
+
+        if not matched and not is_car_part:
+            if obj.get("is_instance") and "fin_texture_base" in obj:
+                base_name_for_texture = obj["fin_texture_base"]
+            else:
+                base_prop = get_scene_value(scene, "level_texture_base", "")
+                if base_prop:
+                    base_name_for_texture = os.path.splitext(base_prop.strip().lower())[0]
+                else:
+                    base_name_for_texture = clean_model_base_name(obj.name)
+            source_mode = "LEVEL_TEXTURES"
+
+        if not matched and is_car_part:
+            fallback_name = get_scene_value(scene, "selected_car_texture", "car.bmp")
+            base_name_for_texture = clean_model_base_name(fallback_name)
+            source_mode = "TEXTURE_NAME"
+
+        bm = bmesh.from_edit_mesh(obj.data)
+        if not bm:
+            return False
+
+        updated = False
+        for face in bm.faces:
+            if not face.select:
+                continue
+
+            tex_num = face[texnum_layer]
+            mat = None
+
+            if source_mode == 'TEXTURE_NAME':
+                mat = helper.find_material_loose(f"{base_name_for_texture}.bmp")
+            elif source_mode == 'LEVEL_TEXTURES':
+                if tex_num == -1:
+                    continue
+                mat = helper._find_level_texture_material(base_name_for_texture, tex_num)
+            else:
+                continue
+
+            if not mat:
+                try:
+                    slot_index = face.material_index
+                    if slot_index < len(obj.data.materials):
+                        candidate = obj.data.materials[slot_index].name
+                        mat = bpy.data.materials.get(candidate) \
+                            or bpy.data.materials.get(f"{candidate}.bmp") \
+                            or (bpy.data.materials.get(candidate[:-4]) if candidate.endswith('.bmp') else None)
+                except Exception:
+                    pass
+
+            if not mat and car_material:
+                mat = car_material
+
+            if not mat and is_car_part:
+                fallback_name = get_scene_value(scene, "selected_car_texture", "car.bmp")
+                mat = car_material or ensure_material_for_image(fallback_name)
+
+            if not mat:
+                continue
+
+            if mat.name not in obj.data.materials:
+                obj.data.materials.append(mat)
+
+            face.material_index = obj.data.materials.find(mat.name)
+            updated = True
+
+        bmesh.update_edit_mesh(obj.data)
+        obj.data.update()
+        return updated
+
     texture_page: bpy.props.EnumProperty(
         name="Texture Page",
         items=lambda self, context: [
@@ -4603,6 +4700,18 @@ class SetFaceTextureDropdown(bpy.types.Operator):
             return {'FINISHED'}
 
         scene = context.scene
+        material_choice = getattr(scene, "material_choice", "UV_TEX")
+        if material_choice == "TEX_VC":
+            updated = self._assign_uv_materials_to_selected_faces(context, obj, tex_layer)
+            helper = MaterialAssignmentHelper()
+            existing_textures = helper.get_existing_textures()
+            helper.assign_tex_vc_materials(obj, existing_textures)
+            if updated:
+                self.report({'INFO'}, "Texture page updated and TEX+VC materials refreshed.")
+            else:
+                self.report({'INFO'}, "Texture page updated. TEX+VC materials refreshed.")
+            return {'FINISHED'}
+
         guessed_base = get_scene_value(scene, "level_texture_base", "")
         material_name = int_to_texture(tex_num, name=guessed_base)
 
