@@ -955,15 +955,17 @@ class TexturesSave(bpy.types.Operator, ImportHelper):
     )
 
     def execute(self, context):
-        import shutil
-
-        directory = os.path.dirname(self.filepath)
+        selected_path = self.filepath
+        directory = selected_path if os.path.isdir(selected_path) else os.path.dirname(selected_path)
         if not os.path.isdir(directory):
             self.report({'ERROR'}, "Invalid directory selected.")
             return {'CANCELLED'}
 
         renamed = 0
         saved = 0
+        used_names = set()
+        base_prefix = self.texture_base.strip()[:8]
+        base_prefix_lower = base_prefix.lower()
 
         # 1. Fix mismatched material names
         for mat in bpy.data.materials:
@@ -985,15 +987,46 @@ class TexturesSave(bpy.types.Operator, ImportHelper):
             self.report({'INFO'}, f"Renamed {renamed} materials to match texture names.")
 
         # 2. Save each image as .bmp
-        for image in bpy.data.images:
+        used_images = [
+            image for image in bpy.data.images
+            if image.source == 'FILE' and image.users > 0
+        ]
+        used_images.sort(key=lambda img: img.name.lower())
+
+        for index, image in enumerate(used_images):
             if image.source != 'FILE' or image.users == 0:
                 continue
 
-            base_name = os.path.splitext(image.name)[0][:8]
-            if self.texture_base:
-                base_name = self.texture_base[:8]
+            image_base = os.path.splitext(image.name)[0]
+            image_base_lower = image_base.lower()
+            if base_prefix:
+                suffix = ""
+                if image_base_lower.startswith(base_prefix_lower):
+                    suffix = image_base_lower[len(base_prefix_lower):]
+                else:
+                    match = re.search(r'([a-z]{1,2})$', image_base_lower)
+                    suffix = match.group(1) if match else ""
 
-            filename = f"{base_name}.bmp"
+                if suffix:
+                    filename = f"{base_prefix}{suffix}.bmp"
+                else:
+                    filename = int_to_texture(index, name=base_prefix)
+            else:
+                filename = f"{image_base[:8]}.bmp"
+
+            filename_lower = filename.lower()
+            if filename_lower in used_names:
+                counter = index
+                name_prefix = base_prefix or image_base[:6]
+                filename = int_to_texture(counter, name=name_prefix)
+                filename_lower = filename.lower()
+                while filename_lower in used_names:
+                    counter += 1
+                    filename = int_to_texture(counter, name=name_prefix)
+                    filename_lower = filename.lower()
+
+            used_names.add(filename_lower)
+
             dst_path = os.path.join(directory, filename)
 
             try:
