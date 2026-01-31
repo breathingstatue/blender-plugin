@@ -93,7 +93,7 @@ from .operators import ButtonZoneHide, AddTrackZone, ReverseTrackZone, ButtonTri
 from .operators import DuplicateFobObject, DuplicateTrigger, CopyTrigger, PasteTrigger, SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere
 from .operators import ButtonCopyUvToFrame, ButtonCopyFrameToUv, PreviewNextFrame, PreviewPrevFrame, TexAnimTransform, TexAnimGrid, CarAutoShader
 from .operators import ToggleVisiboxVisibility, ToggleFOBVisibility, FindSpecialFile, BakeVertexBatch, TexAnimAssignSlot, TexturesLoadFromDisk
-from .operators import DuplicateTrackZone
+from .operators import DuplicateTrackZone, TexAnimClearSelectedFaces, TexAnimClearCurrentSlot
 from .texanim import update_ta_max_frames, update_ta_current_slot, update_ta_current_frame, update_ta_current_frame_uv
 from .texanim import update_ta_current_frame_delay, update_ta_current_frame_tex, update_ta_max_slots
 from .tools import get_trigger_type_items, get_trigger_type, set_trigger_type, get_low_flag_items, get_low_flag, set_low_flag, get_high_flag_items
@@ -530,9 +530,10 @@ def register():
     bpy.types.Scene.ta_current_frame_uv0 = bpy.props.FloatVectorProperty(
         name = "UV 0",
         size = 2,
-        default = (0, 0),
-        #min = 0.0,
-        #max = 1.0,
+        default = (0.0, 0.0),
+        min = 0.0,
+        max = 1.0,
+        step=0.01, 
         update = lambda self, context: update_ta_current_frame_uv(context, 0),
         description = "UV coordinate of the first vertex"
     )
@@ -540,9 +541,10 @@ def register():
     bpy.types.Scene.ta_current_frame_uv1 = bpy.props.FloatVectorProperty(
         name = "UV 1",
         size = 2,
-        default = (0, 0),
-        #min = 0.0,
-        #max = 1.0,
+        default = (1.0, 0.0),
+        min = 0.0,
+        max = 1.0,
+        step=0.01,
         update = lambda self, context: update_ta_current_frame_uv(context, 1),
         description = "UV coordinate of the second vertex"
     )
@@ -550,9 +552,10 @@ def register():
     bpy.types.Scene.ta_current_frame_uv2 = bpy.props.FloatVectorProperty(
         name = "UV 2",
         size = 2,
-        default = (0, 0),
-        #min = 0.0,
-        #max = 1.0,
+        default = (1.0, 1.0),
+        min = 0.0,
+        max = 1.0,
+        step=0.01,
         update = lambda self, context: update_ta_current_frame_uv(context, 2),
         description = "UV coordinate of the third vertex"
     )
@@ -560,9 +563,10 @@ def register():
     bpy.types.Scene.ta_current_frame_uv3 = bpy.props.FloatVectorProperty(
         name = "UV 3",
         size = 2,
-        default = (0, 0),
-        #min = 0.0,
-        #max = 1.0,
+        default = (0.0, 1.0),
+        min = 0.0,
+        max = 1.0,
+        step=0.01,
         update = lambda self, context: update_ta_current_frame_uv(context, 3),
         description = "UV coordinate of the fourth vertex"
     )
@@ -1054,6 +1058,8 @@ def register():
     bpy.utils.register_class(TexAnimAssignSlot)
     bpy.utils.register_class(TexturesLoadFromDisk)
     bpy.utils.register_class(DuplicateTrackZone)
+    bpy.utils.register_class(TexAnimClearSelectedFaces)
+    bpy.utils.register_class(TexAnimClearCurrentSlot)
     bpy.utils.register_class(ButtonZoneHide)
     bpy.utils.register_class(AddTrackZone)
     bpy.utils.register_class(ReverseTrackZone)
@@ -1128,6 +1134,8 @@ def unregister():
     bpy.utils.unregister_class(ReverseTrackZone)
     bpy.utils.unregister_class(AddTrackZone)
     bpy.utils.unregister_class(ButtonZoneHide)
+    bpy.utils.unregister_class(TexAnimClearCurrentSlot)
+    bpy.utils.unregister_class(TexAnimClearSelectedFaces)
     bpy.utils.unregister_class(DuplicateTrackZone)
     bpy.utils.unregister_class(TexturesLoadFromDisk)
     bpy.utils.unregister_class(TexAnimAssignSlot)

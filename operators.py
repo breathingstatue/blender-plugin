@@ -38,7 +38,7 @@ from .parameters_out_redux import append_front_left_wheel, append_front_right_wh
 from .parameters_out_redux import compare_and_adjust_axle_lengths, remove_imported_axles, compare_and_adjust_spring_lengths
 from .parameters_out_redux import remove_imported_springs, compare_and_adjust_pin_lengths, remove_imported_pins
 from .taz_in import create_zone
-from .texanim import copy_frame_to_uv, copy_uv_to_frame
+from .texanim import copy_frame_to_uv, copy_uv_to_frame, ensure_slot_frames
 from .tools import trigger_type_items, fob_type_items, visibox_type_items, get_rig_objects, get_rig_root, rig_world_bbox_center
 from .tri_in import create_trigger
 
@@ -5785,18 +5785,21 @@ class PreviewNextFrame(bpy.types.Operator):
     def execute(self, context):
         scene = context.scene
 
-        # Ensure we don't go beyond the maximum number of frames
         if scene.ta_current_frame < scene.ta_max_frames - 1:
             scene.ta_current_frame += 1
         else:
-            scene.ta_current_frame = 0  # Optionally loop back to the first frame
+            scene.ta_current_frame = 0
 
+        # IMPORTANT: load this frame's UV/TEX/DELAY from stored TA into UI props
+        update_ta_current_frame(self, context)
+
+        # Now apply UI props to mesh UVs/material
         copy_frame_to_uv(context)
 
-        # Update the UI to reflect the changes
-        context.area.tag_redraw()
-        
+        if context.area:
+            context.area.tag_redraw()
         return {"FINISHED"}
+
 
 class PreviewPrevFrame(bpy.types.Operator):
     bl_idname = "texanim.prev_prev"
@@ -5806,17 +5809,18 @@ class PreviewPrevFrame(bpy.types.Operator):
     def execute(self, context):
         scene = context.scene
 
-        # Ensure we don't go below the first frame
         if scene.ta_current_frame > 0:
             scene.ta_current_frame -= 1
         else:
-            scene.ta_current_frame = scene.ta_max_frames - 1  # Optionally loop to the last frame
+            scene.ta_current_frame = scene.ta_max_frames - 1
+
+        # IMPORTANT: refresh UI props from stored data first
+        update_ta_current_frame(self, context)
 
         copy_frame_to_uv(context)
 
-        # Update the UI to reflect the changes
-        context.area.tag_redraw()
-
+        if context.area:
+            context.area.tag_redraw()
         return {"FINISHED"}
 
 class TexAnimTransform(bpy.types.Operator):
@@ -5826,7 +5830,7 @@ class TexAnimTransform(bpy.types.Operator):
 
     def execute(self, context):
         scene = context.scene
-        
+
         # Check if the slot limit is 0
         if scene.ta_max_slots == 0:
             msg_box("Slot limit is 0. Please increase the slot limit before creating an animation.", "ERROR")
@@ -5840,12 +5844,17 @@ class TexAnimTransform(bpy.types.Operator):
             return {'FINISHED'}
 
         max_frames = scene.ta_max_frames
+
+        # NEW: make sure the frames actually exist (allocation guard)
+        ensure_slot_frames(ta, slot, max_frames)
+
         frame_start = scene.ta_frame_start
         frame_end = scene.ta_frame_end
 
-        # Bounds check against current slot's max_frames
-        if frame_start >= max_frames or frame_end >= max_frames:
-            msg_box("Frame index out of range. Please increase Frames Limit if needed.", "ERROR")
+        # NEW (optional but better): also clamp bounds to actual frames list
+        available = len(ta[slot]["frames"])
+        if frame_start >= available or frame_end >= available:
+            msg_box("Frame index out of range (frames not allocated). Increase Frames Limit if needed.", "ERROR")
             return {'FINISHED'}
 
         # Remember original values for the message
@@ -5861,13 +5870,19 @@ class TexAnimTransform(bpy.types.Operator):
             idx = frame_start
             ta[slot]["frames"][idx]["delay"] = scene.ta_delay
             ta[slot]["frames"][idx]["texture"] = scene.ta_texture
-            # No UV change needed, but we could also copy current frame UVs here if desired
 
             scene.texture_animations = str(ta)
             update_ta_current_frame(self, context)
 
             msg_box(f"Single-frame transform applied at frame {idx}.", icon="FILE_TICK")
             return {'FINISHED'}
+
+        def dump_frame_uv(tag, f):
+            uv = ta[slot]["frames"][f]["uv"]
+            print(tag, f, [(u["u"], u["v"]) for u in uv])
+
+        dump_frame_uv("START UV", frame_start)
+        dump_frame_uv("END   UV", frame_end)
 
         # Read UVs from the start frame
         uv_start = (
@@ -5898,7 +5913,7 @@ class TexAnimTransform(bpy.types.Operator):
 
         for i in range(nframes):
             current_frame = frame_start + i
-            prog = i / denom  # safe because frame_end != frame_start here
+            prog = i / denom
 
             ta[slot]["frames"][current_frame]["delay"] = scene.ta_delay
             ta[slot]["frames"][current_frame]["texture"] = scene.ta_texture
@@ -5906,14 +5921,8 @@ class TexAnimTransform(bpy.types.Operator):
             for j in range(4):
                 new_u = uv_start[j][0] * (1 - prog) + uv_end[j][0] * prog
                 new_v = uv_start[j][1] * (1 - prog) + uv_end[j][1] * prog
-
                 ta[slot]["frames"][current_frame]["uv"][j]["u"] = new_u
                 ta[slot]["frames"][current_frame]["uv"][j]["v"] = new_v
-
-        # 🔸 IMPORTANT: do NOT touch frame_count here.
-        # Transform only reshapes existing frames inside [frame_start, frame_end].
-        # Frame count / allocation is handled when user sets Frames Limit (ta_max_frames)
-        # and by Grid (which already updates frame_count safely).
 
         scene.texture_animations = str(ta)
         update_ta_current_frame(self, context)
@@ -6014,10 +6023,9 @@ class TexAnimGrid(bpy.types.Operator):
 class TexAnimAssignSlot(bpy.types.Operator):
     bl_idname = "texanim.assign_anim_slot"
     bl_label = "Assign Anim Slot"
-    bl_description = "Assign the current animation slot to the selected faces and enable texture animation"
+    bl_description = "Enable texture animation on the selected faces (sets FACE_TEXANIM in Type)"
 
     def execute(self, context):
-        scene = context.scene
         obj = context.object
 
         if not obj or obj.type != 'MESH' or not obj.data:
@@ -6030,11 +6038,7 @@ class TexAnimAssignSlot(bpy.types.Operator):
         import bmesh
         bm = bmesh.from_edit_mesh(obj.data)
 
-        # Get / create layers
-        anim_slot_layer = bm.faces.layers.int.get("Anim Slot")
-        if anim_slot_layer is None:
-            anim_slot_layer = bm.faces.layers.int.new("Anim Slot")
-
+        # Type is the face flags layer
         type_layer = bm.faces.layers.int.get("Type")
         if type_layer is None:
             type_layer = bm.faces.layers.int.new("Type")
@@ -6044,18 +6048,145 @@ class TexAnimAssignSlot(bpy.types.Operator):
             msg_box("Please select at least one face.", "ERROR")
             return {'CANCELLED'}
 
-        slot = scene.ta_current_slot
-
         for f in selected_faces:
-            f[anim_slot_layer] = slot
-            # Enable texture animation bit in the Type field
-            f[type_layer] |= FACE_TEXANIM
+            f[type_layer] = int(f[type_layer]) | int(FACE_TEXANIM)
 
         bmesh.update_edit_mesh(obj.data)
         if context.area:
             context.area.tag_redraw()
 
         return {'FINISHED'}
+
+def _read_scene_ta_list(scene):
+    """
+    scene.texture_animations is stored as a stringified Python list-of-dicts.
+    Returns a list (possibly empty).
+    """
+    raw = getattr(scene, "texture_animations", "")
+    if not raw:
+        return []
+    if isinstance(raw, list):
+        return raw
+    if not isinstance(raw, str):
+        return []
+    try:
+        data = ast.literal_eval(raw)
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def _write_scene_ta_list(scene, ta_list):
+    scene.texture_animations = str(ta_list)
+
+
+def _make_default_slot_dict():
+    """
+    Uses your rvstruct.TexAnimation default if available.
+    """
+    try:
+        from . import rvstruct
+        return rvstruct.TexAnimation().as_dict()
+    except Exception:
+        # Minimal fallback; replace if your structure differs
+        return {"mode": 0, "speed": 1, "loop": True, "frames": {}}
+
+
+def _try_refresh_ta_ui(scene):
+    """
+    Optional: refresh preview/UI if your add-on provides it.
+    """
+    try:
+        from . import texanim
+        fn = getattr(texanim, "update_ta_current_frame", None)
+        if callable(fn):
+            fn(scene)
+    except Exception:
+        pass
+
+class TexAnimClearSelectedFaces(bpy.types.Operator):
+    bl_idname = "texanim.clear_selected_faces"
+    bl_label = "Clear Animation (Selected Faces)"
+    bl_description = "Disable texture animation on selected faces (clears FACE_TEXANIM from Type)"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    sanitize_type_flags: bpy.props.BoolProperty(
+        name="Sanitize Type Flags",
+        default=False,
+        description="Also apply FACE_PROP_MASK after clearing (keeps only supported bits)"
+    )
+
+    def execute(self, context):
+        obj = context.object
+
+        if not obj or obj.type != 'MESH' or not obj.data:
+            msg_box("Please select a valid mesh object in Edit Mode.", "ERROR")
+            return {'CANCELLED'}
+
+        if obj.mode != 'EDIT':
+            bpy.ops.object.mode_set(mode='EDIT')
+
+        bm = bmesh.from_edit_mesh(obj.data)
+
+        type_layer = bm.faces.layers.int.get("Type")
+        if type_layer is None:
+            msg_box("Mesh has no 'Type' face layer. Nothing to clear.", "INFO")
+            return {'CANCELLED'}
+
+        selected_faces = [f for f in bm.faces if f.select]
+        if not selected_faces:
+            msg_box("Please select at least one face.", "ERROR")
+            return {'CANCELLED'}
+
+        for f in selected_faces:
+            tv = int(f[type_layer])
+            tv &= ~int(FACE_TEXANIM)  # clear 0x200
+            if self.sanitize_type_flags:
+                tv &= int(FACE_PROP_MASK)
+            f[type_layer] = tv
+
+        bmesh.update_edit_mesh(obj.data)
+        if context.area:
+            context.area.tag_redraw()
+
+        return {'FINISHED'}
+
+class TexAnimClearCurrentSlot(bpy.types.Operator):
+    bl_idname = "texanim.clear_current_slot"
+    bl_label = "Clear Animation Slot (Current Slot)"
+    bl_description = "Resets the current texture animation slot data in the scene"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        scene = context.scene
+
+        slot = getattr(scene, "ta_current_slot", None)
+        if slot is None:
+            msg_box("Scene is missing 'ta_current_slot'.", "ERROR")
+            return {'CANCELLED'}
+
+        try:
+            slot = int(slot)
+        except Exception:
+            msg_box("'ta_current_slot' is not an integer.", "ERROR")
+            return {'CANCELLED'}
+
+        ta_list = _read_scene_ta_list(scene)
+
+        # Ensure list is long enough
+        while len(ta_list) <= slot:
+            ta_list.append(_make_default_slot_dict())
+
+        # Reset slot
+        ta_list[slot] = _make_default_slot_dict()
+        _write_scene_ta_list(scene, ta_list)
+
+        _try_refresh_ta_ui(scene)
+        if context.area:
+            context.area.tag_redraw()
+
+        return {'FINISHED'}
+
 
 """
 VERTEX COLORS -----------------------------------------------------------------

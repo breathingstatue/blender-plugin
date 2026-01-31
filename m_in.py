@@ -15,6 +15,7 @@ from . import common
 from . import layers
 from .layers import set_face_env
 from . import rvstruct
+from . import texanim
 from . import img_in
 from . import w_in
 from .rvstruct import Model
@@ -85,6 +86,10 @@ def import_file(filepath, scene, model_name=None):
         texture_animations = [animation.as_dict() for animation in model.animations]
         scene.texture_animations = str(texture_animations)
         scene.ta_max_slots = model.animation_count
+
+        texanim.update_ta_current_slot(None, bpy.context)
+        # or at least:
+        texanim.update_ta_current_frame(None, bpy.context)
 
         # Make sure our imported model is the active object (for context)
         bpy.context.view_layer.objects.active = obj

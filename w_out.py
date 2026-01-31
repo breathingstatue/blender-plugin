@@ -63,8 +63,6 @@ def create_split_mesh(original_mesh, face_indices, original_obj_name, created_ob
     texnum_layer = split_bm.faces.layers.int.new("Texture Number") if texnum_src else None
     type_src = original_bm.faces.layers.int.get("Type")
     type_layer = split_bm.faces.layers.int.new("Type") if type_src else None
-    anim_slot_src = original_bm.faces.layers.int.get("Anim Slot")
-    anim_slot_layer = split_bm.faces.layers.int.new("Anim Slot") if anim_slot_src else None
 
     # Custom properties layers
     custom_props_layers = {}

@@ -12,6 +12,7 @@ import bmesh
 from mathutils import Color, Vector
 from . import common
 from . import rvstruct
+from . import texanim
 from . import img_in
 from . import prm_in_for_w
 
@@ -83,6 +84,10 @@ def import_file(filepath, scene):
     texture_animations = [animation.as_dict() for animation in world.animations]
     scene.texture_animations = str(texture_animations)
     scene.ta_max_slots = world.animation_count
+
+    texanim.update_ta_current_slot(None, bpy.context)
+    # or at least:
+    texanim.update_ta_current_frame(None, bpy.context)
     
     # Run fast batch material assignment after importing the objects
     fast_batch_assign_materials(scene)
