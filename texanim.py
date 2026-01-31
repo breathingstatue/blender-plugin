@@ -21,24 +21,49 @@ from .common import TEX_ANIM_MAX, int_to_texture
 from .rvstruct import TexAnimation, Frame
 
 
+def _normalize_texture_animations(scene):
+    """Ensure texture animation data is safe to index."""
+    ta = eval(scene.texture_animations)
+    if not isinstance(ta, list):
+        ta = []
+
+    max_slots = max(scene.ta_max_slots, len(ta))
+    while len(ta) < max_slots:
+        ta.append(rvstruct.TexAnimation().as_dict())
+
+    for slot_data in ta:
+        frames = slot_data.get("frames")
+        if not isinstance(frames, list):
+            frames = []
+            slot_data["frames"] = frames
+
+        frame_count = slot_data.get("frame_count", len(frames))
+        if frame_count < len(frames):
+            frame_count = len(frames)
+        slot_data["frame_count"] = frame_count
+
+        while len(frames) < frame_count:
+            frames.append(rvstruct.Frame().as_dict())
+
+    scene.texture_animations = str(ta)
+    return ta
+
+
 def update_ta_max_slots(self, context):
     """Update the maximum number of slots for texture animations."""
     scene = context.scene
     if scene.ta_max_slots > 0:
-        ta = eval(scene.texture_animations)  # Convert string to dictionary
-
-        # Create new animation slots if needed
-        while len(ta) < scene.ta_max_slots:
-            ta.append(rvstruct.TexAnimation().as_dict())
-
-        scene.texture_animations = str(ta)  # Save the updated texture animations
+        _normalize_texture_animations(scene)
 
 def update_ta_max_frames(self, context):
     """Update the maximum number of frames in the current slot."""
     scene = context.scene
     slot = scene.ta_current_slot
 
-    ta = eval(scene.texture_animations)
+    ta = _normalize_texture_animations(scene)
+    if not ta or slot >= len(ta):
+        return
+
     ta[slot]["frame_count"] = scene.ta_max_frames
 
     # Create new frames if necessary
@@ -61,11 +86,15 @@ def update_ta_current_slot(self, context):
             scene.ta_current_slot = 0
         return
 
-    ta = eval(scene.texture_animations)  # Convert string to dictionary
+    ta = _normalize_texture_animations(scene)
 
     # Ensure the current slot is within bounds
-    if slot > scene.ta_max_slots - 1:
-        scene.ta_current_slot = scene.ta_max_slots - 1
+    if not ta:
+        scene.ta_max_frames = 0
+        return
+
+    if slot > scene.ta_max_slots - 1 or slot >= len(ta):
+        scene.ta_current_slot = min(scene.ta_max_slots - 1, len(ta) - 1)
         return
 
     scene.texture_animations = str(ta)  # Save the texture animations
@@ -79,17 +108,24 @@ def update_ta_current_frame(self, context):
     slot = scene.ta_current_slot
     frame = scene.ta_current_frame
 
-    ta = eval(scene.texture_animations)  # Convert string to dictionary
+    ta = _normalize_texture_animations(scene)
+    if not ta or slot >= len(ta):
+        return
+
+    frames = ta[slot]["frames"]
+    if not frames:
+        scene.ta_current_frame = 0
+        return
 
     # Ensure the current frame is within bounds
-    if frame > scene.ta_max_frames - 1:
-        scene.ta_current_frame = scene.ta_max_frames - 1
+    if frame > scene.ta_max_frames - 1 or frame >= len(frames):
+        scene.ta_current_frame = max(0, min(scene.ta_max_frames - 1, len(frames) - 1))
         return
 
     # Update the frame's texture and UV coordinates
-    scene.ta_current_frame_tex = ta[slot]["frames"][frame]["texture"]
-    scene.ta_current_frame_delay = ta[slot]["frames"][frame]["delay"]
-    uv = ta[slot]["frames"][frame]["uv"]
+    scene.ta_current_frame_tex = frames[frame]["texture"]
+    scene.ta_current_frame_delay = frames[frame]["delay"]
+    uv = frames[frame]["uv"]
     scene.ta_current_frame_uv0 = (uv[3]["u"], 1 - uv[3]["v"])
     scene.ta_current_frame_uv1 = (uv[2]["u"], 1 - uv[2]["v"])
     scene.ta_current_frame_uv2 = (uv[1]["u"], 1 - uv[1]["v"])
@@ -102,7 +138,10 @@ def update_ta_current_frame_tex(self, context):
     slot = scene.ta_current_slot
     frame = scene.ta_current_frame
 
-    ta = eval(scene.texture_animations)
+    ta = _normalize_texture_animations(scene)
+    if not ta or slot >= len(ta) or frame >= len(ta[slot]["frames"]):
+        return
+
     ta[slot]["frames"][frame]["texture"] = scene.ta_current_frame_tex  # Update texture
     scene.texture_animations = str(ta)  # Save the updated texture animations
 
@@ -113,7 +152,10 @@ def update_ta_current_frame_delay(self, context):
     slot = scene.ta_current_slot
     frame = scene.ta_current_frame
 
-    ta = eval(scene.texture_animations)
+    ta = _normalize_texture_animations(scene)
+    if not ta or slot >= len(ta) or frame >= len(ta[slot]["frames"]):
+        return
+
     ta[slot]["frames"][frame]["delay"] = scene.ta_current_frame_delay  # Update delay
     scene.texture_animations = str(ta)  # Save the updated texture animations
 
@@ -128,7 +170,10 @@ def update_ta_current_frame_uv(context, num):
     # Reverse the accessor since they're saved in reverse order
     num = [0, 1, 2, 3][::-1][num]
 
-    ta = eval(scene.texture_animations)
+    ta = _normalize_texture_animations(scene)
+    if not ta or slot >= len(ta) or frame >= len(ta[slot]["frames"]):
+        return
+
     ta[slot]["frames"][frame]["uv"][num]["u"] = getattr(scene, prop_str)[0]
     ta[slot]["frames"][frame]["uv"][num]["v"] = 1 - getattr(scene, prop_str)[1]
     scene.texture_animations = str(ta)  # Save the updated UVs
