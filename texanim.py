@@ -155,6 +155,23 @@ def update_ta_current_frame_uv(context, ui_index):
 
     scene.texture_animations = str(ta)
 
+def sync_ui_uvs_to_frame(scene, ta, slot, frame):
+    """Sync current UI UVs into the specified TA frame (allocation-safe)."""
+    needed = max(int(scene.ta_max_frames), int(frame) + 1)
+    ensure_slot_frames(ta, slot, needed)
+
+    ui_uv = [
+        scene.ta_current_frame_uv0,
+        scene.ta_current_frame_uv1,
+        scene.ta_current_frame_uv2,
+        scene.ta_current_frame_uv3,
+    ]
+
+    for ui_index, (u, v_ui) in enumerate(ui_uv):
+        stored_index = 3 - ui_index
+        ta[slot]["frames"][frame]["uv"][stored_index]["u"] = float(u)
+        ta[slot]["frames"][frame]["uv"][stored_index]["v"] = 1.0 - float(v_ui)
+
 def copy_uv_to_frame(context):
     scene = context.scene
     obj = context.object
