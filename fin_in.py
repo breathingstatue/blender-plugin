@@ -28,6 +28,7 @@ from .common import (
     FIN_NO_CAMERA_COLLISION,
     MAX_MODEL_SLOTS,
     clean_model_base_name,
+    dprint,
 )
 from .rvstruct import Instances, Vector
 
@@ -40,24 +41,23 @@ if "bpy" in locals():
 # ---------------------------------------------------------------------------
 
 def import_file(filepath, scene, texture_base_name=None):
-    print(f"Opening file: {filepath}")
+    dprint(f"Opening FIN file: {filepath}")
     with open(filepath, 'rb') as file:
         filename = os.path.basename(filepath)
         level_name = os.path.splitext(filename)[0]
         texture_base_name = texture_base_name or level_name
         fin = Instances(file)
-        print(f"Imported FIN file with {len(fin.instances)} instances.")
+        dprint(f"Imported FIN file with {len(fin.instances)} instances.")
 
     mesh_cache = {}
     name_counter = {}
 
     for idx, instance in enumerate(fin.instances):
-        print(f"Importing instance {idx + 1}/{len(fin.instances)}: {instance.name}")
+        dprint(f"Importing instance {idx + 1}/{len(fin.instances)}: {instance.name}")
         import_instance(filepath, scene, instance, texture_base_name, mesh_cache, name_counter)
 
-    print("Assigning Tex+VC+Alpha materials...")
     assign_texvc_materials(scene)
-    print("Import complete.")
+    dprint("FIN import complete.")
 
 # ---------------------------------------------------------------------------
 # Single instance import
@@ -87,12 +87,11 @@ def import_instance(filepath, scene, instance, texture_base_name, mesh_cache, na
             mesh_data = temp_obj.data
             mesh_cache[base_name] = mesh_data
 
-            # Remove temporary source object (keep only mesh data)
             if temp_obj.name in bpy.context.scene.collection.objects:
                 bpy.context.scene.collection.objects.unlink(temp_obj)
             bpy.data.objects.remove(temp_obj)
     else:
-        print(f"[WARN] No model found for '{raw_name}'")
+        common.queue_error("FIN import", f"No model found for '{raw_name}'")
         instance_obj = bpy.data.objects.new(raw_name, None)
         bpy.context.scene.collection.objects.link(instance_obj)
         instance_obj.empty_display_type = "SPHERE"
@@ -107,38 +106,21 @@ def import_instance(filepath, scene, instance, texture_base_name, mesh_cache, na
     instance_obj = bpy.data.objects.new(unique_name, mesh_data)
     bpy.context.scene.collection.objects.link(instance_obj)
 
-    # ----------------------------------------------------------------------
-    # Transform & position
-    # ----------------------------------------------------------------------
-
     instance_obj.matrix_world = to_trans_matrix(instance.or_matrix)
     instance_obj.location = to_blender_coord(instance.position)
 
-    # ----------------------------------------------------------------------
-    # FIN-related data
-    # ----------------------------------------------------------------------
-
-    # RNA bool (registered in __init__.py)
     instance_obj.is_instance = True
-
-    # Base name for textures: ID property
     instance_obj["fin_texture_base"] = texture_base_name
-
-    # Model color: Re-Volt stores -128..127 → (128 + c) / 255
     instance_obj.fin_col = [(128 + c) / 255 for c in instance.color]
 
-    # Env color (RGB + alpha inverted)
     envcol = (*instance.env_color.color, 255 - instance.env_color.alpha)
     instance_obj.fin_envcol = [c / 255 for c in envcol]
 
-    # Priority
     instance_obj.fin_priority = getattr(instance, "priority", 1)
 
-    # Flags
     flags = getattr(instance, "flags", 0)
     instance_obj["fin_flags"] = int(flags)
 
-    # Decode flags into RNA properties
     instance_obj.fin_env = bool(flags & FIN_ENV)
     instance_obj.fin_hide = bool(flags & FIN_HIDE)
     instance_obj.fin_no_mirror = bool(flags & FIN_NO_MIRROR)
@@ -147,18 +129,15 @@ def import_instance(filepath, scene, instance, texture_base_name, mesh_cache, na
     instance_obj.fin_no_obj_coll = bool(flags & FIN_NO_OBJECT_COLLISION)
     instance_obj.fin_no_cam_coll = bool(flags & FIN_NO_CAMERA_COLLISION)
 
-    # Apply environment settings if applicable
     apply_environment_settings(instance_obj)
 
-    # Ensure object mode for later ops
     if instance_obj.mode == 'EDIT':
         bpy.ops.object.mode_set(mode='OBJECT')
 
-    # If mesh exists, set model color material & COL materials
     if instance_obj.data:
         model_color_material(instance_obj)
 
-    print(f"Finished importing {unique_name}")
+    dprint(f"Imported instance '{unique_name}'")
     return instance_obj
 
 # ---------------------------------------------------------------------------
@@ -166,9 +145,6 @@ def import_instance(filepath, scene, instance, texture_base_name, mesh_cache, na
 # ---------------------------------------------------------------------------
 
 def apply_environment_settings(obj):
-    """Applies environmental settings if applicable based on object properties."""
-    # fin_envcol is an RNA FloatVectorProperty with getter/setter,
-    # but keep obj.get fallback for backwards safety.
     env_col = getattr(obj, "fin_envcol", obj.get("fin_envcol", [1.0, 1.0, 1.0, 1.0]))
 
     if not should_apply_env_settings(obj) or not is_valid_color(env_col):
@@ -190,7 +166,6 @@ def apply_environment_settings(obj):
     obj.data.update()
     bm.free()
 
-    # Retrieve or create Env material
     env_material_name = f"{obj.name.split('.')[0]}_Env"
     env_material = bpy.data.materials.get(env_material_name)
     if not env_material:
@@ -208,29 +183,24 @@ def apply_environment_settings(obj):
         if not bsdf:
             bsdf = env_material.node_tree.nodes.new('ShaderNodeBsdfPrincipled')
 
-    # Ensure Alpha node
     alpha_node = env_material.node_tree.nodes.get('Alpha')
     if not alpha_node:
         alpha_node = env_material.node_tree.nodes.new(type='ShaderNodeValue')
         alpha_node.name = 'Alpha'
         alpha_node.label = 'Alpha'
 
-    # Connect Alpha to BSDF
     if not bsdf.inputs['Alpha'].is_linked:
         links.new(alpha_node.outputs['Value'], bsdf.inputs['Alpha'])
 
-    # Update shader color and alpha
     bsdf.inputs['Base Color'].default_value = (*env_col[:3], 1.0)
     alpha_node.outputs['Value'].default_value = env_col[3]
 
 def is_valid_color(color):
-    """Check if the color values are within the valid range and meet specific criteria."""
     if not color or len(color) < 4:
         return False
     return all(0.0 <= c <= 1.0 for c in color[:3]) and 0.0 <= color[3] <= 1.0
 
 def should_apply_env_settings(obj):
-    # RNA props with fallback to ID-props
     fin_env = getattr(obj, "fin_env", obj.get("fin_env", False))
     apply_env = getattr(obj, "apply_env_settings", obj.get("apply_env_settings", True))
     return bool(fin_env) and bool(apply_env)
@@ -240,7 +210,6 @@ def should_apply_env_settings(obj):
 # ---------------------------------------------------------------------------
 
 def model_color_material(obj):
-    """Creates an RGB model color material and assigns it to the object or retrieves it if already created."""
     base_name, _ = get_base_name_for_layers(obj)
     material_name = f"{base_name}_RGBModelColor"
 
@@ -257,7 +226,6 @@ def model_color_material(obj):
     return mat
 
 def update_shader_color(obj, mat):
-    """Update the shader color based on the object's 'fin_col' property."""
     nodes = mat.node_tree.nodes
     color = getattr(obj, "fin_col", obj.get("fin_col", [0.5, 0.5, 0.5]))
 
@@ -266,14 +234,13 @@ def update_shader_color(obj, mat):
         bsdf.inputs['Base Color'].default_value[:3] = color[:3]
 
 def setup_material_nodes(mat):
-    """Sets up the shader nodes for the RGB modeling material."""
     nodes = mat.node_tree.nodes
     nodes.clear()
     bsdf = nodes.new('ShaderNodeBsdfPrincipled')
     output = nodes.new('ShaderNodeOutputMaterial')
     links = mat.node_tree.links
     links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
-    print(f"Material '{mat.name}' set up with principled shader.")
+    dprint(f"Material '{mat.name}' set up with principled shader.")
 
 def get_base_name_for_layers(obj):
     name_parts = obj.name.split('.')
@@ -287,8 +254,6 @@ def get_base_name_for_layers(obj):
     return f"{base_name}{extension}", suffix
 
 def assign_texvc_materials(scene):
-    """Assign Tex+VC+Alpha materials to all mesh objects after import."""
-
     mesh_objects = [obj for obj in scene.objects if obj.type == 'MESH' and obj.data]
     if not mesh_objects:
         return

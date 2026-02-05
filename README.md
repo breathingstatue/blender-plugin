@@ -6,6 +6,17 @@ place 'io_revolt' in Blender/"version"/scripts/addons/
 
 -Theman with the help of AI and a bunch of friends in the RV I/O community.
 
+20.26.15
+Fixed .fin (Instance) export
+Cleaned Instance import/export debugging
+
+20.26.14
+Fixed "Transform Animation"
+Improved "Texture Animations UI"
+Change in "Texture Number" is actively previewed
+Fixed "Save Textures on Disk"
+
+
 20.26.13
 Fixed .taz (Track Zones) export (addressed by sinaosal)
 
