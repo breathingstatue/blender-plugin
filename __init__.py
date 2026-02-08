@@ -112,7 +112,7 @@ from .ui.viewlayer_panel import RVIO_PT_RevoltViewLayerPanel
 bl_info = {
 "name": "Re-Volt",
 "author": "Marvin Thiel & Theman",
-"version": (20, 26, 15),
+"version": (20, 26, 16),
 "blender": (5, 0, 0),
 "location": "File > Import-Export",
 "description": "Import and export Re-Volt file formats.",

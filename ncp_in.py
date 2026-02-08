@@ -97,15 +97,30 @@ def import_file(filepath, scene):
         else:
             material_name = f"Material_{poly.material}"
 
-        if material_name not in materials_dict:
-            mat = bpy.data.materials.new(name=material_name)
+        mat = materials_dict.get(material_name)
+        if mat is None:
+            mat = bpy.data.materials.get(material_name)
+            if mat is None:
+                mat = bpy.data.materials.new(name=material_name)
             mat.use_nodes = True
             bsdf = mat.node_tree.nodes.get('Principled BSDF')
-            bsdf.inputs['Base Color'].default_value = (*COLORS[poly.material], 1.0)
+            if bsdf:
+                if 0 <= poly.material < len(COLORS):
+                    base_color = COLORS[poly.material]
+                else:
+                    base_color = (1.0, 1.0, 1.0)
+                bsdf.inputs['Base Color'].default_value = (*base_color, 1.0)
             materials_dict[material_name] = mat
+
+        mat = materials_dict[material_name]
+        if me.materials.find(mat.name) == -1:
             me.materials.append(mat)
 
-        new_face.material_index = me.materials.find(material_name)
+        mat_index = me.materials.find(mat.name)
+        if mat_index == -1:
+            print(f"Warning: Failed to assign material '{mat.name}' to face.")
+        else:
+            new_face.material_index = mat_index
 
     bm.to_mesh(me)
     bm.free()
