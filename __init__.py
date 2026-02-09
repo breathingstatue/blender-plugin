@@ -109,10 +109,56 @@ from .ui.vertex import RVIO_PT_VertexPanel
 from .ui.migpanel import RVIO_PT_RevoltMIGPanel
 from .ui.viewlayer_panel import RVIO_PT_RevoltViewLayerPanel
 
+
+class _LiveEditBMeshDict(dict):
+    """Dictionary-like helper that returns fresh edit-mode BMesh objects without caching them."""
+
+    __slots__ = ()
+
+    def __setitem__(self, key, value):
+        super().__setitem__(key, True)
+
+    def acquire(self, key):
+        obj = bpy.data.objects.get(key)
+        if obj and obj.type == 'MESH' and obj.mode == 'EDIT':
+            try:
+                return bmesh.from_edit_mesh(obj.data)
+            except (RuntimeError, ReferenceError):
+                return None
+        return None
+
+    def __getitem__(self, key):
+        if not super().__contains__(key):
+            raise KeyError(key)
+        bm = self.acquire(key)
+        if bm is None:
+            raise KeyError(key)
+        return bm
+
+    def get(self, key, default=None):
+        if super().__contains__(key):
+            bm = self.acquire(key)
+            if bm is not None:
+                return bm
+        return default
+
+    def values(self):
+        for key in self.keys():
+            bm = self.acquire(key)
+            if bm is not None:
+                yield bm
+
+    def items(self):
+        for key in self.keys():
+            bm = self.acquire(key)
+            if bm is not None:
+                yield (key, bm)
+
+
 bl_info = {
 "name": "Re-Volt",
 "author": "Marvin Thiel & Theman",
-"version": (20, 26, 16),
+"version": (20, 26, 17),
 "blender": (5, 0, 0),
 "location": "File > Import-Export",
 "description": "Import and export Re-Volt file formats.",
@@ -122,30 +168,21 @@ bl_info = {
 "category": "Import-Export"
 }
 
-bmesh_dic = {}  # This global dictionary will store your BMesh objects
+bmesh_dic = _LiveEditBMeshDict()  # Tracks edit-mode meshes without holding strong references to BMesh instances
 
 @persistent
 def edit_object_change_handler(scene):
-    """Makes the edit mode bmesh available for use in GUI panels."""
+    """Track edit-mode meshes without caching their BMesh instances."""
     obj = bpy.context.view_layer.objects.active
 
-    # If no active object or the active object is not a mesh, clear the dictionary and return
     if obj is None or obj.type != 'MESH':
         bmesh_dic.clear()
         return
 
-    # Handle the case where the object is in edit mode
     if obj.mode == 'EDIT':
-        try:
-            # Set default only if obj.name is not in bmesh_dic, to avoid creating a new bmesh each time
-            if obj.name not in bmesh_dic:
-                bmesh_dic[obj.name] = bmesh.from_edit_mesh(obj.data)
-        except KeyError as e:
-            print(f"Error accessing BMesh for object: {e}")
-        except Exception as e:
-            print(f"Unexpected error: {e}")
+        bmesh_dic.clear()
+        bmesh_dic[obj.name] = True
     else:
-        # If the object is not in edit mode, clear the dictionary
         bmesh_dic.clear()
 
 def register():

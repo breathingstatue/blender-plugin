@@ -6,6 +6,9 @@ place 'io_revolt' in Blender/"version"/scripts/addons/
 
 -Theman with the help of AI and a bunch of friends in the RV I/O community.
 
+20.26.17
+Live BMesh lookup without caching edit BMesh objects
+
 20.26.16
 Improved .ncp import (re-import works within the same Blender session)
 
