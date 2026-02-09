@@ -159,7 +159,7 @@ bl_info = {
 "name": "Re-Volt",
 "author": "Marvin Thiel & Theman",
 "version": (20, 26, 17),
-"blender": (5, 0, 0),
+"blender": (5, 0, 1),
 "location": "File > Import-Export",
 "description": "Import and export Re-Volt file formats.",
 "wiki_url": "https://www.breathingstatue.com/blender-plugin",
