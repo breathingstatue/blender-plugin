@@ -6,6 +6,12 @@ place 'io_revolt' in Blender/"version"/scripts/addons/
 
 -Theman with the help of AI and a bunch of friends in the RV I/O community.
 
+20.26.19
+Improved MakeItGood panel
+
+20.26.18
+You can now import / export / edit Lights (.lit)
+
 20.26.17
 Live BMesh lookup without caching edit BMesh objects
 

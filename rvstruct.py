@@ -1,13 +1,9 @@
-﻿"""
+"""
 Name:    rvstruct
 Purpose: Reading and writing RV files
 
 Description:
 This is a module for reading and writing Re-Volt binary files.
-TODO:
-- Rework representations and string representations
-- Rework default values and variable names based on the game's defaults
-- Check for lengths on export
 
 Supported Formats:
 - .prm (Probe Mesh)
@@ -21,12 +17,16 @@ Supported Formats:
 - .taz (Track Zones)
 - .tri (Triggers)
 - .m (Model)
+- .lit (Lights)
 
 Missing Formats:
 - .fan (AiNodes)
 - .fld (ForceFields)
-- .lit (Lights)
 """
+
+import os
+import struct
+from math import ceil, sqrt
 
 import os
 import struct
@@ -1889,3 +1889,85 @@ class Visibox:
             "id": self.id,
             "coords": self.coords,
         }
+
+class Lights:
+    """Reads and writes .lit light lists."""
+    def __init__(self, file=None):
+        self.light_count = 0
+        self.lights = []
+
+        if file:
+            self.read(file)
+
+    def read(self, file):
+        count = file.read(1)
+        if not count:
+            self.light_count = 0
+            return
+        self.light_count = struct.unpack("<B", count)[0]
+        # 3 bytes padding
+        file.read(3)
+        for _ in range(self.light_count):
+            self.lights.append(Light(file))
+
+    def write(self, file):
+        file.write(struct.pack("<B", self.light_count))
+        file.write(b"\x00\x00\x00")
+        for light in self.lights:
+            light.write(file)
+
+
+class Light:
+    def __init__(self, file=None):
+        self.position = Vector(data=(0.0, 0.0, 0.0))
+        self.reach = 0.0
+        self.matrix = Matrix()
+        self.pad0 = 0
+        self.cone_angle = 90
+        self.type_const = 0x42
+        self.rgb = (1.0, 1.0, 1.0)
+        self.size = (0.0, 0.0, 0.0)        # used when light_type == 4
+        self.flicker_mode = 0x07
+        self.light_type = 0x00
+        self.flicker_speed = 1
+        if file:
+            self.read(file)
+
+    def read(self, file):
+        self.position = Vector(file)
+        self.reach = struct.unpack("<f", file.read(4))[0]
+        self.matrix = Matrix(file)
+        self.pad0 = struct.unpack("<H", file.read(2))[0]
+        self.cone_angle = struct.unpack("<B", file.read(1))[0] / 2.0  # deg = raw/2
+        self.type_const = struct.unpack("<B", file.read(1))[0]
+
+        payload3 = struct.unpack("<3f", file.read(12))  # rgb or size, depends on type
+
+        self.flicker_mode = struct.unpack("<B", file.read(1))[0]
+        self.light_type = struct.unpack("<B", file.read(1))[0]
+        self.flicker_speed = struct.unpack("<H", file.read(2))[0] & 0xFF
+
+        if self.light_type == 4:           # SQUARE_SHADOW
+            self.size = payload3
+            # square shadows don’t use color; keep rgb for UI if you want
+            self.rgb = (1.0, 1.0, 1.0)
+        else:
+            self.rgb = payload3
+            self.size = (0.0, 0.0, 0.0)
+
+    def write(self, file):
+        self.position.write(file)
+        file.write(struct.pack("<f", float(self.reach)))
+        self.matrix.write(file)
+        file.write(struct.pack("<H", int(self.pad0)))
+        file.write(struct.pack("<B", int(round(max(0, min(180, self.cone_angle))) * 2)))  # deg*2
+        file.write(struct.pack("<B", int(self.type_const)))
+
+        if self.light_type == 4:
+            file.write(struct.pack("<3f", *[float(x) for x in self.size]))
+        else:
+            file.write(struct.pack("<3f", *[float(c) for c in self.rgb]))
+
+        file.write(struct.pack("<B", int(self.flicker_mode)))
+        file.write(struct.pack("<B", int(self.light_type)))
+        file.write(struct.pack("<H", int(self.flicker_speed) & 0xFF))

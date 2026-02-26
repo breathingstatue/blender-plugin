@@ -59,6 +59,8 @@ from . import (
     tools,
     w_in,
     w_out,
+    lit_in,
+    lit_out,
 )
 
 from .ui import (
@@ -93,7 +95,7 @@ from .operators import ButtonZoneHide, AddTrackZone, ReverseTrackZone, ButtonTri
 from .operators import DuplicateFobObject, DuplicateTrigger, CopyTrigger, PasteTrigger, SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere
 from .operators import ButtonCopyUvToFrame, ButtonCopyFrameToUv, PreviewNextFrame, PreviewPrevFrame, TexAnimTransform, TexAnimGrid, CarAutoShader
 from .operators import ToggleVisiboxVisibility, ToggleFOBVisibility, FindSpecialFile, BakeVertexBatch, TexAnimAssignSlot, TexturesLoadFromDisk
-from .operators import DuplicateTrackZone, TexAnimClearSelectedFaces, TexAnimClearCurrentSlot
+from .operators import DuplicateTrackZone, TexAnimClearSelectedFaces, TexAnimClearCurrentSlot, CreateLight, DuplicateLight, ToggleLightVisibility
 from .texanim import update_ta_max_frames, update_ta_current_slot, update_ta_current_frame, update_ta_current_frame_uv
 from .texanim import update_ta_current_frame_delay, update_ta_current_frame_tex, update_ta_max_slots
 from .tools import get_trigger_type_items, get_trigger_type, set_trigger_type, get_low_flag_items, get_low_flag, set_low_flag, get_high_flag_items
@@ -158,7 +160,7 @@ class _LiveEditBMeshDict(dict):
 bl_info = {
 "name": "Re-Volt",
 "author": "Marvin Thiel & Theman",
-"version": (20, 26, 17),
+"version": (20, 26, 19),
 "blender": (5, 0, 1),
 "location": "File > Import-Export",
 "description": "Import and export Re-Volt file formats.",
@@ -1039,6 +1041,86 @@ def register():
         default=0
     )
 
+    bpy.types.Scene.new_light_type = bpy.props.EnumProperty(
+        name="Light Type",
+        items=[
+            ("OMNI", "Omni", "Omni light"),
+            ("OMNI_NORMAL", "Omni Normal", "Omni normal light"),
+            ("SPOT", "Spot", "Spot light"),
+            ("SPOT_NORMAL", "Spot Normal", "Spot normal light"),
+            ("SQUARE_SHADOW", "Square Shadow", "Square shadow light")
+        ],
+        default="OMNI"
+    )
+
+    bpy.types.Object.is_light = bpy.props.BoolProperty(
+        name="Is Light",
+        default=False,
+        description="Marks object as a Re-Volt light"
+    )
+
+    bpy.types.Object.light_type = bpy.props.EnumProperty(
+        name="Light Type",
+        items=[
+            ("OMNI", "Omni", "Omni light"),
+            ("OMNI_NORMAL", "Omni Normal", "Omni normal light"),
+            ("SPOT", "Spot", "Spot light"),
+            ("SPOT_NORMAL", "Spot Normal", "Spot normal light"),
+            ("SQUARE_SHADOW", "Square Shadow", "Square shadow light")
+        ],
+        default="OMNI"
+    )
+
+    bpy.types.Object.light_world_mode = bpy.props.EnumProperty(
+        name="World/Objects",
+        items=[
+            ("WORLD_OBJECTS", "World and Objects", "World and Objects"),
+            ("WORLD_ONLY", "World Only", "World Only"),
+            ("OBJECTS_ONLY", "Objects Only", "Objects Only"),
+        ],
+        default="WORLD_OBJECTS"
+    )
+
+    bpy.types.Object.light_rgb = bpy.props.IntVectorProperty(
+        name="RGB",
+        size=3,
+        min=0,
+        max=255,
+        default=(0, 0, 0)
+    )
+
+    bpy.types.Object.light_reach = bpy.props.FloatProperty(
+        name="Reach",
+        default=512.0,
+        min=0.0
+    )
+
+    bpy.types.Object.light_flicker = bpy.props.BoolProperty(
+        name="Flicker",
+        default=False
+    )
+
+    bpy.types.Object.light_flicker_speed = bpy.props.IntProperty(
+        name="Flicker Speed",
+        default=1,
+        min=1,
+        max=255
+    )
+
+    bpy.types.Object.light_cone = bpy.props.IntProperty(
+        name="Cone",
+        default=90,
+        min=1,
+        max=180
+    )
+
+    bpy.types.Object.light_size = bpy.props.FloatVectorProperty(
+        name="Size",
+        size=3,
+        min=0.0,
+        default=(32.0, 32.0, 32.0)
+    )
+
     #Register Operators
     bpy.utils.register_class(DialogOperator)
     bpy.utils.register_class(ImportRV)
@@ -1117,7 +1199,10 @@ def register():
     bpy.utils.register_class(SetFaceTextureDropdown)
     bpy.utils.register_class(SetLevelTexturePrefix)
     bpy.utils.register_class(RVIO_OT_SelectRevoltDirectory)
-    
+    bpy.utils.register_class(CreateLight)
+    bpy.utils.register_class(DuplicateLight)
+    bpy.utils.register_class(ToggleLightVisibility)
+
     # Register UI
     bpy.utils.register_class(RVIO_PT_RevoltFacePropertiesPanel)
     bpy.utils.register_class(RVIO_PT_RevoltIOToolPanel)
@@ -1151,6 +1236,9 @@ def unregister():
     bpy.utils.unregister_class(RVIO_PT_RevoltFacePropertiesPanel)
     
     # Unregister Operators
+    bpy.utils.unregister_class(ToggleLightVisibility)
+    bpy.utils.unregister_class(DuplicateLight)
+    bpy.utils.unregister_class(CreateLight)
     bpy.utils.unregister_class(RVIO_OT_SelectRevoltDirectory)
     bpy.utils.unregister_class(SetLevelTexturePrefix)
     bpy.utils.unregister_class(SetFaceTextureDropdown)

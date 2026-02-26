@@ -40,6 +40,7 @@ from .parameters_out_redux import remove_imported_springs, compare_and_adjust_pi
 from .taz_in import create_zone
 from .texanim import copy_frame_to_uv, copy_uv_to_frame
 from .tools import trigger_type_items, fob_type_items, visibox_type_items, get_rig_objects, get_rig_root, rig_world_bbox_center
+from .tools import ensure_collection, link_object_to_collection
 from .tri_in import create_trigger
 
 from bpy.props import (
@@ -53,29 +54,7 @@ from bpy.props import (
     PointerProperty
 )
 
-def update_file_extension(operator_instance):
-    # Mapping from format type to extension
-    ext_mapping = {
-        'CAR': '.txt',
-        'FIN': '.fin',
-        'FOB': '.fob',
-        'HUL': '.hul',
-        'LIT': '.lit',
-        'NCP': '.ncp',
-        'PRM': '.prm',
-        'RIM': '.rim',
-        'TAZ': '.taz',
-        'FAN': '.fan',
-        'PAN': '.pan',
-        'TRI': '.tri',
-        'VIS': '.vis',
-        'W': '.w',
-        'M': '.m'
-    }
-    ext = ext_mapping.get(operator_instance.format_type, "")
-    operator_instance.filename_ext = ext
-    operator_instance.filter_glob = f"*{ext}"
-    
+
 """
 BUTTONS ------------------------------------------------------------------------
 """
@@ -140,6 +119,10 @@ class ImportRV(bpy.types.Operator):
             elif frmt == FORMAT_HUL:
                 from . import hul_in
                 hul_in.import_file(self.filepath, scene)
+
+            elif frmt == FORMAT_LIT:
+                from . import lit_in
+                lit_in.import_file(self.filepath, scene)
 
             elif frmt == FORMAT_NCP:
                 from . import ncp_in
@@ -243,6 +226,7 @@ class ExportRV(bpy.types.Operator):
             ('FIN',  "FIN (.fin)", "Instance file"),
             ('FOB',  "FOB (.fob)", "FOB object file"),
             ('HUL',  "HUL (.hul)", "Hull file"),
+            ('LIT',  "LIT (.lit)", "Lights file"),
             ('NCP',  "NCP (.ncp)", "Collision file"),
             ('PRM',  "PRM (.prm)", "Mesh file"),
             ('RIM',  "RIM (.rim)", "Mirror file"),
@@ -266,6 +250,7 @@ class ExportRV(bpy.types.Operator):
         # Maps extension -> format code
         ext_map = {
             ".fin": "FIN", ".fob": "FOB", ".hul": "HUL",
+            ".lit": "LIT",
             ".ncp": "NCP", ".prm": "PRM", ".rim": "RIM", ".taz": "TAZ",
             ".fan": "FAN", ".pan": "PAN", ".tri": "TRI", ".vis": "VIS",
             ".w": "W", ".m": "M"
@@ -1748,7 +1733,7 @@ class RemoveInstanceProperty(bpy.types.Operator):
         return {'FINISHED'}
     
 """
-MAKEITGOOD SECTOR & HULL SPHERE -------------------------------------------------------
+MAKEITGOOD & HULL SPHERE -------------------------------------------------------
 """
 
 class AddTrackZone(bpy.types.Operator):
@@ -2042,12 +2027,22 @@ class CreateFobObject(bpy.types.Operator):
         for i in range(4):
             fob_obj[f"fob_subtype_{i+1}"] = subinfos[i]
 
-        # Link to collection
-        collection = bpy.data.collections.get("FOB_OBJECTS")
-        if collection:
-            collection.objects.link(fob_obj)
+        # Ensure the FOB_OBJECTS collection exists
+        objects_collection_name = 'FOB_OBJECTS'
+        if objects_collection_name not in bpy.data.collections:
+            objects_collection = bpy.data.collections.new(objects_collection_name)
+            bpy.context.scene.collection.children.link(objects_collection)
         else:
-            context.collection.objects.link(fob_obj)
+            objects_collection = bpy.data.collections[objects_collection_name]
+
+        # Check if the object is already linked to the collection
+        if fob_obj.name not in objects_collection.objects:
+            # Add the created trigger object to the TRIGGERS collection
+            objects_collection.objects.link(fob_obj)
+
+        # Unlink from the main scene collection if it is linked there
+        if fob_obj.name in bpy.context.scene.collection.objects:
+            bpy.context.scene.collection.objects.unlink(fob_obj)
 
         return {'FINISHED'}
 
@@ -2067,9 +2062,6 @@ class DuplicateFobObject(bpy.types.Operator):
         name, creation_index = generate_fob_name(obj_id)
 
         new_obj = create_directional_fob_mesh_ui(name)
-        # Rotate the object 90 degrees in X
-        rot_x_90 = mathutils.Matrix.Rotation(math.radians(90), 4, 'X')
-        new_obj.matrix_world = rot_x_90 @ new_obj.matrix_world
         new_obj.location = obj.location + BlenderVector((1, 1, 0))
 
         new_obj["is_fob_object"] = True
@@ -2078,11 +2070,21 @@ class DuplicateFobObject(bpy.types.Operator):
         for i in range(4):
             new_obj[f"fob_subtype_{i+1}"] = int(obj.get(f"fob_subtype_{i+1}", 0))
 
-        collection = bpy.data.collections.get("FOB_OBJECTS")
-        if collection:
-            collection.objects.link(new_obj)
+        # Ensure the FOB_OBJECTS collection exists
+        objects_collection_name = 'FOB_OBJECTS'
+        if objects_collection_name not in bpy.data.collections:
+            objects_collection = bpy.data.collections.new(objects_collection_name)
+            bpy.context.scene.collection.children.link(objects_collection)
         else:
-            context.collection.objects.link(new_obj)
+            objects_collection = bpy.data.collections[objects_collection_name]
+
+        # Add the duplicated FOB object to the FOB_OBJECTS collection
+        objects_collection.objects.link(new_obj)
+
+        # Select the new object and make it active
+        bpy.ops.object.select_all(action='DESELECT')
+        new_obj.select_set(True)
+        context.view_layer.objects.active = new_obj
 
         return {'FINISHED'}
 
@@ -2391,6 +2393,159 @@ class FindSpecialFile(bpy.types.Operator):
     def invoke(self, context, event):
         return context.window_manager.invoke_props_dialog(self)
     
+class CreateLight(bpy.types.Operator):
+    bl_idname = "object.create_light"
+    bl_label = "Create Light"
+    bl_description = "Create a new Re-Volt light"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        scene = context.scene
+        light_type = scene.new_light_type
+
+        # generate name
+        index = max((o.get("light_creation_index", -1) for o in bpy.data.objects if o.get("is_light")), default=-1) + 1
+        name = f"Light_{index}"
+
+        # Placeholder meshes
+        if light_type == "SQUARE_SHADOW":
+            mesh = bpy.data.meshes.new(name + "_Mesh")
+            obj = bpy.data.objects.new(name, mesh)
+            bm = bmesh.new()
+            bmesh.ops.create_cube(bm, size=1.0)
+            bmesh.ops.delete(bm, geom=bm.faces[:], context='FACES_ONLY')
+            bm.to_mesh(mesh)
+            bm.free()
+            obj.display_type = 'WIRE'
+            obj.show_in_front = True
+        elif light_type in {"SPOT", "SPOT_NORMAL"}:
+            mesh = bpy.data.meshes.new(name + "_Mesh")
+            obj = bpy.data.objects.new(name, mesh)
+            bm = bmesh.new()
+            bmesh.ops.create_cone(bm, segments=16, radius1=0.5, radius2=0.0, depth=1.5)
+            bmesh.ops.delete(bm, geom=bm.faces[:], context='FACES_ONLY')
+            bm.to_mesh(mesh)
+            bm.free()
+            obj.display_type = 'WIRE'
+            obj.show_in_front = True
+        else:
+            obj = bpy.data.objects.new(name, None)
+            obj.empty_display_type = 'SPHERE'
+            obj.empty_display_size = 0.2
+
+        obj.location = scene.cursor.location
+        obj["is_light"] = True
+        obj["light_creation_index"] = index
+        obj.is_light = True
+        obj.light_type = light_type
+        obj.light_world_mode = "WORLD_OBJECTS"
+        obj.light_rgb = (0, 0, 0)
+        obj.light_reach = 512.0
+        obj.light_flicker = False
+        obj.light_flicker_speed = 1
+        obj.light_cone = 90
+
+        if light_type == "SQUARE_SHADOW":
+            obj.scale = (0.32, 0.32, 0.32)
+            obj.light_size = (32.0, 32.0, 32.0)
+
+        # Ensure the LIGHTS collection exists
+        lights_collection_name = 'LIGHTS'
+        if lights_collection_name not in bpy.data.collections:
+            lights_collection = bpy.data.collections.new(lights_collection_name)
+            bpy.context.scene.collection.children.link(lights_collection)
+        else:
+            lights_collection = bpy.data.collections[lights_collection_name]
+
+        # Check if the object is already linked to the collection
+        if obj.name not in lights_collection.objects:
+            # Add the created light object to the LIGHTS collection
+            lights_collection.objects.link(obj)
+
+        # Unlink from the main scene collection if it is linked there
+        if obj.name in bpy.context.scene.collection.objects:
+            bpy.context.scene.collection.objects.unlink(obj)
+
+        context.view_layer.objects.active = obj
+        obj.select_set(True)
+        return {'FINISHED'}
+
+class DuplicateLight(bpy.types.Operator):
+    bl_idname = "object.duplicate_light"
+    bl_label = "Duplicate Light"
+    bl_description = "Duplicate the selected Re-Volt light"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        obj = context.object
+        if not obj or not (getattr(obj, "is_light", False) or obj.get("is_light", False)):
+            self.report({'WARNING'}, "No Re-Volt light selected")
+            return {'CANCELLED'}
+
+        index = max(
+            (
+                o.get("light_creation_index", -1)
+                for o in context.scene.objects
+                if getattr(o, "is_light", False) or o.get("is_light", False)
+            ),
+            default=-1
+        ) + 1
+
+        new_obj = obj.copy()
+        if obj.data:
+            new_obj.data = obj.data.copy()
+
+        new_obj.location = obj.location + BlenderVector((1, 1, 0))
+        new_obj["is_light"] = True
+        new_obj.is_light = True
+        new_obj["light_creation_index"] = index
+        try:
+            new_obj.light_creation_index = index
+        except AttributeError:
+            pass
+
+        # Ensure the LIGHTS collection exists
+        lights_collection_name = 'LIGHTS'
+        if lights_collection_name not in bpy.data.collections:
+            lights_collection = bpy.data.collections.new(lights_collection_name)
+            bpy.context.scene.collection.children.link(lights_collection)
+        else:
+            lights_collection = bpy.data.collections[lights_collection_name]
+
+        # Add the duplicated trigger object to the LIGHTS collection
+        lights_collection.objects.link(new_obj)
+
+        # Select the new object and make it active
+        bpy.ops.object.select_all(action='DESELECT')
+        new_obj.select_set(True)
+        context.view_layer.objects.active = new_obj
+
+        self.report({'INFO'}, f"Duplicated light: {new_obj.name}")
+        return {'FINISHED'}
+
+class ToggleLightVisibility(bpy.types.Operator):
+    """Temporarily toggle visibility for all Re-Volt lights"""
+    bl_idname = "object.toggle_light_visibility"
+    bl_label = "Hide / Show Lights"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        objs = [
+            obj
+            for obj in context.scene.objects
+            if getattr(obj, "is_light", False) or obj.get("is_light", False)
+        ]
+        if not objs:
+            self.report({'INFO'}, "No Re-Volt lights found.")
+            return {'CANCELLED'}
+
+        any_visible = any(not obj.hide_get() for obj in objs)
+        for obj in objs:
+            obj.hide_set(any_visible)
+
+        self.report({'INFO'}, f"{'Hid' if any_visible else 'Showed'} all Re-Volt lights")
+        return {'FINISHED'}
+
 """
 MATERIALS & TEXTURES ---------------------------------------------------------
 """
