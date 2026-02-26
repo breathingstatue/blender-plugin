@@ -34,6 +34,13 @@ class RVIO_PT_RevoltMIGPanel(bpy.types.Panel):
         col.operator("object.toggle_fob_visibility", icon="HIDE_OFF")
 
         box = layout.box()
+        box.label(text="Lights")
+        col = box.column(align=True)
+        col.prop(scene, "new_light_type", text="Type")
+        col.operator("object.create_light", icon="LIGHT")
+        col.operator("object.toggle_light_visibility", icon="HIDE_OFF")
+
+        box = layout.box()
         box.label(text="Triggers")
         col = box.column(align=True)        
         # Dropdown menu for selecting trigger type for new triggers

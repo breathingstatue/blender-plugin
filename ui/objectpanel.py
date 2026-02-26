@@ -1,6 +1,6 @@
 import bpy
 import bmesh
-from ..common import LOW_FLAG_OPTIONS, HIGH_FLAG_OPTIONS
+from ..common import LOW_FLAG_OPTIONS, HIGH_FLAG_OPTIONS, to_revolt_scale
 from ..fob_subtypes import OBJECT_TYPE_NAMES, OBJECT_SUBTYPE_DESCRIPTIONS, OBJECT_SUBTYPE_VALUES
 from ..tools import get_high_flag_items
 from ..operators import *
@@ -25,12 +25,34 @@ class RVIO_PT_RevoltObjectPanel(bpy.types.Panel):
         if obj and obj.is_track_zone:
             tz_col.prop(obj, "track_zone_id", text="Track Zone ID", slider=True)
             tz_col.operator("object.duplicate_track_zone", text="Duplicate Track Zone", icon="DUPLICATE")
-            
+
+        # Light properties
+        if obj and (getattr(obj, "is_light", False) or obj.get("is_light")):
+            lbox = layout.box()
+            lbox.label(text="Light Properties")
+            lcol = lbox.column(align=True)
+            lcol.prop(obj, "light_type", text="Type")
+            lcol.prop(obj, "light_world_mode", text="World/Objects")
+            lcol.prop(obj, "light_rgb", text="RGB")
+            lcol.prop(obj, "light_reach", text="Reach")
+            lcol.prop(obj, "light_flicker", text="Flicker")
+            lcol.prop(obj, "light_flicker_speed", text="Flicker Speed")
+            if obj.light_type in {"SPOT", "SPOT_NORMAL"}:
+                lcol.prop(obj, "light_cone", text="Cone")
+            if obj.light_type == "SQUARE_SHADOW":
+                size = (
+                    to_revolt_scale(obj.scale.x),
+                    to_revolt_scale(obj.scale.y),
+                    to_revolt_scale(obj.scale.z),
+                )
+                lcol.label(text=f"Size (from scale): {size[0]:.1f} {size[1]:.1f} {size[2]:.1f}")
+            lcol.operator("object.duplicate_light", text="Duplicate Light", icon="DUPLICATE")
+
         # FOB Object properties
         if obj.get("is_fob_object"):
             obj_type_id = obj.get("fob_type", -1)
             if obj_type_id not in OBJECT_TYPE_NAMES:
-                return  # Unknown type — skip entirely
+                return  # Unknown type   skip entirely
 
             obj_type_name = OBJECT_TYPE_NAMES[obj_type_id]
             labels = OBJECT_SUBTYPE_DESCRIPTIONS.get(obj_type_id, [])
@@ -79,7 +101,7 @@ class RVIO_PT_RevoltObjectPanel(bpy.types.Panel):
                     row.label(text=str(subtype_value))
 
             col.operator("object.duplicate_fob", icon="DUPLICATE")
-            
+
         #Trigger properties
         tri_box = layout.box()
         tri_box.label(text="Trigger Properties")
@@ -151,6 +173,7 @@ class RVIO_PT_RevoltObjectPanel(bpy.types.Panel):
         col.prop(obj, "is_bbox", text="Object is a Boundary Box")
         col.prop(obj, "ignore_ncp", text="Ignore for .ncp")
         col.operator("object.set_bcube_mesh_indices")
+        
         
 def get_subtype_label(obj_type, subtype_index, raw_value):
     subtype_dict = OBJECT_SUBTYPE_VALUES.get(obj_type, {}).get(subtype_index)
