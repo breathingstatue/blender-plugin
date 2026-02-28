@@ -40,7 +40,6 @@ from .parameters_out_redux import remove_imported_springs, compare_and_adjust_pi
 from .taz_in import create_zone
 from .texanim import copy_frame_to_uv, copy_uv_to_frame
 from .tools import trigger_type_items, fob_type_items, visibox_type_items, get_rig_objects, get_rig_root, rig_world_bbox_center
-from .tools import ensure_collection, link_object_to_collection
 from .tri_in import create_trigger
 
 from bpy.props import (
