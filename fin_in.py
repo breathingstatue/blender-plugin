@@ -14,6 +14,7 @@ import importlib
 from mathutils import Color
 
 from . import common
+from . import ncp_in
 from . import prm_in_for_fin
 from . import rvstruct
 from .common import (
@@ -35,13 +36,33 @@ from .rvstruct import Instances, Vector
 if "bpy" in locals():
     importlib.reload(common)
     importlib.reload(rvstruct)
+    importlib.reload(ncp_in)
+
+
+def _ensure_instance_collection(scene, mesh_extension):
+    if mesh_extension != ".ncp":
+        return scene.collection
+    collection_name = "INSTANCE_NCP"
+    collection = bpy.data.collections.get(collection_name)
+    if collection is None:
+        collection = bpy.data.collections.new(collection_name)
+        scene.collection.children.link(collection)
+    elif collection.name not in scene.collection.children.keys():
+        try:
+            scene.collection.children.link(collection)
+        except RuntimeError:
+            pass
+    return collection
 
 # ---------------------------------------------------------------------------
 # Main FIN import
 # ---------------------------------------------------------------------------
 
-def import_file(filepath, scene, texture_base_name=None):
+def import_file(filepath, scene, texture_base_name=None, mesh_extension=".prm"):
     dprint(f"Opening FIN file: {filepath}")
+    mesh_extension = mesh_extension.lower()
+    if mesh_extension not in {".prm", ".ncp"}:
+        mesh_extension = ".prm"
     with open(filepath, 'rb') as file:
         filename = os.path.basename(filepath)
         level_name = os.path.splitext(filename)[0]
@@ -54,26 +75,38 @@ def import_file(filepath, scene, texture_base_name=None):
 
     for idx, instance in enumerate(fin.instances):
         dprint(f"Importing instance {idx + 1}/{len(fin.instances)}: {instance.name}")
-        import_instance(filepath, scene, instance, texture_base_name, mesh_cache, name_counter)
+        import_instance(filepath, scene, instance, texture_base_name, mesh_cache, name_counter, mesh_extension=mesh_extension)
 
-    assign_texvc_materials(scene)
+    if mesh_extension == ".prm":
+        assign_texvc_materials(scene)
     dprint("FIN import complete.")
 
 # ---------------------------------------------------------------------------
 # Single instance import
 # ---------------------------------------------------------------------------
 
-def import_instance(filepath, scene, instance, texture_base_name, mesh_cache, name_counter):
+def import_instance(filepath, scene, instance, texture_base_name, mesh_cache, name_counter, mesh_extension=".prm"):
     folder = os.path.dirname(filepath)
     raw_name = instance.name.rstrip("\x00").lower()
+    mesh_extension = mesh_extension.lower()
+    collection = _ensure_instance_collection(scene, mesh_extension)
+    flags = getattr(instance, "flag", getattr(instance, "flags", 0))
+    if mesh_extension == ".ncp" and (int(flags) & FIN_NO_OBJECT_COLLISION):
+        dprint(f"Skipping instance NCP for '{raw_name}' because No Object Collision is set.")
+        return None
 
-    matched_filename = None
+    candidates = []
     for f in os.listdir(folder):
         f_lower = f.lower()
         name_no_ext, ext = os.path.splitext(f_lower)
-        if name_no_ext.startswith(raw_name) and ext == ".prm":
-            matched_filename = f
-            break
+        if ext != mesh_extension:
+            continue
+        if name_no_ext == raw_name:
+            candidates.append((0, len(name_no_ext), f))
+        elif name_no_ext.startswith(raw_name):
+            candidates.append((1, len(name_no_ext), f))
+
+    matched_filename = sorted(candidates)[0][2] if candidates else None
 
     if matched_filename:
         base_name = os.path.splitext(matched_filename)[0]
@@ -82,18 +115,40 @@ def import_instance(filepath, scene, instance, texture_base_name, mesh_cache, na
             mesh_data = mesh_cache[base_name]
         else:
             path = os.path.join(folder, matched_filename)
-            temp_obj = prm_in_for_fin.import_file(path, scene, texture_base_name=texture_base_name)
+            if mesh_extension == ".ncp":
+                try:
+                    temp_obj = ncp_in.import_file(path, scene)
+                except Exception as exc:
+                    common.queue_error(
+                        "FIN NCP import",
+                        f"Could not import collision mesh '{matched_filename}' for instance '{raw_name}': {exc}",
+                    )
+                    dprint(f"Skipping instance NCP '{raw_name}' from '{matched_filename}': {exc}")
+                    return None
+            else:
+                temp_obj = prm_in_for_fin.import_file(path, scene, texture_base_name=texture_base_name)
+
+            if not temp_obj or not temp_obj.data:
+                common.queue_error(
+                    "FIN NCP import" if mesh_extension == ".ncp" else "FIN import",
+                    f"Imported mesh '{matched_filename}' for instance '{raw_name}' had no mesh data.",
+                )
+                return None
 
             mesh_data = temp_obj.data
             mesh_cache[base_name] = mesh_data
+            mesh_data.use_fake_user = True
 
             if temp_obj.name in bpy.context.scene.collection.objects:
                 bpy.context.scene.collection.objects.unlink(temp_obj)
             bpy.data.objects.remove(temp_obj)
     else:
-        common.queue_error("FIN import", f"No model found for '{raw_name}'")
+        common.queue_error("FIN import", f"No {mesh_extension} model found for '{raw_name}'")
+        if mesh_extension == ".ncp":
+            dprint(f"Skipping instance NCP for '{raw_name}' because no matching .ncp was found.")
+            return None
         instance_obj = bpy.data.objects.new(raw_name, None)
-        bpy.context.scene.collection.objects.link(instance_obj)
+        collection.objects.link(instance_obj)
         instance_obj.empty_display_type = "SPHERE"
         return instance_obj
 
@@ -104,13 +159,20 @@ def import_instance(filepath, scene, instance, texture_base_name, mesh_cache, na
     name_counter[base_obj_name] = name_count + 1
 
     instance_obj = bpy.data.objects.new(unique_name, mesh_data)
-    bpy.context.scene.collection.objects.link(instance_obj)
+    collection.objects.link(instance_obj)
 
     instance_obj.matrix_world = to_trans_matrix(instance.or_matrix)
     instance_obj.location = to_blender_coord(instance.position)
 
     instance_obj.is_instance = True
+    instance_obj["is_instance"] = True
     instance_obj["fin_texture_base"] = texture_base_name
+    instance_obj["source_path"] = os.path.join(folder, matched_filename)
+    if mesh_extension == ".ncp":
+        instance_obj["is_ncp_collision"] = True
+        instance_obj.display_type = "WIRE"
+        instance_obj.show_in_front = True
+        instance_obj["fin_instance_collision_source"] = matched_filename
     instance_obj.fin_col = [(128 + c) / 255 for c in instance.color]
 
     envcol = (*instance.env_color.color, 255 - instance.env_color.alpha)
@@ -118,7 +180,6 @@ def import_instance(filepath, scene, instance, texture_base_name, mesh_cache, na
 
     instance_obj.fin_priority = getattr(instance, "priority", 1)
 
-    flags = getattr(instance, "flags", 0)
     instance_obj["fin_flags"] = int(flags)
 
     instance_obj.fin_env = bool(flags & FIN_ENV)
@@ -129,12 +190,13 @@ def import_instance(filepath, scene, instance, texture_base_name, mesh_cache, na
     instance_obj.fin_no_obj_coll = bool(flags & FIN_NO_OBJECT_COLLISION)
     instance_obj.fin_no_cam_coll = bool(flags & FIN_NO_CAMERA_COLLISION)
 
-    apply_environment_settings(instance_obj)
+    if mesh_extension == ".prm":
+        apply_environment_settings(instance_obj)
 
     if instance_obj.mode == 'EDIT':
         bpy.ops.object.mode_set(mode='OBJECT')
 
-    if instance_obj.data:
+    if instance_obj.data and mesh_extension == ".prm":
         model_color_material(instance_obj)
 
     dprint(f"Imported instance '{unique_name}'")

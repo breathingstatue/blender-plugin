@@ -10,8 +10,9 @@ import bmesh
 import bpy
 from math import radians
 from mathutils import Matrix, Vector
-from .common import to_blender_axis, to_blender_coord, SCALE, create_directional_fob_mesh
+from .common import to_blender_axis, to_blender_coord, SCALE, create_directional_fob_mesh_ui, apply_fob_range_scale
 from .rvstruct import Objects
+from .fob_subtypes import OBJECT_TYPE_NAMES
 
 COLLECTION_NAME = "FOB_OBJECTS"
 
@@ -20,6 +21,15 @@ def ensure_collection(name):
         collection = bpy.data.collections.new(name)
         bpy.context.scene.collection.children.link(collection)
     return bpy.data.collections[name]
+
+def _safe_fob_type_name(obj_id):
+    name = OBJECT_TYPE_NAMES.get(int(obj_id), f"Unknown_{int(obj_id)}")
+    return "_".join(name.replace("/", "_").split())
+
+
+def format_fob_object_name(creation_index, obj_id):
+    return f"FOB_{int(creation_index):03d}_{int(obj_id):03d}_{_safe_fob_type_name(obj_id)}"
+
 
 def get_unique_name(base_name, existing):
     if base_name not in existing:
@@ -38,7 +48,7 @@ def import_file(filepath, scene):
     existing_names = {obj.name for obj in bpy.data.objects}
 
     for creation_index, obj in enumerate(reversed(objects_data.objects)):
-        name = get_unique_name(f"FOB_{creation_index}_{obj.obj_id}", existing_names)
+        name = get_unique_name(format_fob_object_name(creation_index, obj.obj_id), existing_names)
         pos = to_blender_coord(obj.position)
         matrix = Matrix.Translation(Vector(pos))
 
@@ -61,8 +71,8 @@ def import_file(filepath, scene):
         else:
             matrix = Matrix.Translation(Vector(pos))
 
-        # Create directional mesh
-        fob_obj = create_directional_fob_mesh(name)
+        # Create directional mesh. Local Y is forward/depth and local Z is up.
+        fob_obj = create_directional_fob_mesh_ui(name)
 
         # Set the object's final transform
         fob_obj.matrix_world = matrix
@@ -73,6 +83,7 @@ def import_file(filepath, scene):
         fob_obj["fob_creation_index"] = creation_index
         for j in range(4):
             fob_obj[f"fob_subtype_{j+1}"] = obj.subinfos[j]
+        apply_fob_range_scale(fob_obj)
 
         # Link to collection
         bpy.context.scene.collection.objects.link(fob_obj)

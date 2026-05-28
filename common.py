@@ -270,6 +270,7 @@ FORMAT_TRI = 12
 FORMAT_VIS = 13
 FORMAT_W = 14
 FORMAT_M = 15
+FORMAT_FLD = 16
 
 FORMATS = {
 	FORMAT_BMP: "Bitmap (.bm*)",
@@ -287,7 +288,8 @@ FORMATS = {
 	FORMAT_TRI: "Triggers (.tri)",
 	FORMAT_VIS: "Visiboxes (.vis)",
 	FORMAT_W:   "World (.w)",
-	FORMAT_M:   "Model (.m)"
+	FORMAT_M:   "Model (.m)",
+	FORMAT_FLD: "Force Fields (.fld)"
 }
 
 
@@ -315,6 +317,40 @@ def to_blender_coord(vec):
 
 def to_blender_scale(num):
 	return num * SCALE
+
+def apply_fob_range_scale(obj):
+    try:
+        obj_type = int(obj.get("fob_type", getattr(obj, "fob_type", -1)))
+    except (TypeError, ValueError):
+        return
+
+    from .fob_subtypes import OBJECT_SUBTYPE_DESCRIPTIONS
+
+    labels = OBJECT_SUBTYPE_DESCRIPTIONS.get(obj_type, [])
+    if not labels:
+        return
+
+    scale = list(obj.scale)
+    changed = False
+    axis_map = {
+        "x range": 0,
+        "y range": 1,
+        "z range": 2,
+    }
+
+    for idx, label in enumerate(labels[:4], start=1):
+        axis = axis_map.get(str(label).strip().lower())
+        if axis is None:
+            continue
+        try:
+            value = int(obj.get(f"fob_subtype_{idx}", getattr(obj, f"fob_subtype_{idx}", 0)))
+        except (TypeError, ValueError):
+            value = 0
+        scale[axis] = to_blender_scale(value)
+        changed = True
+
+    if changed:
+        obj.scale = scale
 
 def to_revolt_coord(vec):
 	return (vec[0] / SCALE, -vec[2] / SCALE, vec[1] / SCALE)
@@ -724,7 +760,7 @@ def get_format(fstr):
     if os.sep in fstr:
         fstr = fstr.split(os.sep)[-1]
     try:
-        fname, ext = fstr.split(".", 1)
+        fname, ext = fstr.rsplit(".", 1)
     except:
         fname, ext = ("", "")
 
@@ -736,6 +772,8 @@ def get_format(fstr):
         return FORMAT_FIN
     elif ext == "fob":
         return FORMAT_FOB
+    elif ext == "fld":
+        return FORMAT_FLD
     elif ext == "hul":
         return FORMAT_HUL
     elif ext == "lit":

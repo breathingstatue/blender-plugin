@@ -18,10 +18,10 @@ Supported Formats:
 - .tri (Triggers)
 - .m (Model)
 - .lit (Lights)
+- .fan (AiNodes)
+- .fld (Force Fields)
 
 Missing Formats:
-- .fan (AiNodes)
-- .fld (ForceFields)
 """
 
 import os
@@ -31,6 +31,7 @@ from math import ceil, sqrt
 import os
 import struct
 from math import ceil, sqrt
+import io
 
 
 class World:
@@ -983,15 +984,24 @@ class PosNodes:
         self.start_node = 0
         self.total_dist = 0
         self.nodes = []
+        self.trailing_data = b""
 
         if file:
             self.read(file)
 
     def read(self, file):
-        self.num_nodes = struct.unpack("<l", file.read(4))[0]
-        self.start_node = struct.unpack("<l", file.read(4))[0]
-        self.total_dist = struct.unpack("<f", file.read(4))[0]
+        header = file.read(12)
+        if len(header) != 12:
+            raise EOFError("Incomplete position nodes header")
+        self.num_nodes, self.start_node, self.total_dist = struct.unpack("<llf", header)
         self.nodes = [PosNode(file) for n in range(self.num_nodes)]
+        self.trailing_data = file.read()
+
+    def write(self, file):
+        self.num_nodes = len(self.nodes)
+        file.write(struct.pack("<llf", int(self.num_nodes), int(self.start_node), float(self.total_dist)))
+        for node in self.nodes:
+            node.write(file)
 
     def as_dict(self):
         dic = { "num_nodes": self.num_nodes,
@@ -1019,18 +1029,31 @@ class PosNode:
 
     def read(self, file):
         # Reads position
-        self.position = Vector(file)
+        raw = file.read(48)
+        if len(raw) != 48:
+            raise EOFError("Incomplete position node record")
+
+        stream = io.BytesIO(raw)
+        self.position = Vector(stream)
 
         # Reads distance to finish line
-        self.distance = struct.unpack("<f", file.read(4))[0]
+        self.distance = struct.unpack("<f", stream.read(4))[0]
 
         # Reads previous connections
         for x in range(4):
-            self.prev[x] = struct.unpack("<l", file.read(4))[0]
+            self.prev[x] = struct.unpack("<l", stream.read(4))[0]
 
         # Reads upcoming connections
         for x in range(4):
-            self.next[x] = struct.unpack("<l", file.read(4))[0]
+            self.next[x] = struct.unpack("<l", stream.read(4))[0]
+
+    def write(self, file):
+        self.position.write(file)
+        file.write(struct.pack("<f", float(self.distance)))
+        for value in self.prev[:4]:
+            file.write(struct.pack("<l", int(value)))
+        for value in self.next[:4]:
+            file.write(struct.pack("<l", int(value)))
 
     def as_dict(self):
         dic = { "position": self.position,
@@ -1042,6 +1065,458 @@ class PosNode:
 
     def __repr__(self):
         return "PosNode"
+
+
+class AiNodes:
+    """
+    AI nodes level file (.fan)
+
+    Supported layouts:
+    - 16-byte header: <4H2f + 76-byte node records
+    - 12-byte header: <4Hf  + 76-byte node records
+
+    Export always writes the modern 16-byte header.
+    """
+
+    HEADER = "<4H2f"
+    SHORT_HEADER = "<4Hf"
+
+    MAX_REASONABLE_NODES = 10000
+
+    def __init__(self, file=None):
+        self.num_nodes = 0
+        self.start_node = 0
+        self.end_node = 0
+        self.header_flags = 0
+        self.start_factor = 0.5
+
+        self.header_total_dist = 0.0
+        self.total_dist = 0.0
+        self.total_dist_location = "header"
+
+        self.has_extended_header = True
+        self.has_short_header = False
+        self.trailing_data = b""
+        self.nodes = []
+        self.node_record_layout = "track_last"
+
+        if file:
+            self.read(file)
+
+    def __repr__(self):
+        return "AiNodes"
+
+    def _decode_nodes(self, data, offset, count, record_layout="track_last"):
+        nodes = []
+        record_size = AiNode.RECORD_SIZE
+
+        for index in range(count):
+            node_offset = offset + index * record_size
+            raw = data[node_offset:node_offset + record_size]
+
+            if len(raw) != record_size:
+                raise EOFError("Incomplete AI node record")
+
+            node = AiNode()
+            node.read(io.BytesIO(raw), record_layout=record_layout)
+            node.record_layout = record_layout
+            node.raw_record = raw
+            nodes.append(node)
+
+        return nodes
+
+    def _read_nodes(self, data, offset, count):
+        self.nodes = self._decode_nodes(data, offset, count)
+
+    @staticmethod
+    def _finite_number(value):
+        return isinstance(value, (int, float)) and value == value and value not in (float("inf"), float("-inf"))
+
+    @classmethod
+    def _score_nodes(cls, nodes, count):
+        """
+        Score a possible .fan layout by checking fields that become very noisy
+        when records are shifted by the wrong header size.
+        """
+        if not nodes:
+            return 0
+
+        score = 0
+        distances = []
+
+        for node in nodes:
+            for ratio in (node.racing_ratio, node.overtake_ratio):
+                if cls._finite_number(ratio) and 0.0 <= float(ratio) <= 1.0:
+                    score += 3
+                else:
+                    score -= 8
+
+            for speed in (node.green_speed, node.red_speed, node.racing_speed, node.center_speed):
+                if 0 <= int(speed) <= 255:
+                    score += 2
+                else:
+                    score -= 6
+
+            for connection in node.connections[:4]:
+                if int(connection) == -1 or 0 <= int(connection) < count:
+                    score += 2
+                else:
+                    score -= 5
+
+            coords = list(node.left_pos.data) + list(node.right_pos.data)
+            if all(cls._finite_number(coord) and abs(float(coord)) < 1000000.0 for coord in coords):
+                score += 4
+            else:
+                score -= 20
+
+            width = node.left_pos.get_distance_to(node.right_pos)
+            if cls._finite_number(width) and 0.01 <= float(width) <= 10000.0:
+                score += 4
+            else:
+                score -= 8
+
+            if cls._finite_number(node.track_dist) and 0.0 <= float(node.track_dist) < 1000000000.0:
+                score += 2
+                distances.append(float(node.track_dist))
+            else:
+                score -= 6
+
+        if len(distances) > 1:
+            increasing_pairs = sum(
+                1 for previous, current in zip(distances, distances[1:])
+                if current + 0.001 >= previous
+            )
+            score += min(20, increasing_pairs)
+
+            if max(distances) - min(distances) > 1.0:
+                score += 6
+            else:
+                score -= 4
+
+        return score
+
+    def _apply_trailing_total_dist(self):
+        if len(self.trailing_data) >= 4:
+            try:
+                self.total_dist = struct.unpack_from("<f", self.trailing_data, 0)[0]
+                self.total_dist_location = "trailing"
+                return
+            except Exception:
+                pass
+
+        if self.header_total_dist:
+            self.total_dist = self.header_total_dist
+            self.total_dist_location = "header"
+        else:
+            self.total_dist = max((node.track_dist for node in self.nodes), default=0.0)
+            self.total_dist_location = "none"
+
+    def read(self, file):
+        data = file.read()
+        data_len = len(data)
+
+        self.nodes = []
+        self.trailing_data = b""
+        self.node_record_layout = "track_last"
+
+        record_size = struct.calcsize(AiNode.RECORD)
+        header_size = struct.calcsize(self.HEADER)
+        short_header_size = struct.calcsize(self.SHORT_HEADER)
+
+        modern_fits = False
+        short_fits = False
+        modern_count = -1
+        short_count = -1
+        modern_size = 0
+        short_size = 0
+
+        if data_len >= header_size:
+            modern_count = struct.unpack_from("<H", data, 0)[0]
+            modern_size = header_size + modern_count * record_size
+            modern_fits = (
+                0 <= modern_count <= self.MAX_REASONABLE_NODES
+                and data_len >= modern_size
+            )
+
+        if data_len >= short_header_size:
+            short_count = struct.unpack_from("<H", data, 0)[0]
+            short_size = short_header_size + short_count * record_size
+            short_fits = (
+                0 <= short_count <= self.MAX_REASONABLE_NODES
+                and data_len >= short_size
+            )
+
+        if not modern_fits and not short_fits:
+            raise EOFError("Incomplete AI nodes header")
+
+        candidates = []
+
+        if modern_fits:
+            values = struct.unpack_from(self.HEADER, data, 0)
+            for record_layout in AiNode.RECORD_LAYOUTS:
+                try:
+                    nodes = self._decode_nodes(data, header_size, modern_count, record_layout)
+                except EOFError:
+                    nodes = []
+                candidates.append({
+                    "layout": "modern",
+                    "record_layout": record_layout,
+                    "values": values,
+                    "nodes": nodes,
+                    "size": modern_size,
+                    "score": self._score_nodes(nodes, modern_count),
+                })
+
+        if short_fits:
+            values = struct.unpack_from(self.SHORT_HEADER, data, 0)
+            for record_layout in AiNode.RECORD_LAYOUTS:
+                try:
+                    nodes = self._decode_nodes(data, short_header_size, short_count, record_layout)
+                except EOFError:
+                    nodes = []
+                candidates.append({
+                    "layout": "short",
+                    "record_layout": record_layout,
+                    "values": values,
+                    "nodes": nodes,
+                    "size": short_size,
+                    "score": self._score_nodes(nodes, short_count),
+                })
+
+        # Classic stock files can be 12-byte header + records + 4 trailing bytes,
+        # which has the exact same length as the modern 16-byte header layout.
+        # Field plausibility is a stronger signal than byte consumption there.
+        candidate = max(
+            candidates,
+            key=lambda item: (item["score"], -abs(data_len - item["size"])),
+        )
+
+        self.node_record_layout = candidate["record_layout"]
+
+        if candidate["layout"] == "modern":
+            (
+                self.num_nodes,
+                self.start_node,
+                self.end_node,
+                self.header_flags,
+                self.start_factor,
+                self.header_total_dist,
+            ) = candidate["values"]
+
+            self.has_extended_header = True
+            self.has_short_header = False
+        else:
+            (
+                self.num_nodes,
+                self.start_node,
+                self.end_node,
+                self.header_flags,
+                self.start_factor,
+            ) = candidate["values"]
+
+            self.header_total_dist = 0.0
+            self.has_extended_header = True
+            self.has_short_header = True
+
+        self.nodes = candidate["nodes"]
+        self.trailing_data = data[candidate["size"]:]
+        self._apply_trailing_total_dist()
+
+    def write(self, file):
+        self.num_nodes = len(self.nodes)
+
+        header_total = (
+            float(self.total_dist)
+            if self.total_dist_location == "header"
+            else float(self.header_total_dist)
+        )
+
+        file.write(struct.pack(
+            self.HEADER,
+            int(self.num_nodes),
+            int(self.start_node),
+            int(self.end_node),
+            int(self.header_flags),
+            float(self.start_factor),
+            float(header_total),
+        ))
+
+        for node in self.nodes:
+            node.write(file, record_layout=self.node_record_layout)
+
+        if self.total_dist_location == "trailing":
+            file.write(struct.pack("<f", float(self.total_dist)))
+
+    def as_dict(self):
+        return {
+            "num_nodes": self.num_nodes,
+            "start_node": self.start_node,
+            "end_node": self.end_node,
+            "header_flags": self.header_flags,
+            "start_factor": self.start_factor,
+            "header_total_dist": self.header_total_dist,
+            "total_dist": self.total_dist,
+            "total_dist_location": self.total_dist_location,
+            "has_extended_header": self.has_extended_header,
+            "has_short_header": self.has_short_header,
+            "nodes": self.nodes,
+            "trailing_data": self.trailing_data,
+        }
+
+    def __repr__(self):
+        return "AiNodes"
+
+
+class AiNode:
+    """
+    Single AI segment from an .fan file.
+
+    Known/high-confidence fields:
+    - left_pos / right_pos are the green and red side nodes.
+    - connections stores the four signed link slots as authored by RVGL.
+    - track_dist stores the per-segment track distance value.
+
+    The two ratio fields are lateral positions between green and red nodes:
+    they visualize the racing and overtaking lines.
+    """
+    RECORD_TRACK_LAST = "<f8i3fi3fi2f"
+    RECORD_TRACK_FIRST = "<2f8i3fi3fif"
+    RECORD = RECORD_TRACK_LAST
+    RECORD_SIZE = struct.calcsize(RECORD_TRACK_LAST)
+    RECORD_LAYOUTS = ("track_last", "track_first")
+
+    def __init__(self, file=None):
+        self.raw_record = b""
+        self.record_layout = "track_last"
+        self.racing_ratio = 0.5
+        self.priority = 0
+        self.green_speed = 30
+        self.red_speed = 30
+        self.connections = [-1, -1, -1, -1]
+        self.racing_speed = 30
+        self.left_pos = Vector()
+        self.center_speed = 30
+        self.right_pos = Vector()
+        self.flags = 0
+        self.property_type = 0
+        self.start_node = False
+        self.left_wall_flags = 0
+        self.right_wall_flags = 0
+        self.overtake_ratio = 0.5
+        self.track_dist = 0.0
+
+        if file:
+            self.read(file)
+
+    def _sync_flags(self):
+        self.flags = (
+            (int(self.flags) & ~0xFFFF01FF)
+            | (int(self.property_type) & 0xFF)
+            | (0x100 if self.start_node else 0)
+            | ((int(self.left_wall_flags) & 0xFF) << 16)
+            | ((int(self.right_wall_flags) & 0xFF) << 24)
+        )
+
+    def read(self, file, record_layout="track_last"):
+        record = file.read(self.RECORD_SIZE)
+        if len(record) != self.RECORD_SIZE:
+            raise EOFError("Incomplete AI node record")
+        self.raw_record = record
+        self.record_layout = record_layout
+
+        if record_layout == "track_first":
+            values = struct.unpack(self.RECORD_TRACK_FIRST, record)
+            self.track_dist = values[0]
+            self.racing_ratio = values[1]
+            self.priority = values[2]
+            self.green_speed = values[3]
+            self.red_speed = values[4]
+            self.connections = list(values[5:9])
+            self.racing_speed = values[9]
+            self.left_pos = Vector(data=values[10:13])
+            self.center_speed = values[13]
+            self.right_pos = Vector(data=values[14:17])
+            self.flags = values[17]
+            self.overtake_ratio = values[18]
+        else:
+            values = struct.unpack(self.RECORD_TRACK_LAST, record)
+            self.racing_ratio = values[0]
+            self.priority = values[1]
+            self.green_speed = values[2]
+            self.red_speed = values[3]
+            self.connections = list(values[4:8])
+            self.racing_speed = values[8]
+            self.left_pos = Vector(data=values[9:12])
+            self.center_speed = values[12]
+            self.right_pos = Vector(data=values[13:16])
+            self.flags = values[16]
+            self.overtake_ratio = values[17]
+            self.track_dist = values[18]
+
+        self.property_type = self.flags & 0xFF
+        self.start_node = bool(self.flags & 0x100)
+        self.left_wall_flags = (self.flags >> 16) & 0xFF
+        self.right_wall_flags = (self.flags >> 24) & 0xFF
+
+    def write(self, file, record_layout="track_last"):
+        self._sync_flags()
+        if record_layout == "track_first":
+            file.write(struct.pack(
+                self.RECORD_TRACK_FIRST,
+                float(self.track_dist),
+                float(self.racing_ratio),
+                int(self.priority),
+                int(self.green_speed),
+                int(self.red_speed),
+                *(int(c) for c in self.connections[:4]),
+                int(self.racing_speed),
+                *self.left_pos.data,
+                int(self.center_speed),
+                *self.right_pos.data,
+                int(self.flags),
+                float(self.overtake_ratio),
+            ))
+        else:
+            file.write(struct.pack(
+                self.RECORD_TRACK_LAST,
+                float(self.racing_ratio),
+                int(self.priority),
+                int(self.green_speed),
+                int(self.red_speed),
+                *(int(c) for c in self.connections[:4]),
+                int(self.racing_speed),
+                *self.left_pos.data,
+                int(self.center_speed),
+                *self.right_pos.data,
+                int(self.flags),
+                float(self.overtake_ratio),
+                float(self.track_dist),
+            ))
+
+    def as_dict(self):
+        return {
+            "racing_ratio": self.racing_ratio,
+            "priority": self.priority,
+            "green_speed": self.green_speed,
+            "red_speed": self.red_speed,
+            "connections": self.connections,
+            "racing_speed": self.racing_speed,
+            "left_pos": self.left_pos,
+            "center_speed": self.center_speed,
+            "right_pos": self.right_pos,
+            "flags": self.flags,
+            "property_type": self.property_type,
+            "start_node": self.start_node,
+            "left_wall_flags": self.left_wall_flags,
+            "right_wall_flags": self.right_wall_flags,
+            "overtake_ratio": self.overtake_ratio,
+            "track_dist": self.track_dist,
+            "raw_record": self.raw_record,
+            "record_layout": self.record_layout,
+        }
+
+    def __repr__(self):
+        return "AiNode"
 
 
 class NCP:
@@ -1971,3 +2446,115 @@ class Light:
         file.write(struct.pack("<B", int(self.flicker_mode)))
         file.write(struct.pack("<B", int(self.light_type)))
         file.write(struct.pack("<H", int(self.flicker_speed) & 0xFF))
+
+
+class ForceFields:
+    """Reads and writes .fld force field lists."""
+    RECORD_SIZE_LEGACY = 84
+    RECORD_SIZE_MODERN = 100
+    TRAILER_DEFAULT = 1
+
+    def __init__(self, file=None):
+        self.field_count = 0
+        self.force_fields = []
+        self.record_size = self.RECORD_SIZE_MODERN
+        self.trailer = self.TRAILER_DEFAULT
+
+        if file:
+            self.read(file)
+
+    def read(self, file):
+        count_data = file.read(4)
+        if not count_data:
+            self.field_count = 0
+            return
+
+        self.field_count = struct.unpack("<I", count_data)[0]
+        payload = file.read()
+
+        if not self.field_count:
+            self.record_size = self.RECORD_SIZE_MODERN
+            if len(payload) >= 4:
+                self.trailer = struct.unpack("<i", payload[:4])[0]
+            return
+
+        modern_payload_size = self.field_count * self.RECORD_SIZE_MODERN
+        legacy_payload_size = self.field_count * self.RECORD_SIZE_LEGACY
+
+        if len(payload) >= modern_payload_size:
+            self.record_size = self.RECORD_SIZE_MODERN
+            records_payload = payload[:modern_payload_size]
+            trailer_payload = payload[modern_payload_size:]
+        elif len(payload) == legacy_payload_size:
+            self.record_size = self.RECORD_SIZE_LEGACY
+            records_payload = payload
+            trailer_payload = b""
+        else:
+            raise ValueError("Invalid .fld file size.")
+
+        if trailer_payload:
+            self.trailer = struct.unpack("<i", trailer_payload[:4])[0]
+
+        if self.record_size not in {self.RECORD_SIZE_LEGACY, self.RECORD_SIZE_MODERN}:
+            raise ValueError(f"Unsupported .fld record size: {self.record_size}")
+
+        stream = io.BytesIO(records_payload)
+        for _ in range(self.field_count):
+            self.force_fields.append(ForceField(stream, self.record_size))
+
+    def write(self, file):
+        file.write(struct.pack("<I", len(self.force_fields)))
+        for field in self.force_fields:
+            field.write(file)
+        file.write(struct.pack("<i", int(self.trailer)))
+
+
+class ForceField:
+    def __init__(self, file=None, record_size=ForceFields.RECORD_SIZE_MODERN):
+        self.raw_type = 0x10000000
+        self.position = Vector(data=(0.0, 0.0, 0.0))
+        self.matrix = Matrix()
+        self.size = Vector(data=(128.0, 128.0, 128.0))
+        self.direction = Vector(data=(0.0, -1.0, 0.0))
+        self.magnitude = 0.0
+        self.damping = 0.0
+        self.radius_start = 256.0
+        self.radius_end = 512.0
+        self.mag_start = 0.0
+        self.mag_end = 0.0
+        self.shape = 0
+        self.apply = 0
+        self.option = 1
+        self.record_size = record_size
+
+        if file:
+            self.read(file, record_size)
+
+    def read(self, file, record_size=ForceFields.RECORD_SIZE_MODERN):
+        self.record_size = record_size
+        self.raw_type = struct.unpack("<I", file.read(4))[0]
+        self.position = Vector(file)
+        self.matrix = Matrix(file)
+        self.size = Vector(file)
+        self.direction = Vector(file)
+        self.magnitude = struct.unpack("<f", file.read(4))[0]
+        self.damping = struct.unpack("<f", file.read(4))[0]
+
+        if record_size == ForceFields.RECORD_SIZE_MODERN:
+            self.radius_start = struct.unpack("<f", file.read(4))[0]
+            self.radius_end = struct.unpack("<f", file.read(4))[0]
+            self.mag_start = struct.unpack("<f", file.read(4))[0]
+            self.mag_end = struct.unpack("<f", file.read(4))[0]
+
+    def write(self, file):
+        file.write(struct.pack("<I", int(self.raw_type) & 0xFFFFFFFF))
+        self.position.write(file)
+        self.matrix.write(file)
+        self.size.write(file)
+        self.direction.write(file)
+        file.write(struct.pack("<f", float(self.magnitude)))
+        file.write(struct.pack("<f", float(self.damping)))
+        file.write(struct.pack("<f", float(self.radius_start)))
+        file.write(struct.pack("<f", float(self.radius_end)))
+        file.write(struct.pack("<f", float(self.mag_start)))
+        file.write(struct.pack("<f", float(self.mag_end)))

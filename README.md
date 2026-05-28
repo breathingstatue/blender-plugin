@@ -2,9 +2,53 @@
 I created a modified version of Marv's Blender Plugin for Re-Volt, that works in the current Blender (5.0)
 
 INSTALLATION
-place 'io_revolt' in Blender/"version"/scripts/addons/
+place 'io_revolt' in Blender/"version"/scripts/addons_core/
 
 -Theman with the help of AI and a bunch of friends in the RV I/O community.
+
+20.26.33
+Small polish to the UI
+
+20.26.32
+Added new file types to "Find Special Objects" function
+
+20.26.31
+Force Fields (.fld) import / export / editing
+Some final UI polishing
+Added import and export back to the main menu
+
+20.26.30
+Optimization of the Automated AI Nodes functions
+Added Force Fields (.fld) import / export / editing
+
+20.26.29
+Plugin now imports stock .fan files as well
+
+20.26.28
+Improved .fan and .pan import / export / editing
+Automated Overtake Line function
+
+20.26.27
+Added .fan (AI Nodes) and .pan (Pos Nodes) import / export / edit functions
+Fixed the naming convention of car shadow files
+
+20.26.26
+Fixed a bug in "Find Special Objects"
+Improved handling of .FOB Objects in the UI and Blender in general
+
+20.26.25
+Fixed a bug that prevented the plugin from loading properly
+
+20.26.24
+Added a function: Legacy Converter + Is Legacy Car
+Fixed some bugs in the UI, import/export functions and Material Assigner
+
+20.26.22
+Improved FOB Objects UI
+
+20.26.20
+Changes in the UI
+Modified functions: Rename Textures, Fix Texture Numbers, Copy Car Parameters
 
 20.26.19
 Improved MakeItGood panel
@@ -35,7 +79,6 @@ Fixed .taz (Track Zones) export (addressed by sinaosal)
 20.26.12
 Fixed Visiboxes import / export
 Fixed the naming of Visiboxes (in Blender)
-Added Duplicate Visibox function
 Cleaned the MakeItGood panel
 Added Duplicate Track Zone function (requested by sinaosal)
 Tex+VC+Alpha Material Preview has now more visible effect

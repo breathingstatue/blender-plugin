@@ -126,6 +126,8 @@ def import_file(filepath, scene):
     bm.free()
 
     ob = bpy.data.objects.new(name=filename, object_data=me)
+    ob["source_path"] = filepath
+    ob["is_ncp_collision"] = True
     # Check if the object is already in the scene collection
     if ob.name not in bpy.context.scene.collection.objects:
         bpy.context.scene.collection.objects.link(ob)
@@ -134,3 +136,4 @@ def import_file(filepath, scene):
 
     bpy.context.view_layer.objects.active = ob
     ob.select_set(True)
+    return ob

@@ -1,11 +1,19 @@
 """
-Name:    fub_subtypes
+Name:    fob_subtypes
 Purpose: Providing variables for FOB Objects.
 
 Description:
 Contains values that are specific to Re-Volt, functions for converting units
 and helper functions for Blender. 
 """
+
+
+def _range_token(value):
+    return f"m{abs(value)}" if value < 0 else str(value)
+
+
+def fob_subtype_range_property_name(index, min_value, max_value):
+    return f"fob_subtype_{index}_range_{_range_token(min_value)}_{_range_token(max_value)}"
 
 OBJECT_TYPE_NAMES = {
     0: "Spinning Barrel",
@@ -88,12 +96,12 @@ OBJECT_SUBTYPE_DESCRIPTIONS = {
     48: ["Type"],
     49: ["Name", "Range", "Mode", "Start Time"],
     50: ["Type"],
-    51: ["X range", "Y range", "Z range"],
-    52: ["Model"],
-    53: ["Garyness"],
     55: ["Level"],
     56: ["id"],
     57: ["Stop"],
+    68: ["X range", "Y range", "Z range"],
+    69: ["Model"],
+    70: ["Garyness"],
     76: ["Type", "Start offset", "Hide in Time Trial", "Trigger ID"]
 }
 
@@ -196,17 +204,6 @@ OBJECT_SUBTYPE_VALUES = {
     50: {  # Star
         0: ["Global Weapon", "Practice Star"]
     },
-    51: {  # Water Box
-        0: list(range(20001)),
-        1: list(range(20001)),
-        2: list(range(20001))
-    },
-    52: {  # Water Ripples
-        0: ["Hood Stream", "Toytanic Pool", "Garden 1", "Garden 2", "Garden 3", "Garden 4"]
-    },
-    53: {  # Gari flag
-        0: list(range(11))
-    },
     55: {  # Skybox
         0: ["Toytanic day", "Toytanic night", "Wild West", "Neighborhood", "Rooftops"]
     },
@@ -215,6 +212,17 @@ OBJECT_SUBTYPE_VALUES = {
     },
     57: {  # Bottle
         0: ["No", "Yes"]
+    },
+    68: {  # Water Box
+        0: list(range(20001)),
+        1: list(range(20001)),
+        2: list(range(20001))
+    },
+    69: {  # Water Ripples
+        0: ["Hood Stream", "Toytanic Pool", "Garden 1", "Garden 2", "Garden 3", "Garden 4"]
+    },
+    70: {  # Gari flag
+        0: list(range(11))
     },
     76: {  # Custom Animation
         0: list(range(256)),
