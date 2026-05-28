@@ -30,8 +30,11 @@ class RVIO_PT_RevoltFacePropertiesPanel(bpy.types.Panel):
                 has_selection = False
 
         if obj.mode == 'EDIT':
+            face_box = layout.box()
+            face_box.label(text="FACE PROPERTIES")
+
             # ---------- Face Properties ----------
-            box = layout.box()
+            box = face_box.box()
             box.label(text="Face Properties:")
             col = box.column(align=True)
             # These toggles read getters that are now read-only. Enable only when selection exists.
@@ -54,7 +57,7 @@ class RVIO_PT_RevoltFacePropertiesPanel(bpy.types.Panel):
             col.prop(mesh, "face_skip", text="Do not export")
 
             # ---------- NCP Properties ----------
-            box = layout.box()
+            box = face_box.box()
             box.label(text="NCP Properties:")
             col = box.column(align=True)
             col.enabled = has_selection
@@ -67,7 +70,7 @@ class RVIO_PT_RevoltFacePropertiesPanel(bpy.types.Panel):
             col.prop(mesh, "face_ncp_nocoll", text="No Collision")
 
             # ---------- Material Settings ----------
-            box = layout.box()
+            box = face_box.box()
             box.label(text="Material Settings:")
             col = box.column(align=True)
             col.enabled = has_selection
@@ -87,7 +90,7 @@ class RVIO_PT_RevoltFacePropertiesPanel(bpy.types.Panel):
                 row.label(text="(Find not available during edit)")
 
             # ---------- Texture Page (per-face) ----------
-            box = layout.box()
+            box = face_box.box()
             box.label(text="Set Texture")
 
             # Safe usage of the face texture getter (read-only now)
@@ -131,4 +134,4 @@ class RVIO_PT_RevoltFacePropertiesPanel(bpy.types.Panel):
 
         else:
             box = layout.box()
-            box.label(text="PROPERTIES (Switch to Edit Mode).")
+            box.label(text="FACE PROPERTIES")

@@ -11,27 +11,10 @@ class RVIO_PT_RevoltHelpersPanelMesh(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
 
-        # Directory selection
-        box = layout.box()
-        box.label(text="Select RVGL Directory:")
-        box.operator("rvio.select_rvgl_dir", text="Browse")
-
-        # Display current directory
-        rvgl_dir = context.scene.rvgl_dir
-        directory = rvgl_dir
-        if directory:
-            box.label(text=f"Current Directory: {directory}")
-        else:
-            box.label(text="No directory selected")
-        
         box = layout.box()
         box.label(text="Read Car Parameters")
         box.operator("rvio.read_car_parameters")
 
-        box = layout.box()
-        box.label(text="RVGL:")
-        box.operator("helpers.launch_rv")
-        
         box = layout.box()
         box.label(text="Select by Data:")
         box.operator("helpers.select_by_data")

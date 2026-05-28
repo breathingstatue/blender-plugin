@@ -1,7 +1,6 @@
 import bpy
 import bmesh
 import os
-from ..operators import RVIO_OT_SelectRevoltDirectory
 
 class RVIO_PT_RevoltSettingsPanel(bpy.types.Panel):
     bl_label = "RVGL Settings"
@@ -25,11 +24,6 @@ class RVIO_PT_RevoltSettingsPanel(bpy.types.Panel):
         layout.prop(scene, "apply_scale", text="Apply Scale")
         layout.prop(scene, "apply_rotation", text= "Apply Rotation")
         layout.prop(scene, "apply_translation", text= "Apply Translation")
-        layout.separator()
-
-        # PRM Export settings
-        layout.label(text="Export Car (.prm):")
-        layout.prop(scene, "export_camber", text="Copy Wheel Camber")
         layout.separator()
 
         # World Import settings

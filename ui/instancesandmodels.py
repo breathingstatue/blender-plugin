@@ -23,7 +23,6 @@ class RVIO_PT_RevoltInstancesPanel(bpy.types.Panel):
         col.label(text=f"Instances: {instance_count}/1024")
         col.operator("instances.set_instance_property", text="Mark as Instance")
         col.operator("instances.rem_instance_property", text="Remove Instance Property")
-        col.operator("instances.import_instance_ncp", text="Import Instance NCP")
         if obj and getattr(obj, "is_instance", False):
             col.prop(obj, "fin_env", text="EnvMap")
             if obj.mode == 'EDIT':
@@ -52,3 +51,9 @@ class RVIO_PT_RevoltInstancesPanel(bpy.types.Panel):
             col.prop(obj, "fin_no_obj_coll", text="No Object Collision")
         else:
             pass
+
+        model_box = layout.box()
+        model_box.label(text="Model Properties:")
+        model_col = model_box.column(align=True)
+        model_col.operator("object.mark_as_model", text="Mark/Unmark as .m Model")
+        model_col.prop(obj, "is_model", text="Is Model (.m)")

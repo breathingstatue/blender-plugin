@@ -12,7 +12,7 @@ class RVIO_PT_VertexPanel(bpy.types.Panel):
     bl_label = "Vertex Colors"
     bl_space_type = "PROPERTIES"
     bl_region_type = "WINDOW"
-    bl_context = "object"
+    bl_context = "material"
     bl_options = {"HIDE_HEADER"}
 
     def draw(self, context):
@@ -29,10 +29,6 @@ class RVIO_PT_VertexPanel(bpy.types.Panel):
             col.operator("vertexcolor.set_color", text="Set Color")
             col.prop(scene, "vertex_alpha_percentage", text="Alpha Level")
             col.operator("vertexcolor.set_alpha", text="Set Alpha")
-            col = layout.column(align=True)
-            col.label(text="CAR AUTO SHADER")
-            col.prop(scene, "car_shader_color")
-            col.operator("object.car_auto_shader", icon='SHADING_RENDERED')
         else:
             box = layout.box()
             col = box.column(align=True)
