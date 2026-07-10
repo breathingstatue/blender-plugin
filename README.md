@@ -6,6 +6,10 @@ place 'io_revolt' in Blender/"version"/scripts/addons_core/
 
 -Theman with the help of AI and a bunch of friends in the RV I/O community.
 
+20.26.34
+Fixed a bug in .taz and .tri import / export.
+Improved Automated AI Nodes functions
+
 20.26.33
 Small polish to the UI
 

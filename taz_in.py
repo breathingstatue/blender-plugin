@@ -14,7 +14,7 @@ from mathutils import Matrix as BlenderMatrix
 from . import common
 from . import rvstruct
 from .rvstruct import TrackZones, Vector, Zone, Matrix
-from .common import to_blender_coord, to_blender_axis, to_blender_scale, to_trans_matrix, to_or_matrix, SCALE
+from .common import to_blender_coord, to_blender_scale, to_trans_matrix, SCALE
 
 # Define SCALE_ADJUSTMENT_FACTOR
 SCALE_ADJUSTMENT_FACTOR = 2.0  # Adjust this to scale the track zones by a factor of 2
@@ -96,13 +96,10 @@ def import_file(filepath, scene):
         try:
             matrix_data = zone.matrix.data
             print(f"Matrix data: {matrix_data}")
-            or_matrix = to_or_matrix(matrix_data)
-            print(f"Orientation Matrix: {or_matrix}")
-            trans_matrix = to_trans_matrix(or_matrix)
+            trans_matrix = to_trans_matrix(matrix_data)
             print(f"Transformation Matrix: {trans_matrix}")
             blender_matrix = BlenderMatrix(trans_matrix)
-            rot = blender_matrix.to_euler('XZY')
-            rot = to_blender_axis(rot)
+            rot = blender_matrix.to_euler('XYZ')
             print(f"Rotation: {rot}")
         except Exception as e:
             print(f"Error processing matrix for zone {zone.id}: {e}")

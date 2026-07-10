@@ -97,7 +97,7 @@ from .operators import CopyAerialParams, AxleMessageBox, ConfirmLoadOriginalAxle
 from .operators import CopyAndRemoveSprings, PinMessageBox, ConfirmLoadOriginalPin, CopyAndRemovePins, CopyWheelParams, CreateVisibox, AlignCarRevolt
 from .operators import ButtonZoneHide, AddTrackZone, ReverseTrackZone, AddAINode, AddPosNode, ConnectPosPathToTarget, ConnectAINodesByName, ConnectAIPathToTarget
 from .operators import DisconnectAIPathSelected, NormalizeAINodeOrigins, GenerateAINodesFromTrackZones, GeneratePosNodesFromTrackZones, AutomateAIOvertakeLine
-from .operators import MarkAISelectedPathStart, MarkAISelectedPathEnd, GenerateAINodesToSelected, DumpAINodeDebug, RenameAINodesRawOrder, RenameAINodesSlot2Order
+from .operators import MarkAISelectedPathStart, MarkAISelectedPathEnd, GenerateAINodesToSelected, RenameAINodesRawOrder, RenameAINodesSlot2Order
 from .operators import RenameAINodesSlot0Order, ReverseAINodes, ToggleAINodeVisibility, TogglePosNodeVisibility, ButtonTriggerHide, CreateTrigger, MarkAsModel, CreateFobObject
 from .operators import DuplicateFobObject, DuplicateTrigger, CopyTrigger, PasteTrigger, SetBCubeMeshIndices, ButtonHullGenerate, ButtonHullSphere
 from .operators import ToggleVisiboxVisibility, ToggleFOBVisibility, ToggleInstanceNCPVisibility, FindSpecialFile, TexturesLoadFromDisk
@@ -163,7 +163,7 @@ _registered_fob_range_props = []
 bl_info = {
 "name": "Re-Volt",
 "author": "Marvin Thiel & Theman",
-"version": (20, 26, 33),
+"version": (20, 26, 34),
 "blender": (5, 1, 1),
 "location": "File > Import-Export",
 "description": "Import and export Re-Volt file formats.",
@@ -986,12 +986,6 @@ def register():
     bpy.types.Scene.ai_nodes_closed_loop = bpy.props.BoolProperty(
         name="Closed Loop",
         description="Connect the generated AI path back to the first node",
-        default=True
-    )
-
-    bpy.types.Scene.ai_nodes_replace_existing = bpy.props.BoolProperty(
-        name="Replace Existing",
-        description="Remove existing AI nodes before building from selected guide objects",
         default=True
     )
 
@@ -1820,7 +1814,6 @@ def register():
     bpy.utils.register_class(MarkAISelectedPathStart)
     bpy.utils.register_class(MarkAISelectedPathEnd)
     bpy.utils.register_class(GenerateAINodesToSelected)
-    bpy.utils.register_class(DumpAINodeDebug)
     bpy.utils.register_class(RenameAINodesRawOrder)
     bpy.utils.register_class(RenameAINodesSlot2Order)
     bpy.utils.register_class(RenameAINodesSlot0Order)
@@ -1927,7 +1920,6 @@ def unregister():
     bpy.utils.unregister_class(RenameAINodesSlot0Order)
     bpy.utils.unregister_class(RenameAINodesSlot2Order)
     bpy.utils.unregister_class(RenameAINodesRawOrder)
-    bpy.utils.unregister_class(DumpAINodeDebug)
     bpy.utils.unregister_class(GenerateAINodesToSelected)
     bpy.utils.unregister_class(MarkAISelectedPathEnd)
     bpy.utils.unregister_class(MarkAISelectedPathStart)
@@ -2119,7 +2111,6 @@ def unregister():
     del bpy.types.Scene.ai_nodes_default_left_wall
     del bpy.types.Scene.ai_nodes_default_property
     del bpy.types.Scene.ai_nodes_connect_to_selected
-    del bpy.types.Scene.ai_nodes_replace_existing
     del bpy.types.Scene.ai_nodes_closed_loop
     del bpy.types.Scene.ai_nodes_lane_width
     del bpy.types.Scene.ai_nodes_start_factor

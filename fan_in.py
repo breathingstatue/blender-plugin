@@ -748,7 +748,7 @@ def rebuild_ai_route_visuals(scene):
         obj["is_ai_route_visual"] = True
         obj.display_type = "SOLID"
         obj.show_in_front = True
-        obj.hide_select = False
+        obj.hide_select = True
         obj.color = color
         collection.objects.link(obj)
         if created is None:

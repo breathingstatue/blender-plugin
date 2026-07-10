@@ -2783,7 +2783,12 @@ def _collision_mesh_objects(scene):
             continue
         source_path = str(obj.get("source_path", ""))
         name = obj.name.lower()
-        if obj.get("is_ncp_collision") or source_path.lower().endswith(".ncp") or ".ncp" in name:
+        if (
+            obj.get("is_ncp_collision")
+            or obj.get("fin_instance_collision_source")
+            or source_path.lower().endswith(".ncp")
+            or ".ncp" in name
+        ):
             result.append(obj)
     return result
 
@@ -2796,7 +2801,12 @@ def _automation_obstacle_mesh_objects(scene, floor_meshes):
             continue
         source_path = str(obj.get("source_path", "")).lower()
         name = obj.name.lower()
-        if not (obj.get("is_ncp_collision") or source_path.endswith(".ncp") or ".ncp" in name):
+        if not (
+            obj.get("is_ncp_collision")
+            or obj.get("fin_instance_collision_source")
+            or source_path.endswith(".ncp")
+            or ".ncp" in name
+        ):
             continue
         if (
             getattr(obj, "is_ai_node", False)
@@ -2849,6 +2859,29 @@ def _raycast_collision_bvhs(entries, origin, direction, distance):
     return best
 
 
+def _raycast_collision_bvhs_all(entries, origin, direction, distance, max_hits=16):
+    hits = []
+    current_origin = origin.copy()
+    remaining = float(distance)
+    min_step = 0.03
+    for _ in range(max_hits):
+        hit = _raycast_collision_bvhs(entries, current_origin, direction, remaining)
+        if not hit:
+            break
+        hit_world, normal_world, face_index, world_distance, obj = hit
+        if world_distance < min_step:
+            current_origin = current_origin + direction * min_step
+            remaining -= min_step
+            continue
+        hits.append((hit_world, normal_world, face_index, world_distance, obj))
+        advance = world_distance + min_step
+        remaining -= advance
+        if remaining <= min_step:
+            break
+        current_origin = current_origin + direction * advance
+    return hits
+
+
 def _project_point_to_collision_floor(entries, point, height=120.0):
     origin = point + BlenderVector((0.0, 0.0, height))
     hit = _raycast_collision_bvhs(entries, origin, BlenderVector((0.0, 0.0, -1.0)), height * 2.0)
@@ -2861,36 +2894,44 @@ def _project_point_to_collision_floor(entries, point, height=120.0):
 
 
 def _project_point_to_collision_floor_near(entries, point, height=18.0):
-    hit = _raycast_collision_bvhs(
+    hits = _raycast_collision_bvhs_all(
         entries,
         point + BlenderVector((0.0, 0.0, height * 0.5)),
         BlenderVector((0.0, 0.0, -1.0)),
         height,
     )
-    if not hit:
+    candidates = []
+    for hit_world, normal_world, face_index, distance, obj in hits:
+        if normal_world.z < 0.25:
+            continue
+        if abs(hit_world.z - point.z) > height:
+            continue
+        candidates.append((abs(hit_world.z - point.z), distance, hit_world, normal_world, face_index, obj))
+    if not candidates:
         return None
-    hit_world, normal_world, _face_index, _distance, _obj = hit
-    if normal_world.z < 0.25:
-        return None
-    if abs(hit_world.z - point.z) > height:
-        return None
+    candidates.sort(key=lambda item: (item[0], item[1]))
+    hit_world = candidates[0][2]
     return hit_world
 
 
 def _project_point_to_collision_floor_near_hit(entries, point, height=18.0):
-    hit = _raycast_collision_bvhs(
+    hits = _raycast_collision_bvhs_all(
         entries,
         point + BlenderVector((0.0, 0.0, height * 0.5)),
         BlenderVector((0.0, 0.0, -1.0)),
         height,
     )
-    if not hit:
+    candidates = []
+    for hit_world, normal_world, face_index, distance, obj in hits:
+        if normal_world.z < 0.25:
+            continue
+        if abs(hit_world.z - point.z) > height:
+            continue
+        candidates.append((abs(hit_world.z - point.z), distance, hit_world, normal_world, face_index, obj))
+    if not candidates:
         return None
-    hit_world, normal_world, _face_index, _distance, _obj = hit
-    if normal_world.z < 0.25:
-        return None
-    if abs(hit_world.z - point.z) > height:
-        return None
+    candidates.sort(key=lambda item: (item[0], item[1]))
+    hit_world, normal_world = candidates[0][2], candidates[0][3]
     return hit_world, normal_world
 
 
@@ -2909,6 +2950,28 @@ def _world_bbox_bounds(obj):
     return min_x, max_x, min_y, max_y, min_z, max_z
 
 
+def _track_zone_expected_z(obj, sample_x, sample_y, fallback_z):
+    try:
+        matrix = obj.matrix_world
+        if obj.type == "MESH" and obj.bound_box:
+            local_center = BlenderVector((0.0, 0.0, 0.0))
+            for corner in obj.bound_box:
+                local_center += BlenderVector(corner)
+            local_center /= len(obj.bound_box)
+        else:
+            local_center = BlenderVector((0.0, 0.0, 0.0))
+        plane_point = matrix @ local_center
+        normal = matrix.to_3x3() @ BlenderVector((0.0, 0.0, 1.0))
+        if abs(normal.z) <= 0.000001:
+            return fallback_z
+        return plane_point.z - (
+            normal.x * (sample_x - plane_point.x)
+            + normal.y * (sample_y - plane_point.y)
+        ) / normal.z
+    except Exception:
+        return fallback_z
+
+
 def _track_zone_collision_floor_candidates(entries, zone):
     min_x, max_x, min_y, max_y, min_z, max_z = _world_bbox_bounds(zone)
     center = _track_zone_center_world(zone)
@@ -2916,11 +2979,11 @@ def _track_zone_collision_floor_candidates(entries, zone):
     ray_distance = max(1.0, (max_z - min_z) + margin * 2.0)
     samples = [(center.x, center.y)]
 
-    for factor in (0.18, -0.18, 0.32, -0.32):
+    for factor in (0.18, -0.18, 0.32, -0.32, 0.44, -0.44, 0.49, -0.49):
         samples.append((center.x + (max_x - min_x) * factor, center.y))
         samples.append((center.x, center.y + (max_y - min_y) * factor))
-    for fx in (-0.28, 0.0, 0.28):
-        for fy in (-0.28, 0.0, 0.28):
+    for fx in (-0.49, -0.38, -0.25, -0.12, 0.0, 0.12, 0.25, 0.38, 0.49):
+        for fy in (-0.49, -0.38, -0.25, -0.12, 0.0, 0.12, 0.25, 0.38, 0.49):
             samples.append((center.x + (max_x - min_x) * fx, center.y + (max_y - min_y) * fy))
 
     origin_z_values = [
@@ -2929,22 +2992,29 @@ def _track_zone_collision_floor_candidates(entries, zone):
     results = []
     seen = set()
     for sample_x, sample_y in samples:
+        expected_z = _track_zone_expected_z(zone, sample_x, sample_y, center.z)
         for origin_z in origin_z_values:
             origin = BlenderVector((sample_x, sample_y, origin_z))
-            hit = _raycast_collision_bvhs(entries, origin, BlenderVector((0.0, 0.0, -1.0)), ray_distance)
-            if not hit:
-                continue
-            hit_world, normal_world, _face_index, _distance, _obj = hit
-            if normal_world.z < 0.25:
-                continue
-            if hit_world.z < min_z - margin or hit_world.z > max_z + margin:
-                continue
-            key = (round(hit_world.x, 3), round(hit_world.y, 3), round(hit_world.z, 3))
-            if key in seen:
-                continue
-            seen.add(key)
-            score = (BlenderVector((hit_world.x, hit_world.y, 0.0)) - BlenderVector((center.x, center.y, 0.0))).length_squared
-            results.append((score, hit_world))
+            hits = _raycast_collision_bvhs_all(
+                entries,
+                origin,
+                BlenderVector((0.0, 0.0, -1.0)),
+                ray_distance,
+            )
+            for hit_world, normal_world, _face_index, _distance, _obj in hits:
+                if normal_world.z < 0.25:
+                    continue
+                if hit_world.z < min_z - margin or hit_world.z > max_z + margin:
+                    continue
+                key = (round(hit_world.x, 3), round(hit_world.y, 3), round(hit_world.z, 3))
+                if key in seen:
+                    continue
+                seen.add(key)
+                flat_hit = BlenderVector((hit_world.x, hit_world.y, 0.0))
+                flat_center = BlenderVector((center.x, center.y, 0.0))
+                expected_z_penalty = abs(hit_world.z - expected_z)
+                score = (flat_hit - flat_center).length_squared + expected_z_penalty * expected_z_penalty * 6.0
+                results.append((score, hit_world))
 
     results.sort(key=lambda item: item[0])
     return [point for _score, point in results]
@@ -2959,9 +3029,115 @@ def _track_zone_id(obj):
     return int(getattr(obj, "track_zone_id", obj.get("track_zone_id", 0)))
 
 
-def _track_zone_candidate_order_score(obstacle_entries, previous_point, point, previous_direction=None):
+def _rotate_track_zone_ids_for_active(selected_ids, active_zone):
+    if active_zone is None:
+        return selected_ids, False
+    if not (getattr(active_zone, "is_track_zone", False) or active_zone.get("is_track_zone")):
+        return selected_ids, False
+    active_id = _track_zone_id(active_zone)
+    if active_id not in selected_ids:
+        return selected_ids, False
+    active_index = selected_ids.index(active_id)
+    return selected_ids[active_index:] + selected_ids[:active_index], active_index != 0
+
+
+def _rotate_track_zone_ids_for_anchor(by_id, selected_ids, anchor_point, floor_entries, obstacle_entries, spacing):
+    if anchor_point is None or not selected_ids:
+        return selected_ids, False
+
+    best = None
+    for order, zone_id in enumerate(selected_ids):
+        for _zone, points in by_id[zone_id]:
+            point = _best_track_zone_candidate_point(
+                obstacle_entries,
+                anchor_point,
+                points,
+                floor_entries=floor_entries,
+                spacing=spacing,
+            )
+            if point is None:
+                continue
+            score = _track_zone_candidate_order_score(
+                obstacle_entries,
+                anchor_point,
+                point,
+                floor_entries=floor_entries,
+                spacing=spacing,
+            ) + order * 0.001
+            if len(selected_ids) > 1:
+                next_id = selected_ids[(order + 1) % len(selected_ids)]
+                next_best = None
+                for _next_zone, next_points in by_id[next_id]:
+                    next_point = _best_track_zone_candidate_point(
+                        obstacle_entries,
+                        point,
+                        next_points,
+                        previous_direction=_flat_direction_between(anchor_point, point),
+                        floor_entries=floor_entries,
+                        spacing=spacing,
+                    )
+                    if next_point is None:
+                        continue
+                    next_score = _track_zone_candidate_order_score(
+                        obstacle_entries,
+                        point,
+                        next_point,
+                        previous_direction=_flat_direction_between(anchor_point, point),
+                        floor_entries=floor_entries,
+                        spacing=spacing,
+                    )
+                    if next_best is None or next_score < next_best[0]:
+                        next_best = (next_score, next_point)
+                if next_best is not None:
+                    first_dir = _flat_direction_between(anchor_point, point)
+                    next_dir = _flat_direction_between(point, next_best[1])
+                    score += next_best[0] * 0.35
+                    dot = first_dir.dot(next_dir)
+                    if dot < 0.2:
+                        score += 250.0 + (0.2 - dot) * 350.0
+            if best is None or score < best[0]:
+                best = (score, zone_id)
+
+    if best is None:
+        return selected_ids, False
+    anchor_index = selected_ids.index(best[1])
+    return selected_ids[anchor_index:] + selected_ids[:anchor_index], anchor_index != 0
+
+
+def _flat_direction_between(first, second, fallback=None):
+    delta = second - first
+    delta.z = 0.0
+    if delta.length <= 0.000001:
+        return fallback.copy() if fallback is not None else BlenderVector((1.0, 0.0, 0.0))
+    delta.normalize()
+    return delta
+
+
+def _track_zone_candidate_order_score(
+    obstacle_entries,
+    previous_point,
+    point,
+    previous_direction=None,
+    floor_entries=None,
+    spacing=None,
+):
     distance = (point - previous_point).length
     blocked = _collision_segment_blocked(obstacle_entries, previous_point, point)
+    if floor_entries is not None and spacing is not None:
+        blocked = blocked or not _collision_path_segment_clear(floor_entries, obstacle_entries, previous_point, point, spacing)
+    vertical = abs(point.z - previous_point.z)
+    horizontal = BlenderVector((point.x - previous_point.x, point.y - previous_point.y, 0.0)).length
+    slope_penalty = vertical * 14.0
+    if horizontal > 0.000001:
+        slope = vertical / horizontal
+        if slope > 0.10:
+            slope_penalty += distance * (slope - 0.10) * 48.0
+        if slope > 0.24:
+            slope_penalty += distance * (slope - 0.24) * 120.0
+    if vertical > 0.9:
+        slope_penalty += (vertical - 0.9) * (vertical - 0.9) * 34.0
+    if vertical > 2.0:
+        slope_penalty += (vertical - 2.0) * (vertical - 2.0) * 80.0
     direction_penalty = 0.0
     if previous_direction is not None:
         movement = point - previous_point
@@ -2970,13 +3146,20 @@ def _track_zone_candidate_order_score(obstacle_entries, previous_point, point, p
             movement.normalize()
             dot = max(-1.0, min(1.0, previous_direction.dot(movement)))
             if dot < 0.15:
-                direction_penalty += distance * (0.15 - dot) * 1.8 + 6.0
+                direction_penalty += distance * (0.15 - dot) * 0.55 + 2.0
             if dot < -0.25:
-                direction_penalty += 50.0
-    return distance + direction_penalty + (100000.0 if blocked else 0.0)
+                direction_penalty += 10.0
+    return distance + slope_penalty + direction_penalty + (100000.0 if blocked else 0.0)
 
 
-def _best_track_zone_candidate_point(obstacle_entries, previous_point, candidate_points, previous_direction=None):
+def _best_track_zone_candidate_point(
+    obstacle_entries,
+    previous_point,
+    candidate_points,
+    previous_direction=None,
+    floor_entries=None,
+    spacing=None,
+):
     if not candidate_points:
         return None
     if previous_point is None:
@@ -2989,11 +3172,75 @@ def _best_track_zone_candidate_point(obstacle_entries, previous_point, candidate
                 previous_point,
                 point,
                 previous_direction,
+                floor_entries=floor_entries,
+                spacing=spacing,
             ) + order * 8.0,
             (point - previous_point).length_squared,
             point,
         ))
     return min(scored, key=lambda item: (item[0], item[1]))[2]
+
+
+def _track_zone_sequence_beam(
+    by_id,
+    selected_ids,
+    anchor_point,
+    obstacle_entries,
+    floor_entries,
+    spacing,
+    beam_width=10,
+):
+    if not selected_ids:
+        return []
+
+    beam = [(0.0, [], None)]
+    for zone_order, zone_id in enumerate(selected_ids):
+        next_beam = []
+        choices = []
+        for zone, points in by_id[zone_id]:
+            for point_order, point in enumerate(points[:48]):
+                choices.append((zone, point, point_order))
+
+        for base_score, ordered, previous_direction in beam:
+            previous_point = ordered[-1][1] if ordered else anchor_point
+            previous_previous = ordered[-2][1] if len(ordered) >= 2 else None
+            for zone, point, point_order in choices:
+                if previous_point is None:
+                    transition = point_order * 8.0
+                else:
+                    transition = _track_zone_candidate_order_score(
+                        obstacle_entries,
+                        previous_point,
+                        point,
+                        previous_direction,
+                        floor_entries=floor_entries,
+                        spacing=spacing,
+                    ) + point_order * 7.0
+
+                    if previous_previous is not None:
+                        before = _flat_direction_between(previous_previous, previous_point)
+                        after = _flat_direction_between(previous_point, point, fallback=before)
+                        dot = before.dot(after)
+                        if dot < 0.35:
+                            transition += 18.0 + (0.35 - dot) * 45.0
+
+                        old_side = BlenderVector((-before.y, before.x, 0.0))
+                        lateral = abs((point - previous_point).dot(old_side))
+                        forward = abs((point - previous_point).dot(before))
+                        if lateral > max(2.2, forward * 0.9):
+                            transition += (lateral - max(2.2, forward * 0.9)) * 8.0
+
+                new_direction = previous_direction
+                if previous_point is not None:
+                    new_direction = _flat_direction_between(previous_point, point, fallback=previous_direction)
+                next_beam.append((base_score + transition, ordered + [(zone, point)], new_direction))
+
+        if not next_beam:
+            break
+        next_beam.sort(key=lambda item: item[0])
+        beam = next_beam[:beam_width]
+
+    return beam[0][1] if beam else []
 
 
 def _track_zone_overlap_floor_point(floor_entries, zone_a, zone_b, z_hint):
@@ -3048,7 +3295,276 @@ def _insert_track_zone_overlap_points(floor_entries, obstacle_entries, ordered, 
     return result
 
 
-def _ordered_selected_track_zone_points(floor_entries, obstacle_entries, zones, active_zone=None):
+def _point_key(point, precision=3):
+    return (round(point.x, precision), round(point.y, precision), round(point.z, precision))
+
+
+def _track_zone_chart_add_sample(samples, sample_keys, point):
+    key = _point_key(point)
+    if key in sample_keys:
+        return False
+    sample_keys.add(key)
+    samples.append(point.copy())
+    return True
+
+
+def _track_zone_chart_floor_sample(floor_entries, zone, sample_x, sample_y, bounds, center):
+    min_x, max_x, min_y, max_y, min_z, max_z = bounds
+    margin = 1.0
+    expected_z = _track_zone_expected_z(zone, sample_x, sample_y, center.z)
+    origin = BlenderVector((sample_x, sample_y, max_z + margin))
+    hits = _raycast_collision_bvhs_all(
+        floor_entries,
+        origin,
+        BlenderVector((0.0, 0.0, -1.0)),
+        max(1.0, (max_z - min_z) + margin * 2.0),
+    )
+    best = None
+    for hit_world, normal_world, _face_index, _distance, _obj in hits:
+        if normal_world.z < 0.45:
+            continue
+        if hit_world.z < min_z - margin or hit_world.z > max_z + margin:
+            continue
+        expected_z_penalty = abs(hit_world.z - expected_z)
+        score = expected_z_penalty + abs(hit_world.z - center.z) * 0.15
+        if best is None or score < best[0]:
+            best = (score, hit_world)
+    return best[1] if best else None
+
+
+def _track_zone_navigation_chart(floor_entries, obstacle_entries, zones, candidate_points_by_zone, spacing):
+    samples = []
+    sample_keys = set()
+    grid_step = max(2.7, min(spacing * 0.32, 4.4))
+
+    for zone in zones:
+        zone_id = _track_zone_id(zone)
+        for point in candidate_points_by_zone.get(zone_id, ())[:64]:
+            _track_zone_chart_add_sample(samples, sample_keys, point)
+
+        bounds = _world_bbox_bounds(zone)
+        min_x, max_x, min_y, max_y, _min_z, _max_z = bounds
+        center = _track_zone_center_world(zone)
+        width = max(0.001, max_x - min_x)
+        depth = max(0.001, max_y - min_y)
+        step = grid_step
+        estimated = int(math.ceil(width / step) + 1) * int(math.ceil(depth / step) + 1)
+        if estimated > 240:
+            step *= math.sqrt(estimated / 240.0)
+
+        x_count = max(2, int(math.ceil(width / step)))
+        y_count = max(2, int(math.ceil(depth / step)))
+        for ix in range(x_count + 1):
+            sample_x = min_x + width * (ix / x_count)
+            for iy in range(y_count + 1):
+                sample_y = min_y + depth * (iy / y_count)
+                floor = _track_zone_chart_floor_sample(
+                    floor_entries,
+                    zone,
+                    sample_x,
+                    sample_y,
+                    bounds,
+                    center,
+                )
+                if floor is None:
+                    continue
+                _track_zone_chart_add_sample(samples, sample_keys, floor)
+
+    if len(samples) < 3:
+        return None
+
+    max_samples = 3400
+    if len(samples) > max_samples:
+        stride = max(1, int(math.ceil(len(samples) / max_samples)))
+        samples = samples[::stride]
+
+    max_edge = max(grid_step * 1.85, spacing * 0.55)
+    cell_size = max_edge
+    cells = {}
+    for index, point in enumerate(samples):
+        cell = (int(math.floor(point.x / cell_size)), int(math.floor(point.y / cell_size)))
+        cells.setdefault(cell, []).append(index)
+
+    neighbors = {index: [] for index in range(len(samples))}
+    edge_cache = set()
+    for index, point in enumerate(samples):
+        cell_x = int(math.floor(point.x / cell_size))
+        cell_y = int(math.floor(point.y / cell_size))
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                for other in cells.get((cell_x + dx, cell_y + dy), ()):
+                    if other <= index:
+                        continue
+                    key = (index, other)
+                    if key in edge_cache:
+                        continue
+                    edge_cache.add(key)
+                    other_point = samples[other]
+                    distance = (other_point - point).length
+                    if distance > max_edge:
+                        continue
+                    if not _collision_path_segment_clear(floor_entries, obstacle_entries, point, other_point, spacing):
+                        continue
+                    vertical = abs(other_point.z - point.z)
+                    cost = distance + vertical * 2.4
+                    neighbors[index].append((other, cost))
+                    neighbors[other].append((index, cost))
+
+    return {
+        "samples": samples,
+        "neighbors": neighbors,
+        "max_edge": max_edge,
+    }
+
+
+def _chart_attachment_candidates(chart, floor_entries, obstacle_entries, point, spacing):
+    samples = chart["samples"]
+    max_edge = chart["max_edge"]
+    radius = max(max_edge * 2.5, spacing * 1.7)
+    nearby = []
+    for index, sample in enumerate(samples):
+        distance = (sample - point).length
+        if distance > radius:
+            continue
+        nearby.append((distance, index))
+
+    attachments = []
+    for distance, index in sorted(nearby)[:36]:
+        sample = samples[index]
+        if not _collision_path_segment_clear(floor_entries, obstacle_entries, point, sample, spacing):
+            continue
+        vertical = abs(sample.z - point.z)
+        attachments.append((index, distance + vertical * 2.0))
+        if len(attachments) >= 12:
+            break
+    return attachments
+
+
+def _charted_points_between(floor_entries, obstacle_entries, chart, start, end, spacing):
+    if chart is None:
+        return []
+    if _collision_path_segment_clear(floor_entries, obstacle_entries, start, end, spacing):
+        return []
+
+    start_edges = _chart_attachment_candidates(chart, floor_entries, obstacle_entries, start, spacing)
+    end_edges = _chart_attachment_candidates(chart, floor_entries, obstacle_entries, end, spacing)
+    if not start_edges or not end_edges:
+        return []
+
+    end_indices = {index for index, _cost in end_edges}
+    end_cost = {index: cost for index, cost in end_edges}
+    samples = chart["samples"]
+    neighbors = chart["neighbors"]
+
+    heap = []
+    best = {}
+    parent = {}
+    for index, cost in start_edges:
+        best[index] = cost
+        heuristic = (samples[index] - end).length
+        heapq.heappush(heap, (cost + heuristic * 0.85, index, -1))
+
+    goal = None
+    while heap:
+        _estimated, index, previous = heapq.heappop(heap)
+        if index in parent:
+            continue
+        parent[index] = previous
+        if index in end_indices:
+            goal = index
+            break
+        for neighbor, edge_cost in neighbors[index]:
+            if neighbor in parent:
+                continue
+            new_cost = best[index] + edge_cost
+            if neighbor in end_cost:
+                new_cost += end_cost[neighbor]
+            if new_cost >= best.get(neighbor, float("inf")):
+                continue
+            best[neighbor] = new_cost
+            heuristic = (samples[neighbor] - end).length
+            heapq.heappush(heap, (new_cost + heuristic * 0.85, neighbor, index))
+
+    if goal is None:
+        return []
+
+    indices = []
+    current = goal
+    while current >= 0:
+        indices.append(current)
+        current = parent.get(current, -1)
+    indices.reverse()
+    chain = [samples[index] for index in indices]
+    if not chain:
+        return []
+
+    if any(
+        not _collision_path_segment_clear(floor_entries, obstacle_entries, a, b, spacing)
+        for a, b in zip([start] + chain, chain + [end])
+    ):
+        return []
+
+    direct_distance = (end - start).length
+    chain_distance = sum((b - a).length for a, b in zip([start] + chain, chain + [end]))
+    if direct_distance > 0.001 and chain_distance > max(direct_distance * 8.0, direct_distance + spacing * 10.0):
+        return []
+
+    return _simplify_detour_chain([start] + chain + [end], spacing)[1:-1]
+
+
+def _repair_track_zone_route_segments(floor_entries, obstacle_entries, ordered, spacing, candidate_points_by_zone=None, chart=None):
+    if len(ordered) < 2:
+        return ordered
+
+    repaired = [ordered[0]]
+    for index, (zone, point) in enumerate(ordered[1:], start=1):
+        previous_zone, previous_point = repaired[-1]
+        if not _collision_path_segment_clear(floor_entries, obstacle_entries, previous_point, point, spacing):
+            support_points = []
+            detour = []
+            if chart is not None:
+                detour = _charted_points_between(
+                    floor_entries,
+                    obstacle_entries,
+                    chart,
+                    previous_point,
+                    point,
+                    spacing,
+                )
+            if candidate_points_by_zone:
+                zone_ids = {_track_zone_id(previous_zone), _track_zone_id(zone)}
+                if index > 1:
+                    zone_ids.add(_track_zone_id(ordered[index - 2][0]))
+                if index + 1 < len(ordered):
+                    zone_ids.add(_track_zone_id(ordered[index + 1][0]))
+                for zone_id in zone_ids:
+                    support_points.extend(candidate_points_by_zone.get(zone_id, ()))
+            if not detour:
+                detour = _detour_points_around_segment(
+                    floor_entries,
+                    obstacle_entries,
+                    previous_point,
+                    point,
+                    spacing,
+                    support_points=support_points,
+                )
+            for detour_point in detour:
+                if (detour_point - repaired[-1][1]).length >= 0.05:
+                    repaired.append((previous_zone, detour_point))
+        if (point - repaired[-1][1]).length >= 0.05:
+            repaired.append((zone, point))
+
+    return repaired
+
+
+def _ordered_selected_track_zone_points(
+    floor_entries,
+    obstacle_entries,
+    zones,
+    active_zone=None,
+    anchor_point=None,
+    spacing=4.0,
+):
     candidates = []
     missing_floor = []
     for zone in zones:
@@ -3059,53 +3575,54 @@ def _ordered_selected_track_zone_points(floor_entries, obstacle_entries, zones, 
         candidates.append((_track_zone_id(zone), zone, floor_points))
 
     if len(candidates) < 2:
-        return [], missing_floor, 0
+        return [], missing_floor, 0, False
 
     by_id = {}
+    candidate_points_by_zone = {}
     for zone_id, zone, points in candidates:
         by_id.setdefault(zone_id, []).append((zone, points))
+        candidate_points_by_zone.setdefault(zone_id, []).extend(points[:64])
 
     selected_ids = sorted(by_id)
+    selected_ids, rotated_to_active = _rotate_track_zone_ids_for_active(selected_ids, active_zone)
+    if not rotated_to_active:
+        selected_ids, rotated_to_active = _rotate_track_zone_ids_for_anchor(
+            by_id,
+            selected_ids,
+            anchor_point,
+            floor_entries,
+            obstacle_entries,
+            spacing,
+        )
 
-    ordered = []
-    previous_direction = None
-    for chain_index, zone_id in enumerate(selected_ids):
-        choices = by_id[zone_id]
-        previous_point = ordered[-1][1] if ordered else None
-        if active_zone in [zone for zone, _points in choices]:
-            zone, points = next((zone, points) for zone, points in choices if zone == active_zone)
-            point = _best_track_zone_candidate_point(obstacle_entries, previous_point, points, previous_direction)
-        elif chain_index == 0:
-            zone, points = sorted(choices, key=lambda item: item[0].name)[0]
-            point = points[0]
-        else:
-            zone, points = min(
-                choices,
-                key=lambda item: (
-                    _track_zone_candidate_order_score(
-                        obstacle_entries,
-                        previous_point,
-                        _best_track_zone_candidate_point(obstacle_entries, previous_point, item[1], previous_direction),
-                        previous_direction,
-                    ),
-                    item[0].name,
-                ),
-            )
-            point = _best_track_zone_candidate_point(obstacle_entries, previous_point, points, previous_direction)
-        if point is None:
-            continue
-        if previous_point is not None:
-            delta = point - previous_point
-            horizontal = BlenderVector((delta.x, delta.y, 0.0))
-            if horizontal.length > 0.000001:
-                previous_direction = horizontal.normalized()
-        ordered.append((zone, point))
+    ordered = _track_zone_sequence_beam(
+        by_id,
+        selected_ids,
+        anchor_point,
+        obstacle_entries,
+        floor_entries,
+        spacing,
+    )
 
     ordered_count = len(ordered)
-    ordered = _insert_track_zone_overlap_points(floor_entries, obstacle_entries, ordered, spacing=4.0)
+    chart = _track_zone_navigation_chart(
+        floor_entries,
+        obstacle_entries,
+        zones,
+        candidate_points_by_zone,
+        spacing,
+    )
+    ordered = _insert_track_zone_overlap_points(floor_entries, obstacle_entries, ordered, spacing=spacing)
+    ordered = _repair_track_zone_route_segments(
+        floor_entries,
+        obstacle_entries,
+        ordered,
+        spacing=spacing,
+        candidate_points_by_zone=candidate_points_by_zone,
+        chart=chart,
+    )
     ignored = len(candidates) - ordered_count
-    return [point for _zone, point in ordered], missing_floor, ignored
-
+    return [point for _zone, point in ordered], missing_floor, ignored, rotated_to_active
 
 def _dedupe_path_points(points, threshold=0.05, closed=False):
     deduped = []
@@ -3157,11 +3674,17 @@ def _path_corner_support_points(floor_entries, obstacle_entries, points, spacing
         offset = max(0.25, offset)
         candidates = [point]
 
-        # Keep track-zone points as hard corner anchors. Adding an approach point
-        # before the corner made some automated paths begin turning too early.
-        # A short exit support still gives the spacing/refinement pass enough
-        # information to follow the turn without cutting across the wall.
         if dot < 0.72:
+            approach = point - incoming * offset
+            approach_floor = _project_point_to_collision_floor_near(floor_entries, approach, height=3.5)
+            if approach_floor is not None:
+                approach_chain = (
+                    _collision_path_segment_clear(floor_entries, obstacle_entries, prev_point, approach_floor, spacing)
+                    and _collision_path_segment_clear(floor_entries, obstacle_entries, approach_floor, point, spacing)
+                )
+                direct_into_corner = _collision_path_segment_clear(floor_entries, obstacle_entries, prev_point, point, spacing)
+                if approach_chain and (not direct_into_corner or dot < 0.35):
+                    candidates.append(approach)
             candidates.append(point + outgoing * offset)
 
         for candidate in candidates:
@@ -3196,31 +3719,118 @@ def _collision_segment_blocked(entries, start, end, clearance=0.28):
         side.normalize()
     else:
         side = BlenderVector((0.0, 0.0, 0.0))
-    for z_offset in (clearance, clearance * 2.0, clearance * 3.2):
-        for side_offset in (0.0, clearance * 0.6, -clearance * 0.6):
+    for z_offset in (clearance, clearance * 2.0, clearance * 3.2, clearance * 5.0, clearance * 7.0):
+        for side_offset in (0.0, clearance * 0.7, -clearance * 0.7, clearance * 1.4, -clearance * 1.4, clearance * 2.4, -clearance * 2.4):
             origin = start + direction * 0.05 + side * side_offset + BlenderVector((0.0, 0.0, z_offset))
             hit = _raycast_collision_bvhs(entries, origin, direction, max(0.0, distance - 0.1))
-            if hit and hit[1].z < 0.35:
+            if hit and abs(hit[1].z) < 0.45:
                 return True
     return False
+
+
+def _collision_corridor_floor_clear(floor_entries, obstacle_entries, start, end, spacing, width=0.9):
+    delta = end - start
+    distance = delta.length
+    if distance <= 0.000001:
+        return True
+    direction = delta.normalized()
+    side = BlenderVector((-direction.y, direction.x, 0.0))
+    if side.length > 0.000001:
+        side.normalize()
+    steps = max(2, int(math.ceil(distance / max(0.65, spacing * 0.22))))
+    side_offsets = (0.0, width, -width)
+    previous_floors = {offset: None for offset in side_offsets}
+    for step in range(steps + 1):
+        factor = step / steps
+        base = start.lerp(end, factor)
+        for side_offset in side_offsets:
+            sample = base + side * side_offset
+            floor = _project_point_to_collision_floor_near(floor_entries, sample, height=5.0)
+            if floor is None:
+                return False
+            if abs(floor.z - sample.z) > 3.0:
+                return False
+            previous_floor = previous_floors[side_offset]
+            if previous_floor is not None:
+                allowed_step = max(0.85, (distance / steps) * 0.55)
+                if abs(floor.z - previous_floor.z) > allowed_step:
+                    return False
+            previous_floors[side_offset] = floor
+
+    if obstacle_entries:
+        for side_offset in side_offsets:
+            sample_start = start + side * side_offset
+            sample_end = end + side * side_offset
+            if _collision_segment_blocked(obstacle_entries, sample_start, sample_end, clearance=0.24):
+                return False
+    return True
 
 
 def _collision_path_segment_clear(floor_entries, obstacle_entries, start, end, spacing):
     if _collision_segment_blocked(obstacle_entries, start, end):
         return False
+    if floor_entries and not _collision_corridor_floor_clear(floor_entries, obstacle_entries, start, end, spacing):
+        return False
     distance = (end - start).length
     if distance <= 0.000001:
         return True
-    steps = max(1, int(math.ceil(distance / max(1.0, spacing * 0.6))))
-    for step in range(1, steps):
+    steps = max(2, int(math.ceil(distance / max(0.75, spacing * 0.25))))
+    samples = []
+    for step in range(0, steps + 1):
         factor = step / steps
         sample = start.lerp(end, factor)
-        floor = _project_point_to_collision_floor_near(floor_entries, sample, height=2.5)
+        floor = _project_point_to_collision_floor_near(floor_entries, sample, height=5.0)
         if floor is None:
             return False
         if abs(floor.z - sample.z) > 3.0:
             return False
+        samples.append((factor, floor))
+
+    start_floor = samples[0][1]
+    end_floor = samples[-1][1]
+    total_z = end_floor.z - start_floor.z
+    step_length = distance / steps
+    allowed_step = max(0.85, step_length * 0.55)
+    allowed_profile_error = max(0.9, step_length * 0.35)
+
+    previous_floor = start_floor
+    for factor, floor in samples[1:]:
+        step_delta = floor.z - previous_floor.z
+        if abs(step_delta) > allowed_step:
+            return False
+        if abs(total_z) > 0.35:
+            expected_z = start_floor.z + total_z * factor
+            if abs(floor.z - expected_z) > allowed_profile_error:
+                return False
+        previous_floor = floor
     return True
+
+
+def _collision_path_segment_connectable(floor_entries, obstacle_entries, start, end, spacing):
+    if _collision_segment_blocked(obstacle_entries, start, end):
+        return False
+    if not floor_entries:
+        return True
+
+    distance = (end - start).length
+    if distance <= 0.000001:
+        return True
+    steps = max(2, int(math.ceil(distance / max(0.9, spacing * 0.35))))
+    valid = 0
+    previous_floor = None
+    for step in range(steps + 1):
+        sample = start.lerp(end, step / steps)
+        floor = _project_point_to_collision_floor_near(floor_entries, sample, height=max(6.0, spacing * 1.1))
+        if floor is None:
+            continue
+        if abs(floor.z - sample.z) > max(5.5, spacing * 0.8):
+            continue
+        if previous_floor is not None and abs(floor.z - previous_floor.z) > max(4.5, spacing * 0.8):
+            continue
+        previous_floor = floor
+        valid += 1
+
+    return valid >= max(2, int((steps + 1) * 0.45))
 
 
 def _automation_side_floor_distance(floor_entries, obstacle_entries, center, side, default_half_width, spacing):
@@ -3294,12 +3904,15 @@ def _midpoint_around_collision(floor_entries, obstacle_entries, start, end, spac
         floor = _project_point_to_collision_floor_near(floor_entries, candidate)
         if floor is None:
             continue
-        blocked = _collision_segment_blocked(obstacle_entries, start, floor) or _collision_segment_blocked(obstacle_entries, floor, end)
-        penalty = 1000.0 if blocked else 0.0
+        clear = (
+            _collision_path_segment_clear(floor_entries, obstacle_entries, start, floor, spacing)
+            and _collision_path_segment_clear(floor_entries, obstacle_entries, floor, end, spacing)
+        )
+        penalty = 1000.0 if not clear else 0.0
         score = penalty + (floor - midpoint).length_squared
         if best is None or score < best[0]:
-            best = (score, floor, blocked)
-    if best and not best[2]:
+            best = (score, floor, clear)
+    if best and best[2]:
         return best[1]
     return None
 
@@ -3321,7 +3934,7 @@ def _refine_collision_path(floor_entries, obstacle_entries, points, spacing, clo
         while stack:
             a, b, depth = stack.pop()
             length = (b - a).length
-            blocked = _collision_segment_blocked(obstacle_entries, a, b)
+            blocked = not _collision_path_segment_clear(floor_entries, obstacle_entries, a, b, spacing)
             too_long = length > spacing
             if (too_long or blocked) and depth < 4:
                 midpoint = None
@@ -3339,6 +3952,412 @@ def _refine_collision_path(floor_entries, obstacle_entries, points, spacing, clo
         refined.extend(segment_points)
 
     return _dedupe_path_points(refined, threshold=0.05, closed=closed)
+
+
+def _simplify_detour_chain(points, spacing):
+    if len(points) <= 2:
+        return points
+
+    simplified = [points[0]]
+    for index, point in enumerate(points[1:-1], start=1):
+        previous = simplified[-1]
+        next_point = points[index + 1]
+        before = _flat_direction_between(previous, point)
+        after = _flat_direction_between(point, next_point, fallback=before)
+        if before.dot(after) > 0.96 and (point - previous).length < spacing * 1.25:
+            continue
+        simplified.append(point)
+    simplified.append(points[-1])
+    return simplified
+
+
+def _grid_detour_points_around_segment(floor_entries, obstacle_entries, start, end, spacing, support_points=None):
+    delta = end - start
+    flat_delta = BlenderVector((delta.x, delta.y, 0.0))
+    distance = flat_delta.length
+    if distance <= 0.000001:
+        return []
+
+    forward = flat_delta.normalized()
+    side = BlenderVector((-forward.y, forward.x, 0.0))
+    wide_search = bool(support_points)
+    if wide_search:
+        grid_step = max(3.8, min(spacing * 0.52, distance * 0.18))
+        side_extent = max(spacing * 2.8, min(spacing * 7.5, distance * 1.05))
+        forward_before = min(spacing * 1.35, distance * 0.5)
+        forward_after = min(spacing * 1.35, distance * 0.5)
+    else:
+        grid_step = max(3.8, min(spacing * 0.7, distance * 0.35))
+        side_extent = max(spacing * 1.5, min(spacing * 3.2, distance * 0.8))
+        forward_before = min(spacing * 0.8, distance * 0.35)
+        forward_after = min(spacing * 0.8, distance * 0.35)
+
+    side_count = max(3, int(math.ceil(side_extent / grid_step)))
+    forward_count = max(5, int(math.ceil((distance + forward_before + forward_after) / grid_step)))
+    if not wide_search:
+        side_count = min(4, side_count)
+        forward_count = min(10, forward_count)
+    estimated_samples = (forward_count + 1) * (side_count * 2 + 1)
+    sample_cap = 950 if wide_search else 160
+    if estimated_samples > sample_cap:
+        scale = math.sqrt(estimated_samples / sample_cap)
+        grid_step *= scale
+        side_count = max(3, int(math.ceil(side_extent / grid_step)))
+        forward_count = max(5, int(math.ceil((distance + forward_before + forward_after) / grid_step)))
+        if not wide_search:
+            side_count = min(4, side_count)
+            forward_count = min(10, forward_count)
+
+    samples = [start.copy(), end.copy()]
+    sample_keys = {
+        (round(start.x, 3), round(start.y, 3), round(start.z, 3)),
+        (round(end.x, 3), round(end.y, 3), round(end.z, 3)),
+    }
+    grid_indices = {}
+
+    for fi in range(forward_count + 1):
+        along = -forward_before + (distance + forward_before + forward_after) * (fi / forward_count)
+        factor = max(0.0, min(1.0, along / distance))
+        for si in range(-side_count, side_count + 1):
+            offset = si * grid_step
+            candidate = start.lerp(end, factor) + forward * (along - distance * factor) + side * offset
+            hit = _project_point_to_collision_floor_near_hit(
+                floor_entries,
+                candidate,
+                height=max(10.0, spacing * 1.6),
+            )
+            if hit is None:
+                continue
+            floor, normal = hit
+            if normal.z < 0.45:
+                continue
+            if abs(floor.z - candidate.z) > max(9.0, spacing * 1.25):
+                continue
+            key = (round(floor.x, 3), round(floor.y, 3), round(floor.z, 3))
+            if key in sample_keys:
+                continue
+            sample_keys.add(key)
+            grid_indices[(fi, si)] = len(samples)
+            samples.append(floor)
+
+    support_indices = []
+    if support_points:
+        for point in support_points:
+            rel = point - start
+            along = rel.dot(forward)
+            lateral = abs(rel.dot(side))
+            if along < -forward_before * 1.6 or along > distance + forward_after * 1.6:
+                continue
+            if lateral > side_extent * 1.35:
+                continue
+            floor = _project_point_to_collision_floor_near(
+                floor_entries,
+                point,
+                height=max(4.0, spacing * 0.8),
+            )
+            if floor is None:
+                continue
+            key = (round(floor.x, 3), round(floor.y, 3), round(floor.z, 3))
+            if key in sample_keys:
+                continue
+            sample_keys.add(key)
+            support_indices.append(len(samples))
+            samples.append(floor)
+
+    if len(samples) < 3:
+        return []
+
+    neighbors = {index: [] for index in range(len(samples))}
+    max_edge = grid_step * 1.55
+    neighbor_offsets = (
+        (-1, -1), (-1, 0), (-1, 1),
+        (0, -1), (0, 1),
+        (1, -1), (1, 0), (1, 1),
+    )
+    edge_cache = set()
+
+    def add_edge(i, j):
+        if i == j:
+            return
+        key = (min(i, j), max(i, j))
+        if key in edge_cache:
+            return
+        edge_cache.add(key)
+        edge_distance = (samples[i] - samples[j]).length
+        if edge_distance > max_edge * 1.25:
+            return
+        if not _collision_path_segment_clear(floor_entries, obstacle_entries, samples[i], samples[j], spacing):
+            return
+        vertical = abs(samples[i].z - samples[j].z)
+        cost = edge_distance + vertical * 2.5
+        neighbors[i].append((j, cost))
+        neighbors[j].append((i, cost))
+
+    for coord, index in grid_indices.items():
+        fi, si = coord
+        for dfi, dsi in neighbor_offsets:
+            other = grid_indices.get((fi + dfi, si + dsi))
+            if other is not None:
+                add_edge(index, other)
+
+    for index in support_indices:
+        nearby = []
+        for other in range(len(samples)):
+            if other == index:
+                continue
+            distance_to_other = (samples[index] - samples[other]).length
+            if distance_to_other <= max_edge * 1.45:
+                nearby.append((distance_to_other, other))
+        for _distance_to_other, other in sorted(nearby)[:12]:
+            add_edge(index, other)
+
+    start_end_attach_limit = max_edge * 1.35
+    near_start = []
+    near_end = []
+    for index in range(2, len(samples)):
+        start_distance = (samples[index] - start).length
+        end_distance = (samples[index] - end).length
+        if start_distance <= start_end_attach_limit:
+            near_start.append((start_distance, index))
+        if end_distance <= start_end_attach_limit:
+            near_end.append((end_distance, index))
+    for _distance_to_start, index in sorted(near_start)[:14]:
+        add_edge(0, index)
+    for _distance_to_end, index in sorted(near_end)[:14]:
+        add_edge(1, index)
+
+    if not neighbors[0] or not neighbors[1]:
+        by_start = sorted(((samples[index] - start).length, index) for index in range(2, len(samples)))
+        by_end = sorted(((samples[index] - end).length, index) for index in range(2, len(samples)))
+        for _distance_to_start, index in by_start[:14]:
+            add_edge(0, index)
+        for _distance_to_end, index in by_end[:14]:
+            add_edge(1, index)
+
+    heap = [(0.0, 0, -1)]
+    best = {0: 0.0}
+    parent = {}
+    while heap:
+        cost, index, previous = heapq.heappop(heap)
+        if index in parent:
+            continue
+        parent[index] = previous
+        if index == 1:
+            break
+        for neighbor, edge_distance in neighbors[index]:
+            if neighbor in parent:
+                continue
+            heuristic = (samples[neighbor] - end).length
+            new_cost = best[index] + edge_distance
+            if new_cost >= best.get(neighbor, float("inf")):
+                continue
+            best[neighbor] = new_cost
+            heapq.heappush(heap, (new_cost + heuristic * 0.9, neighbor, index))
+
+    if 1 not in parent:
+        return []
+
+    indices = []
+    current = 1
+    while current >= 0:
+        indices.append(current)
+        current = parent.get(current, -1)
+    indices.reverse()
+    chain = [samples[index] for index in indices]
+    if len(chain) <= 2:
+        return []
+    chain = _simplify_detour_chain(chain, spacing)
+    return chain[1:-1]
+
+
+def _detour_points_around_segment(floor_entries, obstacle_entries, start, end, spacing, support_points=None):
+    if _collision_path_segment_clear(floor_entries, obstacle_entries, start, end, spacing):
+        return []
+
+    midpoint = _midpoint_around_collision(floor_entries, obstacle_entries, start, end, spacing)
+    if midpoint is not None:
+        return [midpoint]
+
+    if (end - start).length >= spacing * 2.5:
+        grid_detour = _grid_detour_points_around_segment(
+            floor_entries,
+            obstacle_entries,
+            start,
+            end,
+            spacing,
+            support_points=support_points,
+        )
+        if grid_detour:
+            return grid_detour
+
+    delta = end - start
+    horizontal = BlenderVector((delta.x, delta.y, 0.0))
+    if horizontal.length <= 0.000001:
+        return []
+    horizontal.normalize()
+    side = BlenderVector((-horizontal.y, horizontal.x, 0.0))
+
+    best = None
+    corner_candidates = (
+        BlenderVector((start.x, end.y, (start.z + end.z) * 0.5)),
+        BlenderVector((end.x, start.y, (start.z + end.z) * 0.5)),
+    )
+    for candidate in corner_candidates:
+        floor = _project_point_to_collision_floor_near(
+            floor_entries,
+            candidate,
+            height=max(5.0, spacing * 1.1),
+        )
+        if floor is None:
+            continue
+        if (floor - start).length < 0.25 or (floor - end).length < 0.25:
+            continue
+        chain = [start, floor, end]
+        if any(
+            not _collision_path_segment_clear(floor_entries, obstacle_entries, a, b, spacing)
+            for a, b in zip(chain, chain[1:])
+        ):
+            continue
+        before = _flat_direction_between(start, floor)
+        after = _flat_direction_between(floor, end, fallback=before)
+        turn_penalty = max(0.0, 0.15 - before.dot(after)) * spacing
+        score = (floor - start).length + (end - floor).length + turn_penalty
+        if best is None or score < best[0]:
+            best = (score, [floor])
+
+    offset_distances = (
+        spacing * 0.45,
+        spacing * 0.75,
+        spacing * 1.1,
+        spacing * 1.5,
+        spacing * 2.0,
+        spacing * 2.7,
+    )
+    layouts = (
+        (0.33, 0.67),
+        (0.25, 0.75),
+        (0.20, 0.50, 0.80),
+    )
+    for offset_distance in offset_distances:
+        for sign in (1.0, -1.0):
+            offset = side * offset_distance * sign
+            for layout in layouts:
+                candidate_points = []
+                failed = False
+                for factor in layout:
+                    floor = _project_point_to_collision_floor_near(
+                        floor_entries,
+                        start.lerp(end, factor) + offset,
+                        height=max(5.0, spacing * 1.3),
+                    )
+                    if floor is None:
+                        failed = True
+                        break
+                    candidate_points.append(floor)
+                if failed:
+                    continue
+
+                chain = [start] + candidate_points + [end]
+                if any(
+                    not _collision_path_segment_clear(floor_entries, obstacle_entries, a, b, spacing)
+                    for a, b in zip(chain, chain[1:])
+                ):
+                    continue
+
+                length = sum((b - a).length for a, b in zip(chain, chain[1:]))
+                turn_cost = sum(
+                    max(0.0, 0.65 - _flat_direction_between(a, b).dot(_flat_direction_between(b, c))) * spacing
+                    for a, b, c in zip(chain, chain[1:], chain[2:])
+                )
+                score = length + offset_distance * 0.45 + turn_cost
+                if best is None or score < best[0]:
+                    best = (score, candidate_points)
+
+    return best[1] if best is not None else []
+
+
+def _bridge_collision_path_gaps(floor_entries, obstacle_entries, points, spacing, closed=True):
+    if len(points) < 2:
+        return points
+
+    bridged = list(points)
+    for _iteration in range(2):
+        changed = False
+        result = []
+        segment_count = len(bridged) if closed else len(bridged) - 1
+        for i in range(segment_count):
+            start = bridged[i]
+            end = bridged[(i + 1) % len(bridged)]
+            if not result:
+                result.append(start)
+
+            detour = _detour_points_around_segment(floor_entries, obstacle_entries, start, end, spacing)
+            if detour:
+                for point in detour:
+                    if (point - result[-1]).length >= 0.05:
+                        result.append(point)
+                        changed = True
+            if not closed or i < segment_count - 1:
+                if (end - result[-1]).length >= 0.05:
+                    result.append(end)
+
+        if closed and result and (result[0] - result[-1]).length < 0.05:
+            result.pop()
+        bridged = _dedupe_path_points(result, threshold=0.05, closed=closed)
+        if not changed:
+            break
+
+    return bridged
+
+
+def _remove_or_bridge_isolated_path_points(floor_entries, obstacle_entries, points, spacing, closed=True):
+    if len(points) < 3:
+        return points
+
+    repaired = list(points)
+    for _iteration in range(3):
+        changed = False
+        result = []
+        count = len(repaired)
+        for i, point in enumerate(repaired):
+            if not closed and (i == 0 or i == count - 1):
+                result.append(point)
+                continue
+
+            previous_point = repaired[(i - 1) % count]
+            next_point = repaired[(i + 1) % count]
+            previous_clear = _collision_path_segment_clear(floor_entries, obstacle_entries, previous_point, point, spacing)
+            next_clear = _collision_path_segment_clear(floor_entries, obstacle_entries, point, next_point, spacing)
+            if previous_clear or next_clear:
+                result.append(point)
+                continue
+
+            replacement = []
+            if _collision_path_segment_clear(floor_entries, obstacle_entries, previous_point, next_point, spacing):
+                replacement = []
+            else:
+                replacement = _detour_points_around_segment(floor_entries, obstacle_entries, previous_point, next_point, spacing)
+                if replacement:
+                    chain = [previous_point] + replacement + [next_point]
+                    if any(
+                        not _collision_path_segment_clear(floor_entries, obstacle_entries, a, b, spacing)
+                        for a, b in zip(chain, chain[1:])
+                    ):
+                        replacement = []
+
+            if replacement or _collision_path_segment_clear(floor_entries, obstacle_entries, previous_point, next_point, spacing):
+                for replacement_point in replacement:
+                    if not result or (replacement_point - result[-1]).length >= 0.05:
+                        result.append(replacement_point)
+                changed = True
+            else:
+                result.append(point)
+
+        repaired = _dedupe_path_points(result, threshold=0.05, closed=closed)
+        if not changed:
+            break
+
+    return repaired
 
 
 def _smooth_collision_path(floor_entries, obstacle_entries, points, spacing, closed=True):
@@ -3983,6 +5002,16 @@ class GenerateAINodesToSelected(bpy.types.Operator):
                 closed=False,
             )
 
+        ratio_nodes = ([append_tail] if append_tail else []) + created
+        racing_ratio_nodes = _optimize_ai_line_ratios(
+            ratio_nodes,
+            attr_name="ai_racing_ratio",
+            floor_entries=floor_bvhs,
+            obstacle_entries=obstacle_bvhs,
+            spacing=spacing,
+            closed=False,
+        )
+
         for obj in scene.objects:
             obj.select_set(False)
         for obj in created:
@@ -3998,6 +5027,8 @@ class GenerateAINodesToSelected(bpy.types.Operator):
             message += f" Continued from {append_tail.name}."
         if optimized_nodes:
             message += f" Straightened and width-refit {optimized_nodes} node(s)."
+        if racing_ratio_nodes:
+            message += f" Straightened racing ratios on {racing_ratio_nodes} node(s)."
         self.report({'INFO'}, message)
         return {'FINISHED'}
 
@@ -4259,6 +5290,215 @@ def _set_ai_overtake_ratio(obj, ratio):
         obj["_ai_suppress_geometry_update"] = False
 
 
+def _set_ai_racing_ratio(obj, ratio):
+    ratio = max(0.0, min(1.0, float(ratio)))
+    obj["_ai_suppress_geometry_update"] = True
+    try:
+        obj.ai_racing_ratio = ratio
+        obj["ai_racing_ratio"] = ratio
+        _rebuild_ai_node_helper_vertices(obj)
+        update_ai_node_handles(obj)
+    finally:
+        obj["_ai_suppress_geometry_update"] = False
+
+
+def _ai_node_ratio_point(obj, ratio):
+    left, right = _ai_node_left_right_world(obj)
+    return left.lerp(right, max(0.0, min(1.0, float(ratio))))
+
+
+def _ai_node_current_ratio(obj, attr_name):
+    return _display_ai_ratio(getattr(obj, attr_name, obj.get(attr_name, 0.5)))
+
+
+def _point_line_distance(point, start, end):
+    segment = end - start
+    if segment.length <= 0.000001:
+        return (point - start).length
+    factor = max(0.0, min(1.0, (point - start).dot(segment) / segment.length_squared))
+    return (point - start.lerp(end, factor)).length
+
+
+def _ratio_candidate_points(base_ratio):
+    candidates = {
+        0.08, 0.14, 0.20, 0.28, 0.36, 0.44, 0.50,
+        0.56, 0.64, 0.72, 0.80, 0.86, 0.92,
+        max(0.05, min(0.95, float(base_ratio))),
+    }
+    return sorted(candidates)
+
+
+def _ratio_line_segment_clear(floor_entries, obstacle_entries, start, end, spacing):
+    if not floor_entries and not obstacle_entries:
+        return True
+    if obstacle_entries and _collision_segment_blocked(obstacle_entries, start, end, clearance=0.24):
+        return False
+    if floor_entries and not _collision_corridor_floor_clear(
+        floor_entries,
+        obstacle_entries,
+        start,
+        end,
+        spacing,
+        width=0.45,
+    ):
+        return False
+    return True
+
+
+def _repair_ai_line_ratio_segments(
+    nodes,
+    attr_name="ai_racing_ratio",
+    floor_entries=None,
+    obstacle_entries=None,
+    spacing=AI_NODE_AUTOMATION_SPACING,
+    closed=False,
+):
+    if len(nodes) < 2:
+        return 0
+
+    floor_entries = floor_entries or []
+    obstacle_entries = obstacle_entries or []
+    ratios = [_ai_node_current_ratio(obj, attr_name) for obj in nodes]
+    segment_count = len(nodes) if closed else len(nodes) - 1
+
+    for _iteration in range(2):
+        any_change = False
+        for i in range(segment_count):
+            first_i = i
+            second_i = (i + 1) % len(nodes)
+            first_point = _ai_node_ratio_point(nodes[first_i], ratios[first_i])
+            second_point = _ai_node_ratio_point(nodes[second_i], ratios[second_i])
+            if _ratio_line_segment_clear(floor_entries, obstacle_entries, first_point, second_point, spacing):
+                continue
+
+            best = None
+            for first_ratio in _ratio_candidate_points(ratios[first_i]):
+                candidate_first = _ai_node_ratio_point(nodes[first_i], first_ratio)
+                for second_ratio in _ratio_candidate_points(ratios[second_i]):
+                    candidate_second = _ai_node_ratio_point(nodes[second_i], second_ratio)
+                    if not _ratio_line_segment_clear(floor_entries, obstacle_entries, candidate_first, candidate_second, spacing):
+                        continue
+                    movement = abs(first_ratio - ratios[first_i]) + abs(second_ratio - ratios[second_i])
+                    center_bias = abs(first_ratio - 0.5) * 0.04 + abs(second_ratio - 0.5) * 0.04
+                    length_bias = (candidate_second - candidate_first).length * 0.01
+                    score = movement + center_bias + length_bias
+                    if best is None or score < best[0]:
+                        best = (score, first_ratio, second_ratio)
+
+            if best is None:
+                continue
+            _score, first_ratio, second_ratio = best
+            if abs(first_ratio - ratios[first_i]) > 0.0005:
+                ratios[first_i] = first_ratio
+                any_change = True
+            if abs(second_ratio - ratios[second_i]) > 0.0005:
+                ratios[second_i] = second_ratio
+                any_change = True
+
+        if not any_change:
+            break
+
+    changed = 0
+    for obj, old_ratio, new_ratio in zip(nodes, [_ai_node_current_ratio(obj, attr_name) for obj in nodes], ratios):
+        if abs(old_ratio - new_ratio) <= 0.0005:
+            continue
+        if attr_name == "ai_overtake_ratio":
+            _set_ai_overtake_ratio(obj, new_ratio)
+        else:
+            _set_ai_racing_ratio(obj, new_ratio)
+        changed += 1
+    return changed
+
+
+def _optimize_ai_line_ratios(
+    nodes,
+    attr_name="ai_racing_ratio",
+    floor_entries=None,
+    obstacle_entries=None,
+    spacing=AI_NODE_AUTOMATION_SPACING,
+    closed=False,
+):
+    if len(nodes) < 3:
+        return 0
+
+    floor_entries = floor_entries or []
+    obstacle_entries = obstacle_entries or []
+    ratios = [_ai_node_current_ratio(obj, attr_name) for obj in nodes]
+    changed = 0
+
+    for _iteration in range(3):
+        any_iteration_change = False
+        for i, obj in enumerate(nodes):
+            prev_i = _ai_path_offset_index(i, -1, len(nodes), closed)
+            next_i = _ai_path_offset_index(i, 1, len(nodes), closed)
+            if prev_i is None or next_i is None:
+                continue
+
+            prev_point = _ai_node_ratio_point(nodes[prev_i], ratios[prev_i])
+            next_point = _ai_node_ratio_point(nodes[next_i], ratios[next_i])
+            old_ratio = ratios[i]
+            old_point = _ai_node_ratio_point(obj, old_ratio)
+            best = None
+
+            for ratio in _ratio_candidate_points(old_ratio):
+                point = _ai_node_ratio_point(obj, ratio)
+                if not _ratio_line_segment_clear(floor_entries, obstacle_entries, prev_point, point, spacing):
+                    continue
+                if not _ratio_line_segment_clear(floor_entries, obstacle_entries, point, next_point, spacing):
+                    continue
+
+                prev_vec = point - prev_point
+                next_vec = next_point - point
+                angle_penalty = 0.0
+                if prev_vec.length > 0.000001 and next_vec.length > 0.000001:
+                    prev_flat = BlenderVector((prev_vec.x, prev_vec.y, 0.0))
+                    next_flat = BlenderVector((next_vec.x, next_vec.y, 0.0))
+                    if prev_flat.length > 0.000001 and next_flat.length > 0.000001:
+                        prev_flat.normalize()
+                        next_flat.normalize()
+                        dot = max(-1.0, min(1.0, prev_flat.dot(next_flat)))
+                        angle_penalty = (1.0 - dot) * 12.0
+
+                score = (
+                    _point_line_distance(point, prev_point, next_point) * 7.0
+                    + angle_penalty
+                    + abs(ratio - old_ratio) * 0.18
+                    + abs(ratio - 0.5) * 0.04
+                    + abs((point - old_point).z) * 2.0
+                )
+                if best is None or score < best[0]:
+                    best = (score, ratio)
+
+            if best is None:
+                continue
+            _score, ratio = best
+            if abs(ratio - old_ratio) > 0.0005:
+                ratios[i] = ratio
+                any_iteration_change = True
+
+        if not any_iteration_change:
+            break
+
+    for obj, old_ratio, new_ratio in zip(nodes, [_ai_node_current_ratio(obj, attr_name) for obj in nodes], ratios):
+        if abs(old_ratio - new_ratio) <= 0.0005:
+            continue
+        if attr_name == "ai_overtake_ratio":
+            _set_ai_overtake_ratio(obj, new_ratio)
+        else:
+            _set_ai_racing_ratio(obj, new_ratio)
+        changed += 1
+
+    changed += _repair_ai_line_ratio_segments(
+        nodes,
+        attr_name=attr_name,
+        floor_entries=floor_entries,
+        obstacle_entries=obstacle_entries,
+        spacing=spacing,
+        closed=closed,
+    )
+    return changed
+
+
 def _ai_path_offset_index(index, offset, count, closed):
     target = index + offset
     if closed:
@@ -4444,9 +5684,22 @@ class AutomateAIOvertakeLine(bpy.types.Operator):
                 changed += 1
             _set_ai_overtake_ratio(obj, target_ratio)
 
+        collision_meshes = _collision_mesh_objects(scene)
+        floor_bvhs = _collision_bvh_entries(context, collision_meshes) if collision_meshes else []
+        obstacle_meshes = _automation_obstacle_mesh_objects(scene, collision_meshes) if collision_meshes else []
+        obstacle_bvhs = _collision_bvh_entries(context, obstacle_meshes) if obstacle_meshes else []
+        straightened = _optimize_ai_line_ratios(
+            nodes,
+            attr_name="ai_overtake_ratio",
+            floor_entries=floor_bvhs,
+            obstacle_entries=obstacle_bvhs,
+            spacing=AI_NODE_AUTOMATION_SPACING,
+            closed=closed,
+        )
+
         rebuild_ai_route_visuals(scene)
         scope = "selected" if use_selected else "primary"
-        self.report({'INFO'}, f"Automated overtake line on {len(nodes)} {scope} AI nodes using {lookahead}-node lookahead; changed {changed}.")
+        self.report({'INFO'}, f"Automated overtake line on {len(nodes)} {scope} AI nodes using {lookahead}-node lookahead; changed {changed}, straightened {straightened}.")
         return {'FINISHED'}
 
 
@@ -4590,6 +5843,25 @@ def _post_optimize_automated_ai_nodes(
                     continue
 
                 actual_center = (left + right) * 0.5
+                prev_index = _ai_path_offset_index(i, -1, len(optimized_centers), closed)
+                next_index = _ai_path_offset_index(i, 1, len(optimized_centers), closed)
+                if prev_index is not None and not _collision_path_segment_clear(
+                    floor_entries,
+                    obstacle_entries,
+                    optimized_centers[prev_index],
+                    actual_center,
+                    spacing,
+                ):
+                    continue
+                if next_index is not None and not _collision_path_segment_clear(
+                    floor_entries,
+                    obstacle_entries,
+                    actual_center,
+                    optimized_centers[next_index],
+                    spacing,
+                ):
+                    continue
+
                 movement = (actual_center - centers[i]).length
                 if movement > max(spacing * 0.33, default_half_width * 2.0):
                     continue
@@ -4634,7 +5906,7 @@ def _post_optimize_automated_ai_nodes(
     return changed
 
 
-def _update_created_ai_track_distances(scene, created, append_tail=None, closed=False):
+def _update_created_ai_track_distances(scene, created, append_tail=None, closed=False, close_to_tail=False):
     if not created:
         scene.ai_nodes_total_dist = 0.0
         return 0.0
@@ -4648,6 +5920,8 @@ def _update_created_ai_track_distances(scene, created, append_tail=None, closed=
         start = _ai_node_center_world(created[i])
         end = _ai_node_center_world(created[(i + 1) % len(created)])
         segment_lengths.append((end - start).length)
+    if close_to_tail and append_tail and created:
+        segment_lengths.append((_ai_node_center_world(append_tail) - _ai_node_center_world(created[-1])).length)
 
     total_dist = sum(to_revolt_scale(length) for length in segment_lengths)
     running = 0.0
@@ -4661,11 +5935,147 @@ def _update_created_ai_track_distances(scene, created, append_tail=None, closed=
     return total_dist
 
 
+def _set_ai_primary_link(source, target, enabled):
+    source_connections = _ai_connections(source)
+    target_connections = _ai_connections(target)
+    source_index = _ai_node_index(source)
+    target_index = _ai_node_index(target)
+
+    if enabled:
+        source_connections[2] = target_index
+        target_connections[0] = source_index
+    else:
+        if source_connections[2] == target_index:
+            source_connections[2] = -1
+        if target_connections[0] == source_index:
+            target_connections[0] = -1
+
+    _set_ai_connections(source, source_connections)
+    _set_ai_connections(target, target_connections)
+
+
+def _repair_automated_ai_primary_links(floor_entries, obstacle_entries, start_node, created, spacing, closed):
+    if not created:
+        return 0, 0
+
+    repaired = 0
+    rejected = 0
+    pairs = [(start_node, created[0])]
+    pairs.extend((created[i], created[i + 1]) for i in range(len(created) - 1))
+    if closed:
+        pairs.append((created[-1], start_node))
+
+    for source, target in pairs:
+        source_center = _ai_node_center_world(source)
+        target_center = _ai_node_center_world(target)
+        clear = _collision_path_segment_connectable(floor_entries, obstacle_entries, source_center, target_center, spacing)
+        source_connections = _ai_connections(source)
+        target_connections = _ai_connections(target)
+        source_index = _ai_node_index(source)
+        target_index = _ai_node_index(target)
+        linked = source_connections[2] == target_index and target_connections[0] == source_index
+        if clear and not linked:
+            _set_ai_primary_link(source, target, True)
+            repaired += 1
+
+    return repaired, rejected
+
+
+def _ai_automation_start_node(scene, active=None):
+    nodes = _ai_primary_nodes(scene)
+    start_nodes = [
+        obj for obj in nodes
+        if bool(getattr(obj, "ai_start_node", obj.get("ai_start_node", False)))
+    ]
+    if not start_nodes:
+        return None
+    if active in start_nodes:
+        return active
+    header_start = int(getattr(scene, "ai_nodes_start_node", scene.get("ai_nodes_start_node", -1)))
+    for obj in start_nodes:
+        if _ai_node_index(obj) == header_start:
+            return obj
+    return start_nodes[0]
+
+
+def _ai_automation_centerline(floor_entries, obstacle_entries, zone_points, spacing):
+    centers = _path_corner_support_points(
+        floor_entries,
+        obstacle_entries,
+        zone_points,
+        spacing,
+        closed=False,
+    )
+    centers = _refine_collision_path(floor_entries, obstacle_entries, centers, spacing, closed=False)
+    for _pass in range(2):
+        centers = _bridge_collision_path_gaps(floor_entries, obstacle_entries, centers, spacing, closed=False)
+        centers = _remove_or_bridge_isolated_path_points(floor_entries, obstacle_entries, centers, spacing, closed=False)
+        if _pass == 0:
+            centers = _smooth_collision_path(floor_entries, obstacle_entries, centers, spacing, closed=False)
+    return centers
+
+
+def _ai_automation_connection_plan(floor_entries, obstacle_entries, start_center, centers, spacing, closed):
+    count = len(centers)
+    blocked_segments = []
+    blocked_edges = set()
+    segment_lengths = []
+
+    start_edge_blocked = not _collision_path_segment_connectable(
+        floor_entries,
+        obstacle_entries,
+        start_center,
+        centers[0],
+        spacing,
+    )
+    if start_edge_blocked:
+        blocked_segments.append(("start", 1))
+    segment_lengths.append((centers[0] - start_center).length)
+
+    for i in range(count - 1):
+        start = centers[i]
+        end = centers[i + 1]
+        if not _collision_path_segment_connectable(floor_entries, obstacle_entries, start, end, spacing):
+            blocked_segments.append((i + 1, i + 2))
+            blocked_edges.add(i)
+        segment_lengths.append((end - start).length)
+
+    return_edge_blocked = False
+    if closed:
+        return_edge_blocked = not _collision_path_segment_connectable(
+            floor_entries,
+            obstacle_entries,
+            centers[-1],
+            start_center,
+            spacing,
+        )
+        if return_edge_blocked:
+            blocked_segments.append((count, "start"))
+        segment_lengths.append((start_center - centers[-1]).length)
+
+    return {
+        "blocked_segments": blocked_segments,
+        "blocked_edges": blocked_edges,
+        "segment_lengths": segment_lengths,
+        "start_edge_blocked": start_edge_blocked,
+        "return_edge_blocked": return_edge_blocked,
+    }
+
+
 class GenerateAINodesFromTrackZones(bpy.types.Operator):
     bl_idname = "scene.generate_ai_nodes_from_track_zones"
     bl_label = "Automated AI Nodes"
     bl_description = "Create a first-pass AI path from Track Zones projected onto imported .ncp collision meshes"
     bl_options = {'REGISTER', 'UNDO'}
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self, width=430)
+
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text="The Automation will take approximately")
+        layout.label(text="10 seconds / track zone.")
+        layout.label(text="Do you wish to proceed?")
 
     def execute(self, context):
         scene = context.scene
@@ -4703,57 +6113,60 @@ class GenerateAINodesFromTrackZones(bpy.types.Operator):
             return {'CANCELLED'}
         obstacle_bvhs = _collision_bvh_entries(context, obstacle_meshes) or collision_bvhs
 
-        collection = ensure_collection()
-        existing_nodes = _ai_primary_nodes(scene)
-        closed = bool(all_zone_ids) and selected_zone_ids == all_zone_ids and not existing_nodes
         width = max(0.01, float(getattr(scene, "ai_nodes_lane_width", 2.0)))
         spacing = AI_NODE_AUTOMATION_SPACING
         half_width = width * 0.5
-        active_zone = context.view_layer.objects.active
-        zone_points, missing_floor, ignored_zones = _ordered_selected_track_zone_points(
+        active = context.view_layer.objects.active
+        start_node = _ai_automation_start_node(scene, active=active)
+        if start_node is None:
+            warning = "Add the First Node before Automating."
+            msg_box(warning, "WARNING")
+            self.report({'WARNING'}, warning)
+            return {'CANCELLED'}
+
+        collection = ensure_collection()
+        closed = bool(all_zone_ids) and selected_zone_ids == all_zone_ids
+        start_center = _ai_node_center_world(start_node)
+        active_zone = active if active in selected_zones else None
+        zone_points, missing_floor, ignored_zones, rotated_to_active = _ordered_selected_track_zone_points(
             collision_bvhs,
             obstacle_bvhs,
             zones,
             active_zone=active_zone,
+            anchor_point=start_center,
+            spacing=spacing,
         )
 
         if len(zone_points) < 2:
             self.report({'WARNING'}, "Automated AI Nodes could not find enough TRACK ZONES with nearby .ncp floor.")
             return {'CANCELLED'}
 
-        zone_points = _path_corner_support_points(
-            collision_bvhs,
-            obstacle_bvhs,
-            zone_points,
-            spacing,
-            closed=closed,
-        )
-        centers = _refine_collision_path(collision_bvhs, obstacle_bvhs, zone_points, spacing, closed=closed)
-        centers = _smooth_collision_path(collision_bvhs, obstacle_bvhs, centers, spacing, closed=closed)
+        centers = _ai_automation_centerline(collision_bvhs, obstacle_bvhs, zone_points, spacing)
         if len(centers) < 2:
             self.report({'WARNING'}, "Automated AI Nodes could not create a usable collision path.")
             return {'CANCELLED'}
 
-        append_tail, skip_first_center = _find_ai_append_tail(scene, centers[0], spacing)
-        create_centers = centers[1:] if append_tail and skip_first_center and len(centers) > 1 else centers
+        skip_first_center = (centers[0] - start_center).length < max(0.75, spacing * 0.35)
+        create_centers = centers[1:] if skip_first_center and len(centers) > 1 else centers
         if len(create_centers) < 1:
             self.report({'WARNING'}, "Automated AI Nodes found only an already existing route tail.")
             return {'CANCELLED'}
 
         count = len(create_centers)
-        segment_count = count if closed else count - 1
-        blocked_segments = []
-        blocked_edges = set()
-        segment_lengths = []
-        for i in range(segment_count):
-            start = create_centers[i]
-            end = create_centers[(i + 1) % count]
-            if not _collision_path_segment_clear(collision_bvhs, obstacle_bvhs, start, end, spacing):
-                blocked_segments.append((i + 1, ((i + 1) % count) + 1))
-                blocked_edges.add(i)
-            segment_lengths.append((end - start).length)
-        if append_tail:
-            segment_lengths.insert(0, (_ai_node_center_world(append_tail) - create_centers[0]).length)
+        connection_plan = _ai_automation_connection_plan(
+            collision_bvhs,
+            obstacle_bvhs,
+            start_center,
+            create_centers,
+            spacing,
+            closed,
+        )
+        blocked_segments = connection_plan["blocked_segments"]
+        blocked_edges = connection_plan["blocked_edges"]
+        segment_lengths = connection_plan["segment_lengths"]
+        start_edge_blocked = connection_plan["start_edge_blocked"]
+        return_edge_blocked = connection_plan["return_edge_blocked"]
+
         total_dist = sum(to_revolt_scale(length) for length in segment_lengths)
 
         created = []
@@ -4761,10 +6174,8 @@ class GenerateAINodesFromTrackZones(bpy.types.Operator):
         next_ai_index = _ai_next_index(scene)
         next_display_number = _ai_next_primary_display_number(scene)
         for i in range(count):
-            prev_center = create_centers[(i - 1) % count] if closed or i > 0 else (
-                _ai_node_center_world(append_tail) if append_tail else create_centers[i]
-            )
-            next_center = create_centers[(i + 1) % count] if closed or i < count - 1 else create_centers[i]
+            prev_center = create_centers[i - 1] if i > 0 else start_center
+            next_center = create_centers[i + 1] if i < count - 1 else (start_center if closed else create_centers[i])
             tangent = next_center - prev_center
             tangent.z = 0.0
             if tangent.length <= 0.000001:
@@ -4786,7 +6197,7 @@ class GenerateAINodesFromTrackZones(bpy.types.Operator):
             node.racing_ratio = 0.5
             node.overtake_ratio = 0.5
             node.property_type = int(getattr(scene, "ai_nodes_default_property", 0))
-            node.start_node = (i == 0 and not existing_nodes and not append_tail)
+            node.start_node = False
             node.left_wall_flags = 0x03 if bool(getattr(scene, "ai_nodes_default_left_wall", False)) else 0
             node.right_wall_flags = 0x03 if bool(getattr(scene, "ai_nodes_default_right_wall", False)) else 0
             node.flags = (
@@ -4802,13 +6213,15 @@ class GenerateAINodesFromTrackZones(bpy.types.Operator):
             prev_edge = (i - 1) % count
             next_edge = i
             current_index = next_ai_index + i
-            prev_index = (next_ai_index + ((i - 1) % count)) if closed or i > 0 else (
-                _ai_node_index(append_tail) if append_tail else -1
-            )
-            next_index = (next_ai_index + ((i + 1) % count)) if closed or i < count - 1 else -1
-            if prev_index >= 0 and prev_edge in blocked_edges:
+            prev_index = next_ai_index + i - 1 if i > 0 else _ai_node_index(start_node)
+            next_index = next_ai_index + i + 1 if i < count - 1 else (_ai_node_index(start_node) if closed else -1)
+            if i == 0 and start_edge_blocked:
                 prev_index = -1
-            if next_index >= 0 and next_edge in blocked_edges:
+            if i > 0 and prev_index >= 0 and prev_edge in blocked_edges:
+                prev_index = -1
+            if i < count - 1 and next_index >= 0 and next_edge in blocked_edges:
+                next_index = -1
+            if i == count - 1 and closed and return_edge_blocked:
                 next_index = -1
             node.connections = [
                 prev_index,
@@ -4829,10 +6242,13 @@ class GenerateAINodesFromTrackZones(bpy.types.Operator):
             created_obj.ai_lane_width = float((right - left).length)
             created.append(created_obj)
 
-        if append_tail and created:
-            tail_connections = _ai_connections(append_tail)
-            tail_connections[2] = _ai_node_index(created[0])
-            _set_ai_connections(append_tail, tail_connections)
+        if created:
+            start_connections = _ai_connections(start_node)
+            if not start_edge_blocked:
+                start_connections[2] = _ai_node_index(created[0])
+            if closed and not return_edge_blocked:
+                start_connections[0] = _ai_node_index(created[-1])
+            _set_ai_connections(start_node, start_connections)
 
         optimized_nodes = _post_optimize_automated_ai_nodes(
             collision_bvhs,
@@ -4841,17 +6257,35 @@ class GenerateAINodesFromTrackZones(bpy.types.Operator):
             create_centers,
             spacing,
             half_width,
-            closed and not append_tail,
+            False,
         )
         if optimized_nodes:
             total_dist = _update_created_ai_track_distances(
                 scene,
                 created,
-                append_tail=append_tail,
-                closed=closed and not append_tail,
+                append_tail=start_node,
+                closed=False,
+                close_to_tail=closed,
             )
+        repaired_links, rejected_links = _repair_automated_ai_primary_links(
+            collision_bvhs,
+            obstacle_bvhs,
+            start_node,
+            created,
+            spacing,
+            closed,
+        )
 
-        scene.ai_nodes_start_node = 0 if not existing_nodes else int(getattr(scene, "ai_nodes_start_node", 0))
+        racing_ratio_nodes = _optimize_ai_line_ratios(
+            [start_node] + created,
+            attr_name="ai_racing_ratio",
+            floor_entries=collision_bvhs,
+            obstacle_entries=obstacle_bvhs,
+            spacing=spacing,
+            closed=closed and not return_edge_blocked,
+        )
+
+        scene.ai_nodes_start_node = _ai_node_index(start_node)
         scene.ai_nodes_total_dist = float(total_dist)
         scene.ai_nodes_start_factor = 0.5
         for obj in context.scene.objects:
@@ -4862,8 +6296,9 @@ class GenerateAINodesFromTrackZones(bpy.types.Operator):
             context.view_layer.objects.active = created[0]
         rebuild_ai_route_visuals(scene)
         message = f"Created {len(created)} AI nodes from {len(zone_points)} usable Track Zones and .ncp collision."
-        if append_tail:
-            message += f" Continued from {append_tail.name}."
+        if rotated_to_active:
+            message += " Started from the active Track Zone."
+        message += f" Continued from {start_node.name}."
         if missing_floor:
             message += f" Skipped {len(missing_floor)} zone(s) without nearby .ncp floor."
         if ignored_zones:
@@ -4872,6 +6307,12 @@ class GenerateAINodesFromTrackZones(bpy.types.Operator):
             message += f" {len(blocked_segments)} direct segment(s) may hit walls."
         if optimized_nodes:
             message += f" Straightened and width-refit {optimized_nodes} node(s)."
+        if repaired_links:
+            message += f" Reconnected {repaired_links} validated gap(s)."
+        if rejected_links:
+            message += f" Left {rejected_links} unsafe gap(s) disconnected."
+        if racing_ratio_nodes:
+            message += f" Straightened racing ratios on {racing_ratio_nodes} node(s)."
         self.report({'INFO'}, message)
         return {'FINISHED'}
 
@@ -4978,7 +6419,7 @@ class GeneratePosNodesFromTrackZones(bpy.types.Operator):
         obstacle_bvhs = _collision_bvh_entries(context, obstacle_meshes) or collision_bvhs
 
         active_zone = context.view_layer.objects.active
-        zone_points, missing_floor, ignored_zones = _ordered_selected_track_zone_points(
+        zone_points, missing_floor, ignored_zones, rotated_to_active = _ordered_selected_track_zone_points(
             collision_bvhs,
             obstacle_bvhs,
             zones,
@@ -5008,6 +6449,8 @@ class GeneratePosNodesFromTrackZones(bpy.types.Operator):
         message = f"Created {len(created)} Pos Nodes from {len(zone_points)} usable Track Zones and .ncp collision."
         if append_tail:
             message += f" Continued from {append_tail.name}."
+        if rotated_to_active:
+            message += " Started from the active Track Zone."
         if missing_floor:
             message += f" Skipped {len(missing_floor)} zone(s) without nearby .ncp floor."
         if ignored_zones:
@@ -5024,18 +6467,7 @@ def _ai_node_center_world(obj):
     return obj.matrix_world.translation.copy()
 
 
-def _ai_debug_unique(values):
-    seen = set()
-    result = []
-    for value in values:
-        if value in seen:
-            continue
-        seen.add(value)
-        result.append(value)
-    return result
-
-
-def _ai_debug_walk(scene, start_index, slot_order=(2, 3, 0, 1)):
+def _ai_route_walk(scene, start_index, slot_order=(2, 3, 0, 1)):
     nodes = _ai_node_objects(scene)
     by_index = {_ai_node_index(obj): obj for obj in nodes}
     if start_index not in by_index:
@@ -5059,239 +6491,6 @@ def _ai_debug_walk(scene, start_index, slot_order=(2, 3, 0, 1)):
                 break
         previous, current = current, next_index
     return order
-
-
-def _ai_debug_walk_text(scene, walk):
-    by_index = {_ai_node_index(obj): obj for obj in _ai_node_objects(scene)}
-    parts = []
-    for index in walk:
-        obj = by_index.get(index)
-        if obj is None:
-            parts.append(str(index))
-            continue
-        type_id = int(getattr(obj, "ai_property_type", obj.get("ai_property_type", 0)))
-        left_wall = int(getattr(obj, "ai_left_wall_flags", obj.get("ai_left_wall_flags", 0)))
-        right_wall = int(getattr(obj, "ai_right_wall_flags", obj.get("ai_right_wall_flags", 0)))
-        start = "*" if bool(getattr(obj, "ai_start_node", obj.get("ai_start_node", False))) else ""
-        parts.append(f"{index}{start}:{obj.name}:T{type_id}:W{left_wall:02X}/{right_wall:02X}")
-    return " -> ".join(parts)
-
-
-def _ai_debug_type_sequence(scene, order, label):
-    by_index = {_ai_node_index(obj): obj for obj in _ai_node_objects(scene)}
-    parts = []
-    for index in order:
-        obj = by_index.get(index)
-        if obj is None:
-            continue
-        type_id = int(getattr(obj, "ai_property_type", obj.get("ai_property_type", 0)))
-        start = "*" if bool(getattr(obj, "ai_start_node", obj.get("ai_start_node", False))) else ""
-        parts.append(f"{index}{start}:T{type_id}")
-    return f"  {label}: " + " -> ".join(parts)
-
-
-def _ai_debug_shifted_type_sequence(scene, order, label, shift):
-    by_index = {_ai_node_index(obj): obj for obj in _ai_node_objects(scene)}
-    if not order:
-        return f"  {label}: "
-    parts = []
-    count = len(order)
-    for pos, index in enumerate(order):
-        source_index = order[(pos + shift) % count]
-        source_obj = by_index.get(source_index)
-        if source_obj is None:
-            continue
-        type_id = int(getattr(source_obj, "ai_property_type", source_obj.get("ai_property_type", 0)))
-        parts.append(f"{index}<=raw{source_index}:T{type_id}")
-    return f"  {label}: " + " -> ".join(parts)
-
-
-def _ai_raw_record_bytes(obj):
-    raw_hex = str(obj.get("ai_raw_record_hex", "")).strip()
-    if not raw_hex:
-        return b""
-    try:
-        return bytes.fromhex(raw_hex)
-    except ValueError:
-        return b""
-
-
-def _ai_raw_field_bytes(obj):
-    raw = _ai_raw_record_bytes(obj)
-    if len(raw) >= 68:
-        return raw[64:68].hex(" ").upper()
-    if len(raw) >= 4:
-        return raw[0:4].hex(" ").upper()
-    return ""
-
-
-def _ai_property_source(scene, obj):
-    source_index = int(obj.get("ai_property_source_index", _ai_node_index(obj)))
-    source_obj = _ai_node_by_index(scene, source_index)
-    return source_index, source_obj or obj
-
-
-def _ai_debug_incoming(scene):
-    incoming = {}
-    for obj in _ai_node_objects(scene):
-        source_index = _ai_node_index(obj)
-        for slot, target in enumerate(_ai_connections(obj)):
-            if target < 0:
-                continue
-            incoming.setdefault(target, []).append((source_index, slot))
-    return incoming
-
-
-class DumpAINodeDebug(bpy.types.Operator):
-    bl_idname = "scene.dump_ai_node_debug"
-    bl_label = "Dump AI Node Debug"
-    bl_description = "Write a diagnostic AI node ordering table into a Blender text block"
-    bl_options = {'REGISTER'}
-
-    def execute(self, context):
-        scene = context.scene
-        nodes = sorted(_ai_node_objects(scene), key=lambda obj: (_ai_node_index(obj), obj.name))
-        if not nodes:
-            self.report({'WARNING'}, "No AI node objects found.")
-            return {'CANCELLED'}
-
-        incoming = _ai_debug_incoming(scene)
-        header_start = int(getattr(scene, "ai_nodes_start_node", scene.get("ai_nodes_start_node", 0)))
-        start_flag_indices = [
-            _ai_node_index(obj)
-            for obj in nodes
-            if bool(getattr(obj, "ai_start_node", obj.get("ai_start_node", False)))
-        ]
-        no_previous_indices = [
-            _ai_node_index(obj)
-            for obj in nodes
-            if not any(slot in {0, 1} for _, slot in incoming.get(_ai_node_index(obj), []))
-        ]
-        candidates = _ai_debug_unique(start_flag_indices + [header_start] + no_previous_indices + [_ai_node_index(nodes[0])])
-
-        lines = []
-        lines.append("AI Node Debug")
-        lines.append("=" * 80)
-        lines.append(f"Source file: {scene.get('ai_nodes_source_file', '')}")
-        lines.append(
-            "Header: "
-            f"start_node={header_start} "
-            f"end_node={int(getattr(scene, 'ai_nodes_end_node', scene.get('ai_nodes_end_node', 0)))} "
-            f"header_flags={int(getattr(scene, 'ai_nodes_header_flags', scene.get('ai_nodes_header_flags', 0)))} "
-            f"extended_header={bool(scene.get('ai_nodes_has_extended_header', True))}"
-        )
-        lines.append("")
-        lines.append("Candidate route walks (raw file indices):")
-        for candidate in candidates:
-            label_bits = []
-            if candidate in start_flag_indices:
-                label_bits.append("start-bit")
-            if candidate == header_start:
-                label_bits.append("header")
-            if candidate in no_previous_indices:
-                label_bits.append("no-prev")
-            label = ", ".join(label_bits) or "fallback"
-            for name, slot_order in (
-                ("forward 2/3/0/1", (2, 3, 0, 1)),
-                ("forward 0/1/2/3", (0, 1, 2, 3)),
-                ("normal 2/0 only", (2, 0)),
-                ("normal 0/2 only", (0, 2)),
-            ):
-                walk = _ai_debug_walk(scene, candidate, slot_order=slot_order)
-                lines.append(f"  {candidate:>4} ({label}, {name}): {_ai_debug_walk_text(scene, walk)}")
-
-        distance_order = sorted(
-            nodes,
-            key=lambda obj: (
-                float(getattr(obj, "ai_track_dist", obj.get("ai_track_dist", 0.0))),
-                _ai_node_index(obj),
-            ),
-        )
-        lines.append("")
-        lines.append(
-            "Track-distance order: "
-            + " -> ".join(
-                f"{_ai_node_index(obj)}({float(getattr(obj, 'ai_track_dist', obj.get('ai_track_dist', 0.0))):.2f})"
-                for obj in distance_order
-            )
-        )
-
-        raw_order = [_ai_node_index(obj) for obj in nodes]
-        start_index = start_flag_indices[0] if start_flag_indices else header_start
-        slot2_order = _ai_debug_walk(scene, start_index, slot_order=(2, 3, 0, 1))
-        slot0_order = _ai_debug_walk(scene, start_index, slot_order=(0, 1, 2, 3))
-        lines.append("")
-        lines.append("Type order probes:")
-        for label, order in (
-            ("raw file order", raw_order),
-            ("raw file order reversed", list(reversed(raw_order))),
-            ("start slot2 order", slot2_order),
-            ("start slot0 order", slot0_order),
-        ):
-            lines.append(_ai_debug_type_sequence(scene, order, label))
-            lines.append(_ai_debug_shifted_type_sequence(scene, order, f"{label} with previous raw type", -1))
-            lines.append(_ai_debug_shifted_type_sequence(scene, order, f"{label} with next raw type", 1))
-
-        lines.append("")
-        lines.append("Nodes sorted by raw ai_node_index:")
-        lines.append(
-            "raw  name              disp file guess start type vSrc vStart vType vReason          flags       rawField     walls  branch join  ratios(R raw/vis, N next, P pref) connections          incoming       trackDist     center(x,y,z)"
-        )
-        lines.append("-" * 226)
-        for obj in nodes:
-            index = _ai_node_index(obj)
-            visual_source_index, visual_source = _ai_property_source(scene, obj)
-            flags = int(getattr(obj, "ai_flags", obj.get("ai_flags", 0))) & 0xFFFFFFFF
-            left_wall = int(getattr(obj, "ai_left_wall_flags", obj.get("ai_left_wall_flags", 0)))
-            right_wall = int(getattr(obj, "ai_right_wall_flags", obj.get("ai_right_wall_flags", 0)))
-            connections = _ai_connections(obj)
-            incoming_text = ",".join(f"{src}:{slot}" for src, slot in incoming.get(index, [])) or "-"
-            center = _ai_node_center_world(obj)
-            visible_racing = float(getattr(obj, "ai_racing_ratio", obj.get("ai_racing_ratio", 0.5)))
-            visible_overtake = float(getattr(obj, "ai_overtake_ratio", obj.get("ai_overtake_ratio", 0.5)))
-            raw_racing = obj.get("ai_raw_racing_ratio", visible_racing)
-            raw_next_racing = obj.get("ai_raw_next_racing_ratio", visible_overtake)
-            ratio_text = f"R{raw_racing:.3f}/{visible_racing:.3f} N{raw_next_racing:.3f} O{visible_overtake:.3f}"
-            source_reason = str(obj.get("ai_property_source_reason", "raw"))
-            lines.append(
-                f"{index:>3}  "
-                f"{obj.name:<16} "
-                f"{int(obj.get('ai_display_index', -1)):>4} "
-                f"{int(obj.get('ai_file_index', index)):>4} "
-                f"{int(obj.get('ai_route_guess_index', -1)):>5} "
-                f"{'Y' if bool(getattr(obj, 'ai_start_node', obj.get('ai_start_node', False))) else 'N':>5} "
-                f"{int(getattr(obj, 'ai_property_type', obj.get('ai_property_type', 0))):>4} "
-                f"{visual_source_index:>4} "
-                f"{'Y' if bool(getattr(visual_source, 'ai_start_node', visual_source.get('ai_start_node', False))) else 'N':>6} "
-                f"{int(getattr(visual_source, 'ai_property_type', visual_source.get('ai_property_type', 0))):>5} "
-                f"{source_reason:<16} "
-                f"0x{flags:08X}  "
-                f"{_ai_raw_field_bytes(obj):<11} "
-                f"{left_wall:02X}/{right_wall:02X}  "
-                f"{'Y' if bool(getattr(obj, 'ai_is_secondary_path', obj.get('ai_is_secondary_path', False))) else 'N':>6} "
-                f"{int(getattr(obj, 'ai_branch_join_index', obj.get('ai_branch_join_index', -1))):>4}  "
-                f"{ratio_text:<29} "
-                f"{str(connections):<20} "
-                f"{incoming_text:<14} "
-                f"{float(getattr(obj, 'ai_track_dist', obj.get('ai_track_dist', 0.0))):>10.2f}  "
-                f"({center.x:.2f}, {center.y:.2f}, {center.z:.2f})"
-            )
-
-        lines.append("")
-        lines.append("Raw record bytes:")
-        for obj in nodes:
-            raw = str(obj.get("ai_raw_record_hex", ""))
-            if raw:
-                lines.append(f"  raw {_ai_node_index(obj):>3} {obj.name:<16} {raw}")
-
-        text = bpy.data.texts.get("AI Node Debug")
-        if text is None:
-            text = bpy.data.texts.new("AI Node Debug")
-        text.clear()
-        text.write("\n".join(lines))
-        print("\n".join(lines))
-        self.report({'INFO'}, "Wrote AI Node Debug text block.")
-        return {'FINISHED'}
 
 
 def _ai_start_index_for_naming(scene, nodes):
@@ -5365,7 +6564,7 @@ class RenameAINodesSlot2Order(bpy.types.Operator):
             self.report({'WARNING'}, "No AI node objects found.")
             return {'CANCELLED'}
         start_index = _ai_start_index_for_naming(context.scene, nodes)
-        order = _ai_debug_walk(context.scene, start_index, slot_order=(2, 3, 0, 1))
+        order = _ai_route_walk(context.scene, start_index, slot_order=(2, 3, 0, 1))
         count = _rename_ai_nodes_by_order(context.scene, order)
         self.report({'INFO'}, f"Renamed {count} AI nodes by slot 2 route.")
         return {'FINISHED'}
@@ -5383,7 +6582,7 @@ class RenameAINodesSlot0Order(bpy.types.Operator):
             self.report({'WARNING'}, "No AI node objects found.")
             return {'CANCELLED'}
         start_index = _ai_start_index_for_naming(context.scene, nodes)
-        order = _ai_debug_walk(context.scene, start_index, slot_order=(0, 1, 2, 3))
+        order = _ai_route_walk(context.scene, start_index, slot_order=(0, 1, 2, 3))
         count = _rename_ai_nodes_by_order(context.scene, order)
         self.report({'INFO'}, f"Renamed {count} AI nodes by slot 0 route.")
         return {'FINISHED'}

@@ -14,7 +14,7 @@ from mathutils import Matrix as BlenderMatrix
 from . import common
 from . import rvstruct
 from .rvstruct import Triggers, Vector, Trigger, Matrix
-from .common import to_blender_coord, to_blender_axis, to_blender_scale, to_trans_matrix, to_or_matrix, SCALE, TRIGGER_TYPES
+from .common import to_blender_coord, to_blender_scale, to_trans_matrix, SCALE, TRIGGER_TYPES
 
 # Define SCALE_ADJUSTMENT_FACTOR
 SCALE_ADJUSTMENT_FACTOR = 2.0  # Adjust this to scale the triggers by a factor of 2
@@ -95,15 +95,12 @@ def import_file(filepath, scene):
         print(f"Size: {size}")
         # Rotation
         try:
-            matrix_data = trigger.matrix.data if trigger.matrix else [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+            matrix_data = trigger.matrix.data if trigger.matrix else [(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)]
             print(f"Matrix data: {matrix_data}")
-            or_matrix = to_or_matrix(matrix_data)
-            print(f"Orientation Matrix: {or_matrix}")
-            trans_matrix = to_trans_matrix(or_matrix)
+            trans_matrix = to_trans_matrix(matrix_data)
             print(f"Transformation Matrix: {trans_matrix}")
             blender_matrix = BlenderMatrix(trans_matrix)
-            rot = blender_matrix.to_euler('XZY')
-            rot = to_blender_axis(rot)
+            rot = blender_matrix.to_euler('XYZ')
             print(f"Rotation: {rot}")
         except Exception as e:
             print(f"Error processing matrix for trigger: {e}")
