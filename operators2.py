@@ -13,6 +13,39 @@ from . import rvstruct
 from .common import FACE_TEXANIM, TEX_PAGES_MAX, msg_box
 from .texanim import copy_frame_to_uv, copy_uv_to_frame, update_ta_current_frame
 
+
+def _remove_vertex_color_layers(mesh, *layer_names):
+    """Remove color layers by fresh name lookup to avoid stale layer handles."""
+    vcols = getattr(mesh, "vertex_colors", None)
+    if not vcols:
+        return
+
+    for layer_name in layer_names:
+        if not layer_name:
+            continue
+
+        while True:
+            layer = vcols.get(layer_name)
+            if not layer:
+                break
+            vcols.remove(layer)
+
+
+def _remove_temp_bake_layers(mesh):
+    vcols = getattr(mesh, "vertex_colors", None)
+    if not vcols:
+        return
+
+    temp_names = [
+        layer.name
+        for layer in vcols
+        if layer.name in {"TempBakeAO", "TempBakeDirect"}
+        or layer.name.startswith("TempBakeAO.")
+        or layer.name.startswith("TempBakeDirect.")
+    ]
+    _remove_vertex_color_layers(mesh, *temp_names)
+
+
 """
 SHADOW -----------------------------------------------------------------------
 """
@@ -457,8 +490,11 @@ class BakeVertex(bpy.types.Operator):
         original_vcols = [loop.color[:] for loop in vc_layer.data]
 
         # Create temporary vertex color layers for baking
+        _remove_temp_bake_layers(obj.data)
         temp_ao_vc_layer = obj.data.vertex_colors.new(name='TempBakeAO')
         temp_direct_vc_layer = obj.data.vertex_colors.new(name='TempBakeDirect')
+        temp_ao_vc_name = temp_ao_vc_layer.name
+        temp_direct_vc_name = temp_direct_vc_layer.name
         obj.data.vertex_colors.active = temp_ao_vc_layer
 
         # Set render engine to Cycles and configure settings
@@ -475,6 +511,9 @@ class BakeVertex(bpy.types.Operator):
         material = bpy.data.materials.get(prefixed_mat_name) or bpy.data.materials.get(generic_mat_name)
         if not material:
             self.report({'WARNING'}, f"Material {prefixed_mat_name} or {generic_mat_name} not found.")
+            _remove_vertex_color_layers(obj.data, temp_ao_vc_name, temp_direct_vc_name)
+            scene.render.engine = original_engine
+            scene.cycles.samples = original_samples
             return {'CANCELLED'}
 
         # Ensure material is in object material slot
@@ -500,14 +539,14 @@ class BakeVertex(bpy.types.Operator):
         bpy.ops.object.mode_set(mode='OBJECT')
 
         # Bake the ambient occlusion (AO) to the temporary vertex color layer
-        vcol_node.layer_name = temp_ao_vc_layer.name
+        vcol_node.layer_name = temp_ao_vc_name
         bpy.ops.object.bake(type='AO', use_clear=True, use_selected_to_active=False, margin=2, cage_extrusion=0.0, normal_space='TANGENT', target='VERTEX_COLORS')
 
         # Switch to the temporary direct lighting vertex color layer
         obj.data.vertex_colors.active = temp_direct_vc_layer
 
         # Bake the direct lighting to the temporary vertex color layer
-        vcol_node.layer_name = temp_direct_vc_layer.name
+        vcol_node.layer_name = temp_direct_vc_name
         bpy.ops.object.bake(type='DIFFUSE', use_clear=True, use_selected_to_active=False, margin=2, cage_extrusion=0.0, normal_space='TANGENT', pass_filter={'DIRECT'}, target='VERTEX_COLORS')
 
         # Merge the baked AO and direct lighting with the original colors using bmesh
@@ -516,8 +555,8 @@ class BakeVertex(bpy.types.Operator):
 
         # Access vertex color layers in bmesh
         vc_layer_bm = bm.loops.layers.color.get('Col')
-        temp_ao_vc_layer_bm = bm.loops.layers.color.get('TempBakeAO')
-        temp_direct_vc_layer_bm = bm.loops.layers.color.get('TempBakeDirect')
+        temp_ao_vc_layer_bm = bm.loops.layers.color.get(temp_ao_vc_name)
+        temp_direct_vc_layer_bm = bm.loops.layers.color.get(temp_direct_vc_name)
 
         for face in bm.faces:
             for loop in face.loops:
@@ -536,8 +575,7 @@ class BakeVertex(bpy.types.Operator):
         bm.free()
 
         # Delete the temporary vertex color layers
-        obj.data.vertex_colors.remove(temp_ao_vc_layer)
-        obj.data.vertex_colors.remove(temp_direct_vc_layer)
+        _remove_vertex_color_layers(obj.data, temp_ao_vc_name, temp_direct_vc_name)
 
         # Cleanup and restore settings
         scene.render.engine = original_engine
@@ -702,8 +740,11 @@ class BatchBakeVertexToEnv(bpy.types.Operator):
             original_vcols = [loop.color[:] for loop in env_layer.data]
 
             # Create temporary vertex color layers for baking
+            _remove_temp_bake_layers(obj.data)
             temp_ao_env_layer = obj.data.vertex_colors.new(name='TempBakeAO')
             temp_direct_env_layer = obj.data.vertex_colors.new(name='TempBakeDirect')
+            temp_ao_env_name = temp_ao_env_layer.name
+            temp_direct_env_name = temp_direct_env_layer.name
             obj.data.vertex_colors.active = temp_ao_env_layer
 
             # Ensure the material setup is correct
@@ -714,6 +755,7 @@ class BatchBakeVertexToEnv(bpy.types.Operator):
             material = bpy.data.materials.get(prefixed_mat_name) or bpy.data.materials.get(generic_mat_name)
             if not material:
                 self.report({'WARNING'}, f"Material {prefixed_mat_name} or {generic_mat_name} not found.")
+                _remove_vertex_color_layers(obj.data, temp_ao_env_name, temp_direct_env_name)
                 continue
 
             # Ensure material is in object material slot
@@ -771,8 +813,8 @@ class BatchBakeVertexToEnv(bpy.types.Operator):
 
             # Access vertex color layers in bmesh
             env_layer_bm = bm.loops.layers.color.get('Env')
-            temp_ao_env_layer_bm = bm.loops.layers.color.get('TempBakeAO')
-            temp_direct_env_layer_bm = bm.loops.layers.color.get('TempBakeDirect')
+            temp_ao_env_layer_bm = bm.loops.layers.color.get(temp_ao_env_name)
+            temp_direct_env_layer_bm = bm.loops.layers.color.get(temp_direct_env_name)
 
             for face in bm.faces:
                 for loop in face.loops:
@@ -791,8 +833,7 @@ class BatchBakeVertexToEnv(bpy.types.Operator):
             bm.free()
 
             # Delete the temporary vertex color layers
-            obj.data.vertex_colors.remove(temp_ao_env_layer)
-            obj.data.vertex_colors.remove(temp_direct_env_layer)
+            _remove_vertex_color_layers(obj.data, temp_ao_env_name, temp_direct_env_name)
 
         # Cleanup and restore settings
         scene.render.engine = original_engine
@@ -885,8 +926,11 @@ class BakeVertexToRGBModelColor(bpy.types.Operator):
             original_vcols = [loop.color[:] for loop in rgb_layer.data]
 
             # Create temporary vertex color layers for baking
+            _remove_temp_bake_layers(obj.data)
             temp_ao_rgb_layer = obj.data.vertex_colors.new(name='TempBakeAO')
             temp_direct_rgb_layer = obj.data.vertex_colors.new(name='TempBakeDirect')
+            temp_ao_rgb_name = temp_ao_rgb_layer.name
+            temp_direct_rgb_name = temp_direct_rgb_layer.name
             obj.data.vertex_colors.active = temp_ao_rgb_layer
 
             # Ensure the material setup is correct
@@ -897,6 +941,7 @@ class BakeVertexToRGBModelColor(bpy.types.Operator):
             material = bpy.data.materials.get(prefixed_mat_name) or bpy.data.materials.get(generic_mat_name)
             if not material:
                 self.report({'WARNING'}, f"Material {prefixed_mat_name} or {generic_mat_name} not found.")
+                _remove_vertex_color_layers(obj.data, temp_ao_rgb_name, temp_direct_rgb_name)
                 continue
 
             # Ensure material is in object material slot
@@ -954,8 +999,8 @@ class BakeVertexToRGBModelColor(bpy.types.Operator):
 
             # Access vertex color layers in bmesh
             rgb_layer_bm = bm.loops.layers.color.get('RGBModelColor')
-            temp_ao_rgb_layer_bm = bm.loops.layers.color.get('TempBakeAO')
-            temp_direct_rgb_layer_bm = bm.loops.layers.color.get('TempBakeDirect')
+            temp_ao_rgb_layer_bm = bm.loops.layers.color.get(temp_ao_rgb_name)
+            temp_direct_rgb_layer_bm = bm.loops.layers.color.get(temp_direct_rgb_name)
 
             for face in bm.faces:
                 for loop in face.loops:
@@ -974,8 +1019,7 @@ class BakeVertexToRGBModelColor(bpy.types.Operator):
             bm.free()
 
             # Delete the temporary vertex color layers
-            obj.data.vertex_colors.remove(temp_ao_rgb_layer)
-            obj.data.vertex_colors.remove(temp_direct_rgb_layer)
+            _remove_vertex_color_layers(obj.data, temp_ao_rgb_name, temp_direct_rgb_name)
 
         # Cleanup and restore settings
         scene.render.engine = original_engine

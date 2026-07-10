@@ -163,8 +163,8 @@ _registered_fob_range_props = []
 bl_info = {
 "name": "Re-Volt",
 "author": "Marvin Thiel & Theman",
-"version": (20, 26, 34),
-"blender": (5, 1, 1),
+"version": (20, 26, 35),
+"blender": (5, 1, 2),
 "location": "File > Import-Export",
 "description": "Import and export Re-Volt file formats.",
 "wiki_url": "https://www.breathingstatue.com/blender-plugin",
