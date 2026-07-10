@@ -46,6 +46,23 @@ def _remove_temp_bake_layers(mesh):
     _remove_vertex_color_layers(mesh, *temp_names)
 
 
+def _clamp01(value):
+    return max(0.0, min(1.0, float(value)))
+
+
+def _blend_baked_vertex_color(original_color, ao_color, direct_color, shadow_strength, light_strength, alpha):
+    shadow_amount = _clamp01(float(shadow_strength) / 10.0)
+    light_amount = max(0.0, float(light_strength))
+
+    rgb = []
+    for channel in range(3):
+        shadow_factor = (1.0 - shadow_amount) + (shadow_amount * _clamp01(ao_color[channel]))
+        value = (original_color[channel] * shadow_factor) + (light_amount * direct_color[channel])
+        rgb.append(_clamp01(value))
+
+    return rgb + [_clamp01(alpha)]
+
+
 """
 SHADOW -----------------------------------------------------------------------
 """
@@ -527,6 +544,7 @@ class BakeVertex(bpy.types.Operator):
         links = material.node_tree.links
         nodes.clear()
         vcol_node = nodes.new(type='ShaderNodeVertexColor')
+        vcol_node.layer_name = 'Col'
         bsdf_node = nodes.new(type='ShaderNodeBsdfPrincipled')
         output_node = nodes.new(type='ShaderNodeOutputMaterial')
         links.new(vcol_node.outputs['Color'], bsdf_node.inputs['Base Color'])
@@ -538,15 +556,13 @@ class BakeVertex(bpy.types.Operator):
         obj.select_set(True)
         bpy.ops.object.mode_set(mode='OBJECT')
 
-        # Bake the ambient occlusion (AO) to the temporary vertex color layer
-        vcol_node.layer_name = temp_ao_vc_name
+        # Bake into temporary layers while the material reads the real source colors.
         bpy.ops.object.bake(type='AO', use_clear=True, use_selected_to_active=False, margin=2, cage_extrusion=0.0, normal_space='TANGENT', target='VERTEX_COLORS')
 
         # Switch to the temporary direct lighting vertex color layer
         obj.data.vertex_colors.active = temp_direct_vc_layer
 
-        # Bake the direct lighting to the temporary vertex color layer
-        vcol_node.layer_name = temp_direct_vc_name
+        # Bake the direct lighting to the temporary vertex color layer.
         bpy.ops.object.bake(type='DIFFUSE', use_clear=True, use_selected_to_active=False, margin=2, cage_extrusion=0.0, normal_space='TANGENT', pass_filter={'DIRECT'}, target='VERTEX_COLORS')
 
         # Merge the baked AO and direct lighting with the original colors using bmesh
@@ -563,12 +579,14 @@ class BakeVertex(bpy.types.Operator):
                 original_color = loop[vc_layer_bm]
                 ao_color = loop[temp_ao_vc_layer_bm]
                 direct_color = loop[temp_direct_vc_layer_bm]
-                # Blend the original color with the AO shadow and direct lighting
-                blended_color = [
-                    original_color[j] * (1 - self.shadow_strength * (1 - ao_color[j])) + self.light_strength * direct_color[j]
-                    for j in range(3)
-                ]
-                loop[vc_layer_bm] = blended_color + [1.0]
+                loop[vc_layer_bm] = _blend_baked_vertex_color(
+                    original_color,
+                    ao_color,
+                    direct_color,
+                    self.shadow_strength,
+                    self.light_strength,
+                    1.0,
+                )
 
         # Update the mesh
         bm.to_mesh(obj.data)
@@ -821,12 +839,14 @@ class BatchBakeVertexToEnv(bpy.types.Operator):
                     original_color = loop[env_layer_bm]
                     ao_color = loop[temp_ao_env_layer_bm]
                     direct_color = loop[temp_direct_env_layer_bm]
-                    blended_color = [
-                        original_color[j] * (1 - self.shadow_strength * (1 - ao_color[j])) +
-                        self.light_strength * direct_color[j]
-                        for j in range(3)
-                    ]
-                    loop[env_layer_bm] = blended_color + [original_color[3]]  # Preserve original alpha
+                    loop[env_layer_bm] = _blend_baked_vertex_color(
+                        original_color,
+                        ao_color,
+                        direct_color,
+                        self.shadow_strength,
+                        self.light_strength,
+                        original_color[3],
+                    )
 
             # Update the mesh
             bm.to_mesh(obj.data)
@@ -1007,12 +1027,14 @@ class BakeVertexToRGBModelColor(bpy.types.Operator):
                     original_color = loop[rgb_layer_bm]
                     ao_color = loop[temp_ao_rgb_layer_bm]
                     direct_color = loop[temp_direct_rgb_layer_bm]
-                    blended_color = [
-                        original_color[j] * (1 - self.shadow_strength * (1 - ao_color[j])) +
-                        self.light_strength * direct_color[j]
-                        for j in range(3)
-                    ]
-                    loop[rgb_layer_bm] = blended_color + [1.0]
+                    loop[rgb_layer_bm] = _blend_baked_vertex_color(
+                        original_color,
+                        ao_color,
+                        direct_color,
+                        self.shadow_strength,
+                        self.light_strength,
+                        1.0,
+                    )
 
             # Update the mesh
             bm.to_mesh(obj.data)
