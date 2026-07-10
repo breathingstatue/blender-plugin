@@ -6,7 +6,7 @@ place 'io_revolt' in Blender/"version"/scripts/addons_core/
 
 -Theman with the help of AI and a bunch of friends in the RV I/O community.
 
-20.26.35
+20.26.36
 Improved Vertex Colour Baking
 
 20.26.34

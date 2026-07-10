@@ -14,14 +14,6 @@ from .common import FACE_TEXANIM, TEX_PAGES_MAX, msg_box
 from .texanim import copy_frame_to_uv, copy_uv_to_frame, update_ta_current_frame
 
 
-MIN_GAME_VISIBLE_RGB = 1.0 / 255.0
-
-
-def _fill_vertex_color_layer(layer, color):
-    for loop in layer.data:
-        loop.color = color
-
-
 def _get_vertex_color_layer(mesh, layer_name):
     vcols = getattr(mesh, "vertex_colors", None)
     if vcols:
@@ -57,10 +49,7 @@ def _ensure_vertex_color_layer(mesh, layer_name):
     layer = _get_vertex_color_layer(mesh, layer_name)
     if layer:
         return layer
-
-    layer = _new_vertex_color_layer(mesh, layer_name)
-    _fill_vertex_color_layer(layer, (1.0, 1.0, 1.0, 1.0))
-    return layer
+    return _new_vertex_color_layer(mesh, layer_name)
 
 
 def _remove_vertex_color_layers(mesh, *layer_names):
@@ -123,28 +112,13 @@ def _clamp01(value):
     return max(0.0, min(1.0, float(value)))
 
 
-def _visible_game_rgb(value):
-    value = _clamp01(value)
-    if value <= 0.0:
-        return MIN_GAME_VISIBLE_RGB
-    return max(value, MIN_GAME_VISIBLE_RGB)
-
-
-def _blend_baked_vertex_color(
-    original_color,
-    ao_color,
-    direct_color,
-    shadow_strength,
-    light_strength,
-    alpha,
-    overwrite_colours=False,
-):
+def _blend_baked_vertex_color(original_color, ao_color, direct_color, shadow_strength, light_strength, alpha):
     shadow_amount = _clamp01(float(shadow_strength) / 10.0)
     light_amount = max(0.0, float(light_strength))
 
     rgb = []
     for channel in range(3):
-        original = 1.0 if overwrite_colours else _clamp01(original_color[channel])
+        original = _clamp01(original_color[channel])
         direct = _clamp01(direct_color[channel])
         shadow_factor = (1.0 - shadow_amount) + (shadow_amount * _clamp01(ao_color[channel]))
 
@@ -154,7 +128,7 @@ def _blend_baked_vertex_color(
             light_factor = direct * light_amount
 
         value = original * shadow_factor * light_factor
-        rgb.append(_visible_game_rgb(value))
+        rgb.append(_clamp01(value))
 
     return rgb + [_clamp01(alpha)]
 
@@ -645,12 +619,6 @@ class BakeVertex(bpy.types.Operator):
         min=0.0,
         max=10.0
     )
-
-    overwrite_colours: bpy.props.BoolProperty(
-        name="Overwrite Colours",
-        description="Bake grayscale lighting instead of preserving the current vertex colours",
-        default=False
-    )
     
     samples: bpy.props.IntProperty(
         name="Samples",
@@ -779,7 +747,6 @@ class BakeVertex(bpy.types.Operator):
                     self.shadow_strength,
                     self.light_strength,
                     1.0,
-                    self.overwrite_colours,
                 )
 
         # Update the mesh
@@ -832,12 +799,6 @@ class BakeVertexBatch(bpy.types.Operator):
     )
 
     # NEW — dropdown with allowed options only
-    overwrite_colours: bpy.props.BoolProperty(
-        name="Overwrite Colours",
-        description="Bake grayscale lighting instead of preserving the current vertex colours",
-        default=False
-    )
-
     samples: bpy.props.EnumProperty(
         name="Samples",
         description="Number of samples for baking",
@@ -869,7 +830,6 @@ class BakeVertexBatch(bpy.types.Operator):
                 'EXEC_DEFAULT',
                 shadow_strength=self.shadow_strength,
                 light_strength=self.light_strength,
-                overwrite_colours=self.overwrite_colours,
                 samples=int(self.samples)       # IMPORTANT: convert enum string to int
             )
 
@@ -902,12 +862,6 @@ class BatchBakeVertexToEnv(bpy.types.Operator):
         default=0.5,
         min=0.0,
         max=10.0
-    )
-
-    overwrite_colours: bpy.props.BoolProperty(
-        name="Overwrite Colours",
-        description="Bake grayscale lighting instead of preserving the current vertex colours",
-        default=False
     )
     
     # CHANGED: EnumProperty with fixed options
@@ -1059,7 +1013,6 @@ class BatchBakeVertexToEnv(bpy.types.Operator):
                         self.shadow_strength,
                         self.light_strength,
                         original_color[3],
-                        self.overwrite_colours,
                     )
 
             # Update the mesh
@@ -1103,12 +1056,6 @@ class BakeVertexToRGBModelColor(bpy.types.Operator):
         default=0.5,
         min=0.0,
         max=10.0
-    )
-
-    overwrite_colours: bpy.props.BoolProperty(
-        name="Overwrite Colours",
-        description="Bake grayscale lighting instead of preserving the current vertex colours",
-        default=False
     )
     
     # CHANGED: EnumProperty with fixed options
@@ -1260,7 +1207,6 @@ class BakeVertexToRGBModelColor(bpy.types.Operator):
                         self.shadow_strength,
                         self.light_strength,
                         1.0,
-                        self.overwrite_colours,
                     )
 
             # Update the mesh
